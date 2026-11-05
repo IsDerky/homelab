@@ -1,0 +1,65 @@
+name: Ansible
+
+on:
+  push:
+    branches: [main]
+    paths: ["ansible/**", ".github/workflows/ansible.yml"]
+  pull_request:
+    paths: ["ansible/**", ".github/workflows/ansible.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: pipx install ansible-lint && pipx inject ansible-lint ansible-core
+      - working-directory: ansible
+        run: ansible-lint playbooks/honeypot.yml roles/honeypot
+
+  honeypot:
+    name: Rol honeypot sobre el runner
+    runs-on: ubuntu-24.04
+    needs: lint
+    defaults:
+      run:
+        working-directory: ansible
+    steps:
+      - uses: actions/checkout@v5
+      - run: pipx install ansible-core
+
+      - name: Señuelos
+        run: |
+          nohup python3 -m http.server 8080 --bind 0.0.0.0 >/dev/null 2>&1 &
+          docker run -d --name senuelo nginx:alpine
+          sleep 3
+          echo "SENUELO_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' senuelo)" >> "$GITHUB_ENV"
+
+      - name: Control positivo (sin cortafuegos se llega a los señuelos)
+        run: |
+          docker run --rm alpine:3.20 sh -c "nc -z -w 3 172.17.0.1 8080 && nc -z -w 3 $SENUELO_IP 80"
+
+      - name: Inventario de prueba
+        run: |
+          cat > inventory.ini <<EOF
+          [honeypot]
+          runner ansible_connection=local ansible_python_interpreter=/usr/bin/python3
+
+          [honeypot:vars]
+          honeypot_test_targets=["172.17.0.1:8080", "172.30.250.1:8080", "$SENUELO_IP:80"]
+          EOF
+
+      - name: Primera pasada (instala y pasa la prueba de aislamiento)
+        run: ansible-playbook playbooks/honeypot.yml
+
+      - name: Segunda pasada (tiene que ser changed=0)
+        run: |
+          ansible-playbook playbooks/honeypot.yml | tee segunda.log
+          grep -E "runner +: ok=[0-9]+ +changed=0 " segunda.log
+
+      - name: El honeypot responde
+        run: |
+          timeout 5 bash -c "</dev/tcp/127.0.0.1/2222"
+          sudo docker ps --filter name=honeypot-cowrie
