@@ -13,7 +13,7 @@ Aquí no hay IPs, dominios ni credenciales. El código de cada pieza está en su
 
 | Servicio | Cómo | Expuesto |
 |---|---|---|
-| App web propia (Next.js + SQLite) | systemd, usuario propio, solo escucha en loopback | Cloudflare Tunnel |
+| [App web propia](https://github.com/IsDerky/bentonime-showcase) (Next.js + SQLite) | systemd, usuario propio, solo escucha en loopback | Cloudflare Tunnel |
 | Pterodactyl (panel + Wings) | nginx + PHP + MariaDB + Redis; Wings con Docker | nginx con HTTPS |
 | Nodos remotos de Pterodactyl | dos máquinas más con Wings, gestionadas desde el mismo panel | — |
 | AdGuard Home | Docker | Solo LAN (DNS y DoH) |
