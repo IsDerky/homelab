@@ -2,7 +2,7 @@
 
 Cómo está montado mi servidor casero: qué corre, cómo se expone, cómo se hacen y se comprueban los backups, cómo me entero de que algo va mal y cómo se despliega. Es una sola máquina, pero la trato como si fuera producción, porque una parte lo es: aloja servidores de juego de clientes.
 
-Aquí no hay IPs, dominios ni credenciales. El código de cada pieza está en su propio repo (por ahora [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot)).
+Aquí no hay IPs, dominios ni credenciales. El código de cada pieza está en su propio repo: [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), [asistente-ops](https://github.com/IsDerky/asistente-ops) (recolector, bot y vigilante) y [oficina-pixel](https://github.com/IsDerky/oficina-pixel) (el panel).
 
 ## Máquina
 
