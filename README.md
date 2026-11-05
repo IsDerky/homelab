@@ -103,7 +103,7 @@ Dos partes, para que un fallo del servidor no apague también el aviso.
 | Backup de clientes | 30 h |
 | Simulacro de restauración | 40 días |
 
-Avisa una vez al pasarse el plazo, recuerda cada 24 h y avisa cuando vuelve. Es el patrón *dead man's switch*: si el servidor muere entero, nadie mandaría el aviso desde dentro.
+Avisa una vez al pasarse el plazo, recuerda cada 24 h y avisa cuando vuelve. El Worker, su KV y el cron también están declarados en [Terraform](https://github.com/IsDerky/asistente-ops/tree/main/watchdog/terraform). Es el patrón *dead man's switch*: si el servidor muere entero, nadie mandaría el aviso desde dentro.
 
 **Recolector** (`ops-collect`, Python sin dependencias, timer cada 5 minutos). Junta en un JSON el estado del sistema, SMART, servicios, backups, `docker stats`, certificados, fail2ban y el honeypot. También procesa el journal y agrupa los mensajes de log por huella, para detectar lo que es nuevo.
 
