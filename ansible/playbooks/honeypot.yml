@@ -1,0 +1,6 @@
+---
+- name: Honeypot Cowrie aislado
+  hosts: honeypot
+  become: true
+  roles:
+    - honeypot

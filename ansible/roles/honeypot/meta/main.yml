@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: honeypot
+  namespace: isderky
+  description: Honeypot SSH/Telnet con Cowrie en Docker, aislado de la LAN con iptables
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+dependencies: []

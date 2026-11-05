@@ -1,0 +1,23 @@
+---
+# Dónde se instala (compose, .env, datos en var/)
+honeypot_dir: /opt/honeypot
+
+honeypot_image: cowrie/cowrie:3.1.4
+
+# Subred Docker del honeypot. El cortafuegos aísla por ella; tiene que estar libre.
+honeypot_subnet: 172.30.250.0/24
+
+# Puertos del host. En el router: 22 → servidor:ssh y 23 → servidor:telnet
+honeypot_ssh_port: 2222
+honeypot_telnet_port: 2223
+
+# Nombre de máquina que ve el atacante
+honeypot_hostname: web-prod-02
+
+# Logs, sesiones grabadas y descargas de más de este tiempo se borran
+honeypot_retention: 30d
+
+# Destinos (ip:puerto) a los que el honeypot NO debe llegar: router, servicios
+# del servidor, otros equipos de la LAN... Obligatorio: sin destinos, la prueba
+# de aislamiento no demuestra nada.
+honeypot_test_targets: []

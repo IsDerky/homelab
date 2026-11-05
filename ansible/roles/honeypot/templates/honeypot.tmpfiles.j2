@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# Limpieza del honeypot (systemd-tmpfiles-clean, a diario)
+e {{ honeypot_dir }}/var/log/cowrie - - - {{ honeypot_retention }}
+e {{ honeypot_dir }}/var/lib/cowrie/tty - - - {{ honeypot_retention }}
+e {{ honeypot_dir }}/var/lib/cowrie/downloads - - - {{ honeypot_retention }}

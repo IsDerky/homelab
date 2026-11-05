@@ -1,0 +1,136 @@
+---
+- name: Comprobar que hay destinos para la prueba de aislamiento
+  ansible.builtin.assert:
+    that: honeypot_test_targets | length > 0
+    fail_msg: Define honeypot_test_targets (router, servicios del servidor, equipos de la LAN).
+    quiet: true
+
+- name: Comprobar que Docker Compose v2 está instalado
+  ansible.builtin.command: docker compose version
+  changed_when: false
+
+- name: Buscar otras redes Docker con la misma subred
+  ansible.builtin.shell: |
+    {% raw %}
+    set -o pipefail
+    for net in $(docker network ls -q); do
+      name=$(docker network inspect -f '{{.Name}}' "$net")
+      [ "$name" = honeypot ] && continue
+      docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' "$net" \
+        | tr ' ' '\n' | grep -qxF "$SUBNET" && echo "$name"
+    done
+    true
+    {% endraw %}
+  args:
+    executable: /bin/bash
+  environment:
+    SUBNET: "{{ honeypot_subnet }}"
+  register: honeypot_subnet_clash
+  changed_when: false
+
+- name: La subred tiene que estar libre
+  ansible.builtin.assert:
+    that: honeypot_subnet_clash.stdout | length == 0
+    fail_msg: "La red Docker '{{ honeypot_subnet_clash.stdout }}' ya usa {{ honeypot_subnet }}: cambia honeypot_subnet."
+    quiet: true
+
+- name: Cortafuegos del honeypot
+  ansible.builtin.copy:
+    src: honeypot-firewall
+    dest: /usr/local/bin/honeypot-firewall
+    mode: "0755"
+  notify: Reiniciar honeypot
+
+- name: Carpeta del honeypot
+  ansible.builtin.file:
+    path: "{{ honeypot_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Carpetas de datos (Cowrie corre como 999)
+  ansible.builtin.file:
+    path: "{{ honeypot_dir }}/{{ item }}"
+    state: directory
+    owner: "999"
+    group: "999"
+    mode: "0750"
+  loop:
+    - var
+    - var/log
+    - var/log/cowrie
+    - var/lib
+    - var/lib/cowrie
+    - var/lib/cowrie/downloads
+    - var/lib/cowrie/tty
+
+- name: Compose y configuración
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ honeypot_dir }}/{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: docker-compose.yml.j2, dest: docker-compose.yml, mode: "0644" }
+    - { src: env.j2, dest: .env, mode: "0640" }
+  notify: Reiniciar honeypot
+
+- name: Prueba de aislamiento
+  ansible.builtin.copy:
+    src: prueba-aislamiento.sh
+    dest: "{{ honeypot_dir }}/prueba-aislamiento.sh"
+    mode: "0755"
+
+- name: Limpieza diaria de lo antiguo
+  ansible.builtin.template:
+    src: honeypot.tmpfiles.j2
+    dest: /etc/tmpfiles.d/honeypot.conf
+    mode: "0644"
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: honeypot.service.j2
+    dest: /etc/systemd/system/honeypot.service
+    mode: "0644"
+  notify:
+    - Recargar systemd
+    - Reiniciar honeypot
+
+- name: Aplicar cambios pendientes antes de arrancar
+  ansible.builtin.meta: flush_handlers
+
+- name: Arrancar el honeypot (cortafuegos primero)
+  ansible.builtin.systemd_service:
+    name: honeypot.service
+    enabled: true
+    state: started
+
+- name: Esperar a que escuche
+  ansible.builtin.wait_for:
+    port: "{{ item }}"
+    host: 127.0.0.1
+    timeout: 60
+  loop:
+    - "{{ honeypot_ssh_port }}"
+    - "{{ honeypot_telnet_port }}"
+
+- name: Prueba de aislamiento
+  block:
+    - name: Lanzar la prueba desde la red del honeypot
+      ansible.builtin.command: "{{ honeypot_dir }}/prueba-aislamiento.sh"
+      environment:
+        ENV_FILE: "{{ honeypot_dir }}/.env"
+      register: honeypot_isolation
+      changed_when: false
+
+    - name: Resultado de la prueba
+      ansible.builtin.debug:
+        var: honeypot_isolation.stdout_lines
+
+  rescue:
+    - name: Parar el honeypot si no está aislado
+      ansible.builtin.systemd_service:
+        name: honeypot.service
+        state: stopped
+
+    - name: Fallar con el detalle
+      ansible.builtin.fail:
+        msg: "El aislamiento NO funciona, honeypot parado: {{ honeypot_isolation.stdout_lines | default([]) }}"
