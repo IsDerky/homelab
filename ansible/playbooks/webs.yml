@@ -1,0 +1,7 @@
+---
+# Webs traídas de la VPS. El vhost de hosting va en el rol nginx (nginx_sites).
+- name: Webs
+  hosts: homelab
+  become: true
+  roles:
+    - roninfc

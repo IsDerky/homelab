@@ -132,16 +132,16 @@ Push a `main` = despliegue. Hay dos variantes:
 - **Un solo disco.** Es el punto débil. Lo cubro con backups fuera de casa cada 6 h y simulacros mensuales; el siguiente paso es un segundo SSD para tener también copia local (3-2-1).
 - **Google Drive como destino de backups.** Ya tenía el espacio pagado y restic cifra antes de subir, así que el proveedor no ve nada. La app OAuth de rclone solo tiene acceso a los ficheros que crea ella.
 - **Cloudflare Tunnel para la app web.** No abro puertos y Cloudflare filtra por delante. El precio es depender de un tercero para ese servicio.
-- **Scripts en bash idempotentes**, poco a poco pasando a Ansible. Para una máquina los scripts funcionan, pero reconstruirla desde cero cuesta. El honeypot ya es un rol ([`ansible/`](ansible/)) que se prueba en el CI aplicándolo de verdad sobre el runner.
+- **Configuración en Ansible** ([`ansible/`](ansible/)). Empezó como scripts en bash idempotentes: para una máquina funcionaban, pero reconstruirla desde cero costaba. Ahora SSH, cortafuegos, fail2ban, backups, avisos, nginx, el túnel y las webs son roles, y `site.yml` aplica el servidor entero (una segunda pasada da `changed=0`). Los valores y secretos van en un repo privado con Ansible Vault. El honeypot además se prueba en el CI aplicándolo de verdad sobre el runner.
 - **El bot no tiene poder propio.** Todo lo que puede hacer está en una lista blanca con permisos mínimos (polkit o sudoers con argumentos fijos) y necesita mi clic.
 
 ## Pendiente
 
-- SSH solo con clave (hoy entro con contraseña, solo desde la LAN).
+- Traer las dos webs que quedan en un VPS que no se renueva ([runbook](docs/runbook-migracion-vps.md)). Preparadas y apagadas; falta el corte de DNS.
 - Segundo SSD para copia local.
 - Resolver DNS recursivo propio (Unbound) detrás de AdGuard.
 - Pila de la BIOS y arranque automático tras un corte de luz.
-- Pasar el resto de piezas a roles de Ansible (el honeypot ya está).
+- Reconstruir el servidor en una VM vacía solo con `site.yml`, para probar que de verdad basta.
 
 ## Licencia
 

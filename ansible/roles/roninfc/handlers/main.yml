@@ -1,0 +1,11 @@
+---
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# Apagado (antes del corte) no hay nada que reiniciar
+- name: Reiniciar roninfc
+  ansible.builtin.systemd_service:
+    name: roninfc.service
+    state: restarted
+  when: roninfc_enabled
