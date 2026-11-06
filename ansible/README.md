@@ -9,6 +9,7 @@ Roles para montar piezas del homelab:
 - `avisos`: DMs por Discord para inicios de sesión SSH, errores de SMART y el latido a un vigilante externo.
 - `nginx`: nginx con los vhosts del inventario y certbot con validación DNS de Cloudflare.
 - `cloudflared`: túnel de Cloudflare gestionado desde el panel, solo con el token.
+- `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 
 ## Uso
@@ -121,13 +122,32 @@ nginx_sites:
   - name: pterodactyl
   - name: web-nueva
     enabled: false   # se copia pero no se activa
+    check:           # cuando esté activa, tiene que dar 200
+      url: http://127.0.0.1:8084/
+      host: web.example.com
 ```
+
+Con `check`, al final del rol (ya recargado nginx) pide esa URL con esa cabecera `Host` y falla si no da 200. Solo para los vhosts activos.
 
 Los certificados no se piden desde el rol. El rol deja certbot, su plugin de Cloudflare y el token en `/root/.secrets/cloudflare.ini` (`nginx_certbot_cloudflare_ini`), y `certbot.timer` se encarga de renovar.
 
 ## Rol `cloudflared`
 
 Añade el repo de Cloudflare, instala `cloudflared` y lo arranca con el token del túnel (`cloudflared_tunnel_env`, en el vault). Las rutas del túnel se gestionan en el panel de Cloudflare, no aquí. Como reiniciar el túnel corta lo que pasa por él, solo se reinicia si cambia el token o la unidad.
+
+## Rol `roninfc`
+
+La web que vino del VPS ([runbook de la migración](../docs/runbook-migracion-vps.md)). El rol solo prepara la máquina: usuario de sistema sin shell, `/srv/roninfc/releases` y la unidad systemd. El código no lo toca: lo compila y publica el CI en `releases/<sha>` y enlaza `current`.
+
+Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitada. Con `true` la arranca, y antes comprueba que el CI ha publicado alguna versión. Después espera a que `roninfc_check_path` devuelva JSON con datos (`success` y `data` no vacío), no solo un 200: la ruta hace scraping con Chrome y así se prueba también que puppeteer funciona dentro del encierro de systemd.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `roninfc_enabled` | `false` | Encendida o solo preparada |
+| `roninfc_port` | `3051` | Solo en `127.0.0.1` |
+| `roninfc_root` | `/srv/roninfc` | Fijada también en el script de despliegue |
+| `roninfc_memory_max` | `1536M` | Next y Chrome juntos |
+| `roninfc_check_path` / `roninfc_check_timeout` | `/api/partidos` / `90` | |
 
 ## Qué hace el rol `honeypot`
 
