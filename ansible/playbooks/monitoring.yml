@@ -1,0 +1,6 @@
+---
+- name: Monitorización
+  hosts: homelab
+  become: true
+  roles:
+    - monitoring

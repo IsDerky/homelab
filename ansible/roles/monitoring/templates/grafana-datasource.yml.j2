@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://127.0.0.1:{{ monitoring_ports.prometheus }}
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: {{ monitoring_scrape_interval }}

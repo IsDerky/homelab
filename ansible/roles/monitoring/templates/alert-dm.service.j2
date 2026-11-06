@@ -1,0 +1,30 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Avisos de Alertmanager por DM de Discord
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/alert-dm
+Environment=ALERT_DM_LISTEN=127.0.0.1:{{ monitoring_ports.alert_dm }}
+Restart=on-failure
+
+# El token de Discord es de root (0600). systemd se lo pasa como credencial a
+# un usuario efímero y lo monta donde discord-dm lo busca, sin cambiar permisos.
+DynamicUser=yes
+LoadCredential=discord-notify.env:/etc/discord-notify.env
+BindReadOnlyPaths=%d/discord-notify.env:/etc/discord-notify.env
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

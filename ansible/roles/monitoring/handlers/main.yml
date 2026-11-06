@@ -1,0 +1,46 @@
+---
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# up -d solo recrea los contenedores cuyo servicio ha cambiado en el compose
+- name: Aplicar compose
+  ansible.builtin.command: docker compose up -d --remove-orphans
+  args:
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+# Prometheus, Alertmanager y blackbox releen su configuración con SIGHUP
+- name: Recargar prometheus
+  ansible.builtin.command: docker compose kill -s HUP prometheus
+  args:
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Recargar alertmanager
+  ansible.builtin.command: docker compose kill -s HUP alertmanager
+  args:
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Recargar blackbox
+  ansible.builtin.command: docker compose kill -s HUP blackbox
+  args:
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Reiniciar grafana
+  ansible.builtin.command: docker compose restart grafana
+  args:
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Reiniciar ops-exporter
+  ansible.builtin.systemd_service:
+    name: ops-exporter.service
+    state: restarted
+
+- name: Reiniciar alert-dm
+  ansible.builtin.systemd_service:
+    name: alert-dm.service
+    state: restarted

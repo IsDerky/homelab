@@ -10,6 +10,7 @@ Roles para montar piezas del homelab:
 - `nginx`: nginx con los vhosts del inventario y certbot con validación DNS de Cloudflare.
 - `cloudflared`: túnel de Cloudflare gestionado desde el panel, solo con el token.
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
+- `monitoring`: Prometheus, Alertmanager, Grafana, blackbox y node_exporter, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 
 ## Uso
@@ -148,6 +149,52 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 | `roninfc_root` | `/srv/roninfc` | Fijada también en el script de despliegue |
 | `roninfc_memory_max` | `1536M` | Next y Chrome juntos |
 | `roninfc_check_path` / `roninfc_check_timeout` | `/api/partidos` / `90` | |
+
+## Rol `monitoring`
+
+```
+node_exporter ─┐
+blackbox ──────┤                         ┌─ Grafana (dashboards)
+ops-exporter ──┼─→ Prometheus (15 días) ─┤
+alertmanager ──┘                         └─ Alertmanager ─→ alert-dm ─→ discord-dm ─→ DM
+```
+
+- **Prometheus, Alertmanager, Grafana, blackbox y node_exporter** en Docker Compose, como un servicio systemd (`monitoring.service`). Todos con la red del host y escuchando solo en `127.0.0.1`: lo que publica Docker se salta ufw, así que no se publica ningún puerto. Cada contenedor tiene tope de memoria.
+- **`ops-exporter`** (Python, solo la librería estándar): lee el JSON que deja `ops-collect` cada 5 minutos (backups, simulacro, SMART, certificados, servicios, fail2ban, deploys) y lo sirve en el formato de texto de Prometheus. No repite nada de lo que da node_exporter. Corre con un usuario efímero de systemd (`DynamicUser`) que solo puede leer ese fichero, por el grupo.
+- **`alert-dm`**: Alertmanager solo sabe escribir en canales de Discord, y los avisos del servidor van por DM. Este pequeño receptor traduce su webhook a una llamada a `discord-dm`. El token de Discord es de root (0600): systemd se lo pasa como credencial (`LoadCredential`) a un usuario efímero, sin cambiarle los permisos. Si no consigue mandar el DM, responde 500 y Alertmanager lo reintenta.
+- **Dashboards y fuente de datos como código** (provisioning de Grafana). Lo que se cambie desde la web no se guarda.
+
+La configuración se valida antes de instalarla (`promtool check config`, `promtool check rules` y `amtool check-config` con las mismas imágenes). Si cambia, se recarga con SIGHUP sin reiniciar. Al final, el rol espera a que Prometheus pueda leer **todos** sus objetivos; no basta con que los contenedores estén arrancados.
+
+### Alertas
+
+Pocas y solo de cosas graves. Lo demás (backups, certificados, servidor caído entero, SMART) ya lo avisan el vigilante externo, el bot y smartd, y repetirlo sería ruido.
+
+| Alerta | Cuándo |
+|---|---|
+| `SLOQuemaRapida` | Una web gasta su margen de error 14,4 veces más rápido de lo permitido, en 1 h y en 5 min a la vez |
+| `DiscoCasiLleno` | Menos del 10 % libre en `/` durante 15 min |
+| `MemoriaAgotada` | Menos del 5 % de RAM disponible durante 10 min |
+| `ObjetivoCaido` | Prometheus no puede leer algún exporter en 15 min (si no, las alertas que dependen de él no saltarían) |
+| `RecolectorParado` | El snapshot de `ops-collect` lleva más de 30 min sin actualizarse |
+
+**El SLO.** Cada comprobación HTTP tiene un objetivo de disponibilidad en 30 días (`monitoring_slo_target`, 99,5 % por defecto: unas 3,6 h de fallo al mes). Avisar en cuanto falla una comprobación sería ruido. Esperar a incumplir el objetivo sería avisar tarde. La alerta mira **a qué ritmo se gasta el margen**, en dos ventanas a la vez, como propone el libro de SRE de Google: a 14,4 veces el ritmo permitido, el margen del mes se acaba en unos 2 días. La ventana larga (1 h) evita que salte por un fallo suelto. La corta (5 min) hace que se apague en cuanto se arregla.
+
+Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): una caída completa avisa, un fallo suelto de vez en cuando no, y al arreglarse se apaga. El CI los pasa junto con los tests de los dos scripts.
+
+### Variables
+
+| Variable | Por defecto | |
+|---|---|---|
+| `monitoring_grafana_admin_password` | `""` | Obligatoria. En el vault |
+| `monitoring_grafana_root_url` | `http://127.0.0.1:3005/` | Si va detrás de nginx en un subdirectorio, la URL completa |
+| `monitoring_grafana_anonymous_viewer` | `false` | Ver sin iniciar sesión (rol Viewer) |
+| `monitoring_http_probes` | `[]` | `servicio`, `url` y opcionalmente `body_regex` y `slo` |
+| `monitoring_slo_target` | `0.995` | Objetivo por defecto de las comprobaciones |
+| `monitoring_ops_group` | `""` | Grupo que puede leer el snapshot. Vacío = sin ops-exporter |
+| `monitoring_alert_dm` | `true` | Avisos por DM (necesita `discord-dm`, del rol `avisos`) |
+| `monitoring_retention_time` / `_size` | `15d` / `2GB` | Lo primero que se cumpla |
+| `monitoring_mem` | ver `defaults/main.yml` | Tope de memoria por contenedor |
 
 ## Qué hace el rol `honeypot`
 
