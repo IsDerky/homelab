@@ -1,0 +1,6 @@
+---
+- name: NAS
+  hosts: homelab
+  become: true
+  roles:
+    - nas

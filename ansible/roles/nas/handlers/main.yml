@@ -1,0 +1,7 @@
+---
+# Reiniciar, no recargar: con reload smbd no vuelve a abrir los puertos, y los
+# cambios de interfaces o de smb ports no se aplicarían
+- name: Reiniciar samba
+  ansible.builtin.systemd_service:
+    name: smbd.service
+    state: restarted

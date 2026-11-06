@@ -1,0 +1,117 @@
+---
+- name: Falta el disco
+  ansible.builtin.assert:
+    that: usb_storage_device | length > 0
+    fail_msg: Define usb_storage_device (/dev/disk/by-id/...).
+    quiet: true
+
+- name: Paquetes
+  ansible.builtin.apt:
+    name: [lvm2, parted]
+    state: present
+
+- name: Comprobar que el disco está conectado
+  ansible.builtin.stat:
+    path: "{{ usb_storage_device }}"
+  register: usb_storage_disk
+
+- name: Sin el disco no hay nada que hacer
+  ansible.builtin.assert:
+    that: usb_storage_disk.stat.exists
+    fail_msg: "{{ usb_storage_device }} no está conectado."
+    quiet: true
+
+- name: ¿La partición ya es de LVM?
+  ansible.builtin.command: blkid -o value -s TYPE {{ usb_storage_device }}-part1
+  register: usb_storage_part_type
+  changed_when: false
+  failed_when: false
+
+# Lo único destructivo del rol: solo con usb_storage_init y si aún no hay LVM
+- name: Preparar el disco (BORRA lo que tenga)
+  when:
+    - usb_storage_init | bool
+    - usb_storage_part_type.stdout != 'LVM2_member'
+  block:
+    - name: Borrar firmas y tabla de particiones
+      ansible.builtin.command: wipefs --all --force {{ usb_storage_device }}
+      changed_when: true
+
+    - name: Una partición GPT para LVM
+      community.general.parted:
+        device: "{{ usb_storage_device }}"
+        label: gpt
+        number: 1
+        flags: [lvm]
+        state: present
+
+    - name: Esperar a que aparezca la partición
+      ansible.builtin.wait_for:
+        path: "{{ usb_storage_device }}-part1"
+        timeout: 15
+
+- name: La partición tiene que ser de LVM
+  ansible.builtin.assert:
+    that: >-
+      usb_storage_part_type.stdout == 'LVM2_member'
+      or (usb_storage_init | bool)
+    fail_msg: "{{ usb_storage_device }} no está preparado. Si se puede borrar: -e usb_storage_init=true"
+    quiet: true
+
+- name: Grupo de volúmenes
+  community.general.lvg:
+    vg: "{{ usb_storage_vg }}"
+    pvs: "{{ usb_storage_device }}-part1"
+
+# shrink: false: si el tamaño del inventario es menor, no reduce (perdería datos)
+- name: Volúmenes lógicos
+  community.general.lvol:
+    vg: "{{ usb_storage_vg }}"
+    lv: "{{ item.name }}"
+    size: "{{ item.size }}"
+    shrink: false
+  loop: "{{ usb_storage_volumes }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.size }})"
+
+# No reformatea si ya hay un sistema de archivos
+- name: Sistemas de archivos
+  community.general.filesystem:
+    dev: /dev/{{ usb_storage_vg }}/{{ item.name }}
+    fstype: ext4
+    opts: -L {{ item.name }}
+  loop: "{{ usb_storage_volumes }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: UUID de cada volumen
+  ansible.builtin.command: blkid -o value -s UUID /dev/{{ usb_storage_vg }}/{{ item.name }}
+  loop: "{{ usb_storage_volumes }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: usb_storage_uuids
+  changed_when: false
+
+- name: Montar por UUID
+  ansible.posix.mount:
+    path: "{{ item.item.mount }}"
+    src: UUID={{ item.stdout }}
+    fstype: ext4
+    opts: "{{ usb_storage_mount_opts }}"
+    state: mounted
+  loop: "{{ usb_storage_uuids.results }}"
+  loop_control:
+    label: "{{ item.item.name }} → {{ item.item.mount }}"
+
+# Después de montar: los permisos son los de la raíz del volumen, no del punto
+# de montaje vacío. Solo si se define owner; si no, los pone el rol que lo use.
+- name: Dueño y permisos de cada volumen
+  ansible.builtin.file:
+    path: "{{ item.mount }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group | default(item.owner) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop: "{{ usb_storage_volumes | selectattr('owner', 'defined') }}"
+  loop_control:
+    label: "{{ item.mount }}"
