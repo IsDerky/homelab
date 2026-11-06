@@ -164,7 +164,7 @@ alertmanager ──┘                         └─ Alertmanager ─→ alert-
 - **`alert-dm`**: Alertmanager solo sabe escribir en canales de Discord, y los avisos del servidor van por DM. Este pequeño receptor traduce su webhook a una llamada a `discord-dm`. El token de Discord es de root (0600): systemd se lo pasa como credencial (`LoadCredential`) a un usuario efímero, sin cambiarle los permisos. Si no consigue mandar el DM, responde 500 y Alertmanager lo reintenta.
 - **Dashboards y fuente de datos como código** (provisioning de Grafana). Lo que se cambie desde la web no se guarda.
 
-La configuración se valida antes de instalarla (`promtool check config`, `promtool check rules` y `amtool check-config` con las mismas imágenes). Si cambia, se recarga con SIGHUP sin reiniciar. Al final, el rol espera a que Prometheus pueda leer **todos** sus objetivos; no basta con que los contenedores estén arrancados.
+La configuración se valida antes de instalarla (`promtool check config`, `promtool check rules` y `amtool check-config` con las mismas imágenes). Si cambia, se recarga con SIGHUP sin reiniciar. Por eso se monta por carpetas y no fichero a fichero: Ansible reemplaza cada fichero por uno nuevo, y un montaje de fichero suelto seguiría viendo el antiguo (la recarga cargaba la configuración de antes sin dar ningún error). Al final, el rol espera a que Prometheus pueda leer **todos** sus objetivos; no basta con que los contenedores estén arrancados.
 
 ### Alertas
 

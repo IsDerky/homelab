@@ -1,6 +1,9 @@
 # {{ ansible_managed }}
 # Todo con la red del host y escuchando solo en 127.0.0.1. Los puertos que
 # publica Docker se saltan ufw; así no se publica ninguno.
+# La configuración se monta por carpetas, no fichero a fichero: Ansible
+# reemplaza los ficheros (nuevo inodo) y un montaje de fichero suelto seguiría
+# viendo el viejo, así que el SIGHUP recargaría la configuración anterior.
 name: monitoring
 
 services:
@@ -14,8 +17,7 @@ services:
       - --storage.tsdb.retention.size={{ monitoring_retention_size }}
       - --web.listen-address=127.0.0.1:{{ monitoring_ports.prometheus }}
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./rules:/etc/prometheus/rules:ro
+      - ./prometheus:/etc/prometheus:ro
       - ./data/prometheus:/prometheus
     mem_limit: {{ monitoring_mem.prometheus }}
     restart: unless-stopped
@@ -30,7 +32,7 @@ services:
       # Una sola instancia: sin el puerto de cluster (9094)
       - --cluster.listen-address=
     volumes:
-      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager:/etc/alertmanager:ro
       - ./data/alertmanager:/alertmanager
     mem_limit: {{ monitoring_mem.alertmanager }}
     restart: unless-stopped
@@ -42,7 +44,7 @@ services:
       - --config.file=/etc/blackbox/blackbox.yml
       - --web.listen-address=127.0.0.1:{{ monitoring_ports.blackbox }}
     volumes:
-      - ./blackbox.yml:/etc/blackbox/blackbox.yml:ro
+      - ./blackbox:/etc/blackbox:ro
     mem_limit: {{ monitoring_mem.blackbox }}
     restart: unless-stopped
 
