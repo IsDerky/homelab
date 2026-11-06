@@ -1,16 +1,49 @@
 # Ansible
 
-Roles para montar piezas del homelab. Por ahora, `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
+Roles para montar piezas del homelab:
+
+- `base`: zona horaria, paquetes básicos y usuario de administración con sus claves SSH.
+- `ssh`: `sshd_config` desde plantilla, solo con claves por defecto.
+- `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 
 ## Uso
 
 ```bash
 cd ansible
-cp inventory.example.ini inventory.ini   # tu servidor y tus destinos de la prueba
-ansible-playbook playbooks/honeypot.yml
+ansible-galaxy collection install -r requirements.yml
+cp inventory.example.ini inventory.ini   # tu servidor y tus variables
+ansible-playbook playbooks/base.yml --check --diff   # ver qué cambiaría
+ansible-playbook playbooks/base.yml
 ```
 
-Necesita en el servidor Docker con Compose v2, systemd e iptables.
+Para muchas variables es más cómodo `group_vars/<grupo>.yml` que el inventario. Esa carpeta tampoco va a git.
+
+El honeypot necesita en el servidor Docker con Compose v2, systemd e iptables.
+
+## Rol `base`
+
+| Variable | Por defecto | |
+|---|---|---|
+| `base_timezone` | `Europe/Madrid` | |
+| `base_packages` | ver `defaults/main.yml` | Paquetes que tienen que estar instalados |
+| `base_admin_user` | `admin` | Usuario con sudo |
+| `base_admin_keys` | `[]` | Claves públicas que pueden entrar con ese usuario |
+
+## Rol `ssh`
+
+Ansible pasa a ser el dueño de `/etc/ssh/sshd_config`: los cambios a mano se pierden en la siguiente pasada. Antes de instalar el fichero lo valida con `sshd -t`, así que una plantilla rota no llega a aplicarse. Si cambia, hace `reload` (las sesiones abiertas no se cortan) y guarda copia del anterior.
+
+Los valores por defecto son los seguros. Si hace falta relajar algo mientras se migra (por ejemplo, dejar la contraseña hasta tener claves en todos los equipos), se sobrescribe en el inventario y se quita después.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `ssh_allow_users` | `[]` | `usuario` o `usuario@ip`. Vacío = sin `AllowUsers` |
+| `ssh_password_authentication` | `false` | |
+| `ssh_permit_root_login` | `prohibit-password` | |
+| `ssh_x11_forwarding` | `false` | |
+| `ssh_match_blocks` | `[]` | Bloques `Match` (ver `defaults/main.yml`) |
+
+Antes de aplicarlo la primera vez: deja una sesión abierta como root y comprueba que el usuario nuevo entra con su clave y puede usar sudo.
 
 ## Qué hace el rol `honeypot`
 
