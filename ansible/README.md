@@ -4,6 +4,7 @@ Roles para montar piezas del homelab:
 
 - `base`: zona horaria, paquetes básicos y usuario de administración con sus claves SSH.
 - `ssh`: `sshd_config` desde plantilla, solo con claves por defecto.
+- `ufw` y `fail2ban`: cortafuegos y baneos, con jails y filtros propios (`playbooks/firewall.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 
 ## Uso
@@ -44,6 +45,48 @@ Los valores por defecto son los seguros. Si hace falta relajar algo mientras se 
 | `ssh_match_blocks` | `[]` | Bloques `Match` (ver `defaults/main.yml`) |
 
 Antes de aplicarlo la primera vez: deja una sesión abierta como root y comprueba que el usuario nuevo entra con su clave y puede usar sudo.
+
+## Rol `ufw`
+
+Pone las reglas, después las políticas por defecto y al final activa ufw, así que en una máquina nueva no hay ningún momento con todo cerrado y SSH sin abrir. Si ninguna regla abre `ufw_ssh_port`, el rol falla antes de tocar nada.
+
+Solo añade reglas: una que se quite de `ufw_rules` hay que borrarla a mano con `ufw delete`.
+
+```yaml
+ufw_rules:
+  - port: "443"
+    proto: tcp
+  - port: "22"
+    proto: tcp
+    from: 192.168.1.0/24
+    comment: SSH LAN
+```
+
+## Rol `fail2ban`
+
+Cada jail y cada filtro va en su fichero de `jail.d/` y `filter.d/`. Si algo cambia, primero pasa `fail2ban-client --test` y solo entonces recarga; con una config rota, fail2ban sigue con la anterior. Deja esas carpetas solo para root, porque fail2ban ejecuta como root las `action` que haya en ellas.
+
+Ejemplo para el SFTP de Wings (Pterodactyl), que no pasa por sshd:
+
+```yaml
+fail2ban_filters:
+  - name: wings-sftp-bots
+    definition:
+      journalmatch: _SYSTEMD_UNIT=wings.service
+      failregex: 'WARN:.*failed to validate user credentials \(invalid format\) ip=<HOST>:\d+'
+
+fail2ban_jails:
+  - name: wings-sftp-bots
+    settings:
+      enabled: true
+      filter: wings-sftp-bots
+      backend: systemd
+      maxretry: 3
+      findtime: 1d
+      bantime: 7d
+      bantime.increment: true
+      action: iptables[name=wings-sftp-bots, port=2022, protocol=tcp]
+```
 
 ## Qué hace el rol `honeypot`
 

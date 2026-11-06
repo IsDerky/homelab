@@ -1,0 +1,7 @@
+---
+- name: Cortafuegos y fail2ban
+  hosts: homelab
+  become: true
+  roles:
+    - ufw
+    - fail2ban
