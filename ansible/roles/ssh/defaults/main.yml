@@ -1,0 +1,13 @@
+---
+# Usuarios que pueden entrar (usuario o usuario@ip). Vacío = cualquiera.
+ssh_allow_users: []
+
+ssh_password_authentication: false
+ssh_permit_root_login: prohibit-password
+ssh_x11_forwarding: false
+
+# Bloques Match al final del fichero:
+#   - match: User backup Address 10.0.0.5
+#     options:
+#       PermitTTY: false
+ssh_match_blocks: []

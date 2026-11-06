@@ -1,0 +1,6 @@
+---
+- name: SSH del servidor
+  hosts: homelab
+  become: true
+  roles:
+    - ssh
