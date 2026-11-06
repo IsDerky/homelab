@@ -1,0 +1,13 @@
+[Unit]
+Description=Backup del servidor a Google Drive (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/server-backup %i
+# La primera copia de clientes (~17 GB) puede tardar horas: sin límite de tiempo.
+TimeoutStartSec=infinity
+# Que no le quite CPU ni disco a Bentonime ni a los servidores de juego.
+Nice=10
+IOSchedulingClass=idle

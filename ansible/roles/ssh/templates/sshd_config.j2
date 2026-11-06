@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+Include /etc/ssh/sshd_config.d/*.conf
+
+{% if ssh_allow_users %}
+AllowUsers {{ ssh_allow_users | join(' ') }}
+{% endif %}
+PasswordAuthentication {{ 'yes' if ssh_password_authentication | bool else 'no' }}
+PermitRootLogin {{ ssh_permit_root_login }}
+PermitEmptyPasswords no
+KbdInteractiveAuthentication no
+UsePAM yes
+X11Forwarding {{ 'yes' if ssh_x11_forwarding | bool else 'no' }}
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server
+{% for block in ssh_match_blocks %}
+
+Match {{ block.match }}
+{% for key, value in block.options.items() %}
+    {{ key }} {{ ('yes' if value else 'no') if value is boolean else value }}
+{% endfor %}
+{% endfor %}

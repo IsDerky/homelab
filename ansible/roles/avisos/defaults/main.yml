@@ -1,0 +1,15 @@
+---
+# Contenido de /etc/discord-notify.env (DISCORD_BOT_TOKEN y DISCORD_USER_ID).
+# Con Ansible Vault.
+avisos_discord_env: ""
+
+# Contenido de /etc/ops-watchdog.env (OPS_WATCHDOG_URL y OPS_WATCHDOG_TOKEN).
+# Vacío = sin latido al vigilante externo.
+avisos_watchdog_env: ""
+
+# Inicios de sesión desde estas IPs no avisan
+avisos_login_trusted_ips: []
+
+# Línea de /etc/smartd.conf. Vacío = no se toca.
+#   /dev/sda -a -s (S/../.././03|L/../../7/04) -m root -M exec /usr/local/bin/smartd-discord
+avisos_smartd_line: ""

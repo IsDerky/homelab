@@ -1,0 +1,30 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Aviso por DM cuando alguien inicia sesión por SSH en el servidor. Lo llama
+# PAM al abrir la sesión (línea en /etc/pam.d/sshd, la pone el rol avisos):
+#   session optional pam_exec.so quiet /usr/local/bin/login-alert
+#
+# No avisa de los inicios desde las IPs de confianza (avisos_login_trusted_ips),
+# el equipo desde el que se administra. Cualquier otro origen, sí.
+# Nunca bloquea ni retrasa el login: el DM sale en segundo plano y "optional"
+# hace que un fallo aquí no impida entrar.
+set -u
+
+[ "${PAM_TYPE:-}" = open_session ] || exit 0
+
+TRUSTED_IPS="{{ avisos_login_trusted_ips | join(' ') }}"
+user="${PAM_USER:-?}"
+ip="${PAM_RHOST:-desconocida}"
+
+for trusted in $TRUSTED_IPS; do
+  [ "$ip" = "$trusted" ] && exit 0
+done
+
+when="$(date '+%a %d %b, %H:%M:%S')"
+dm="${LOGIN_ALERT_DM:-/usr/local/bin/discord-dm}" # sustituible en pruebas
+setsid bash -c '
+  timeout 20 "$5" -t "🔓 Alguien ha entrado en el servidor" -c red \
+    -f "Usuario=$1" -f "Desde=$2" -f "Cuándo=$3" -f "Por=${4:-ssh}" \
+    "Si no has sido tú: \`last -i | head\` para verlo y \`pkill -KILL -u $1\` para echarle."
+' _ "$user" "$ip" "$when" "${PAM_SERVICE:-ssh}" "$dm" >/dev/null 2>&1 < /dev/null &
+exit 0

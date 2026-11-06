@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: ufw
+  namespace: isderky
+  description: Cortafuegos ufw con reglas desde variables y comprobación de que SSH sigue abierto
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+dependencies: []

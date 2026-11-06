@@ -1,0 +1,6 @@
+---
+- name: Servidor web y certificados
+  hosts: homelab
+  become: true
+  roles:
+    - nginx

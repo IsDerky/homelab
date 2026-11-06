@@ -1,0 +1,11 @@
+[Unit]
+Description=Latido al vigilante externo cada 5 minutos
+
+[Timer]
+# Hora de reloj fija (:00, :05, :10…). No usar OnUnitActiveSec: activado con el
+# sistema ya arrancado se queda sin próxima ejecución y el latido se para.
+OnCalendar=*:0/5
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

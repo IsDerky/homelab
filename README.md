@@ -1,6 +1,6 @@
 # homelab
 
-Cómo está montado mi servidor casero: qué corre, cómo se expone, cómo se hacen y se comprueban los backups, cómo me entero de que algo va mal y cómo se despliega. Es una sola máquina, pero la trato como si fuera producción, porque una parte lo es: aloja servidores de juego de clientes.
+Cómo está montado mi servidor casero: qué corre, cómo se expone, cómo se hacen y se comprueban los backups, cómo me entero de que algo va mal y cómo se despliega. Es una sola máquina, pero la trato como si fuera producción, porque una parte lo es: aloja los servidores de juego de amigos y conocidos.
 
 Aquí no hay IPs, dominios ni credenciales. El código de cada pieza está en su propio repo: [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), [asistente-ops](https://github.com/IsDerky/asistente-ops) (recolector, bot y vigilante) y [oficina-pixel](https://github.com/IsDerky/oficina-pixel) (el panel).
 
@@ -84,9 +84,9 @@ restic sobre rclone a Google Drive. Todo se cifra en el servidor antes de subirl
 | `sistema` | Cada 6 h | BD de la app (`sqlite3 .backup`), dump del panel, `/etc`, `/opt`, scripts, crons | 7 diarios, 4 semanales, 12 mensuales |
 | `clientes` | A diario | Volúmenes y backups de los servidores de juego | 7 diarios, 4 semanales, 3 mensuales |
 | `mantenimiento` | Domingos | `prune` y `check` de una cuarta parte de los datos (cada mes se verifica todo) | — |
-| `simulacro` | Primer domingo de mes | Restaura en `/var/tmp`, pasa `integrity_check` a la BD, comprueba el dump del panel y un fichero de clientes | — |
+| `simulacro` | Primer domingo de mes | Restaura en `/var/tmp`, pasa `integrity_check` a la BD, comprueba el dump del panel y un fichero de un servidor de juego | — |
 
-Los volúmenes de los clientes se copian como ficheros desde el host, sin ejecutar nada dentro de sus servidores. Es una copia "como si se fuera la luz" (crash-consistent); por eso se guardan varias versiones.
+Los volúmenes de los servidores de juego se copian como ficheros desde el host, sin ejecutar nada dentro de sus servidores. Es una copia "como si se fuera la luz" (crash-consistent); por eso se guardan varias versiones.
 
 Un backup que nunca se ha restaurado no es un backup. El simulacro mensual existe por eso, y su resultado también se vigila (ver abajo).
 
@@ -100,7 +100,7 @@ Dos partes, para que un fallo del servidor no apague también el aviso.
 |---|---|
 | Servidor | 15 min |
 | Backup del sistema | 13 h |
-| Backup de clientes | 30 h |
+| Backup de los servidores de juego | 30 h |
 | Simulacro de restauración | 40 días |
 
 Avisa una vez al pasarse el plazo, recuerda cada 24 h y avisa cuando vuelve. El Worker, su KV y el cron también están declarados en [Terraform](https://github.com/IsDerky/asistente-ops/tree/main/watchdog/terraform). Es el patrón *dead man's switch*: si el servidor muere entero, nadie mandaría el aviso desde dentro.

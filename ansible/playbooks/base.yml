@@ -1,0 +1,6 @@
+---
+- name: Base del servidor
+  hosts: homelab
+  become: true
+  roles:
+    - base

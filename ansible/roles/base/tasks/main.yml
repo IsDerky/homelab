@@ -1,0 +1,26 @@
+---
+- name: Zona horaria
+  community.general.timezone:
+    name: "{{ base_timezone }}"
+
+- name: Paquetes básicos
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Usuario de administración
+  ansible.builtin.user:
+    name: "{{ base_admin_user }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+
+- name: Claves SSH del usuario de administración
+  ansible.posix.authorized_key:
+    user: "{{ base_admin_user }}"
+    key: "{{ item }}"
+  loop: "{{ base_admin_keys }}"
+  loop_control:
+    label: "{{ item.split() | last }}"

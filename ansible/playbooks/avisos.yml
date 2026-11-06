@@ -1,0 +1,6 @@
+---
+- name: Avisos por Discord
+  hosts: homelab
+  become: true
+  roles:
+    - avisos

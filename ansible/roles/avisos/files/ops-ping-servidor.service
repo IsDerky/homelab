@@ -1,0 +1,12 @@
+[Unit]
+Description=Latido al vigilante externo (ops-watchdog)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ops-ping servidor
+# Solo necesita leer su .env y hacer una petición HTTPS.
+DynamicUser=yes
+LoadCredential=ops-watchdog.env:/etc/ops-watchdog.env
+Environment=OPS_WATCHDOG_ENV=%d/ops-watchdog.env

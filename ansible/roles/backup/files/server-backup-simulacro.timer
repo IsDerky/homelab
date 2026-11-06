@@ -1,0 +1,11 @@
+[Unit]
+Description=Simulacro mensual de restauración (primer domingo, 10:00): restaura y comprueba
+
+[Timer]
+# Después del mantenimiento de las 08:00, que ya ha verificado parte del repositorio.
+OnCalendar=Sun *-*-01..07 10:00
+Unit=server-backup@simulacro.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

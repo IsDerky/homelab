@@ -1,0 +1,56 @@
+---
+- name: Falta el token del túnel
+  ansible.builtin.assert:
+    that: cloudflared_tunnel_env | length > 0
+    fail_msg: Define cloudflared_tunnel_env (con Ansible Vault).
+    quiet: true
+
+# force: false: solo se descarga si falta, para no marcar cambios cada vez
+- name: Clave del repositorio de Cloudflare
+  ansible.builtin.get_url:
+    url: https://pkg.cloudflare.com/cloudflare-main.gpg
+    dest: /usr/share/keyrings/cloudflare-main.gpg
+    mode: "0644"
+    force: false
+
+- name: Repositorio de Cloudflare
+  ansible.builtin.copy:
+    content: "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main\n"
+    dest: /etc/apt/sources.list.d/cloudflared.list
+    owner: root
+    group: root
+    mode: "0644"
+  register: cloudflared_repo
+
+- name: Paquete cloudflared
+  ansible.builtin.apt:
+    name: cloudflared
+    state: present
+    update_cache: "{{ cloudflared_repo is changed }}"
+
+- name: Token del túnel
+  ansible.builtin.copy:
+    content: "{{ cloudflared_tunnel_env }}"
+    dest: /etc/cloudflared/tunnel.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Reiniciar cloudflared
+
+- name: Unidad cloudflared
+  ansible.builtin.copy:
+    src: cloudflared.service
+    dest: /etc/systemd/system/cloudflared.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Recargar systemd
+    - Reiniciar cloudflared
+
+- name: Servicio cloudflared
+  ansible.builtin.systemd_service:
+    name: cloudflared.service
+    enabled: true
+    state: started

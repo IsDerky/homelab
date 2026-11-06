@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: cloudflared
+  namespace: isderky
+  description: Túnel de Cloudflare (cloudflared) gestionado desde el panel, con el token en Ansible Vault
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

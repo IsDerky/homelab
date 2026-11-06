@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+[{{ section }}]
+{% for key, value in options.items() %}
+{{ key }} = {{ (value | string | lower) if value is boolean else value }}
+{% endfor %}

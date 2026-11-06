@@ -1,0 +1,34 @@
+#!/bin/bash
+# Aviso de smartd por DM de Discord. En /etc/smartd.conf:
+#   DEVICESCAN … -m root -M exec /usr/local/bin/smartd-discord
+# smartd pasa los datos en variables SMARTD_* (ver `man smartd.conf`, -M exec).
+set -euo pipefail
+
+type="${SMARTD_FAILTYPE:-?}"
+case "$type" in
+  EmailTest) color=blue title="🧪 Prueba de alertas SMART" ;;
+  Health | FailedHealthCheck) color=red title="🔥 El disco reporta fallo de salud SMART" ;;
+  CurrentPendingSector) color=red title="🔥 Sectores pendientes de reasignar" ;;
+  OfflineUncorrectableSector) color=red title="🔥 Sectores ilegibles" ;;
+  SelfTest) color=red title="🔥 Autotest SMART fallido" ;;
+  # -R 5!/187!/199! en smartd.conf (reasignados, no corregibles, CRC) también llegan como Usage.
+  Usage) color=red title="🔥 Cambio en un atributo SMART crítico" ;;
+  Temperature) color=amber title="🌡️ Temperatura del disco alta" ;;
+  ErrorCount) color=amber title="⚠️ Nuevos errores en el log SMART" ;;
+  FailedOpenDevice) color=amber title="⚠️ smartd no puede abrir el disco" ;;
+  Failed*) color=amber title="⚠️ smartd no puede leer los datos SMART" ;;
+  *) color=amber title="⚠️ Aviso SMART ($type)" ;;
+esac
+
+fields=(-f "Disco=${SMARTD_DEVICEINFO:-${SMARTD_DEVICE:-?}}" -f "Dispositivo=\`${SMARTD_DEVICESTRING:-${SMARTD_DEVICE:-?}}\`")
+if [ -n "${SMARTD_TFIRSTEPOCH:-}" ] && [ "$type" != EmailTest ]; then
+  fields+=(-f "Primera vez=<t:${SMARTD_TFIRSTEPOCH}:R>")
+fi
+case "${SMARTD_NEXTDAYS:-}" in
+  "") ;;
+  1) fields+=(-f "Próximo aviso=mañana") ;;
+  *) fields+=(-f "Próximo aviso=en ${SMARTD_NEXTDAYS} días") ;;
+esac
+
+exec /usr/local/bin/discord-dm -t "$title" -c "$color" --footer "smartd · $(hostname)" \
+  "${fields[@]}" "${SMARTD_MESSAGE:-sin mensaje}"

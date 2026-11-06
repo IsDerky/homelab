@@ -1,0 +1,23 @@
+---
+backup_packages:
+  - restic
+  - rclone
+  - sqlite3
+  - python3
+
+# Timers que se instalan y activan (files/server-backup-<modo>.timer)
+backup_modes:
+  - sistema
+  - clientes
+  - mantenimiento
+  - simulacro
+
+# Tienen que coincidir con las del script server-backup
+backup_repository: rclone:gdrive:servidor-backup
+backup_password_file: /root/.restic-pass
+backup_rclone_config: /root/.config/rclone/rclone.conf
+
+# Secretos: definirlos con Ansible Vault. Solo se escriben si el fichero no
+# existe (máquina nueva); si ya está, el rol comprueba que coincide.
+backup_restic_password: ""
+backup_rclone_conf: ""

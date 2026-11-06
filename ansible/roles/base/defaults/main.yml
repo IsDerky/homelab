@@ -1,0 +1,20 @@
+---
+base_timezone: Europe/Madrid
+
+# Lo que tiene que estar siempre instalado
+base_packages:
+  - ca-certificates
+  - curl
+  - git
+  - htop
+  - jq
+  - nano
+  - rsync
+  - tree
+  - unattended-upgrades
+
+# Usuario con sudo para no tener que entrar como root
+base_admin_user: admin
+
+# Claves públicas que pueden entrar con ese usuario
+base_admin_keys: []

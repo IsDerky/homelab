@@ -1,0 +1,6 @@
+---
+# reload y no restart: las sesiones abiertas no se cortan
+- name: Recargar ssh
+  ansible.builtin.systemd_service:
+    name: ssh.service
+    state: reloaded

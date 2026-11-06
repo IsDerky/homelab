@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Envía un DM de Discord al owner como embed.
+
+Uso:
+  discord-dm "texto"                                   # compatible con la versión anterior
+  discord-dm -t "✅ Backup hecho" -c green \\
+             -f "Tamaño=1,2 GB" -f "Duración=4 min" \\
+             -b "Ver logs=https://…" "texto opcional"
+
+Colores: green, amber, red, blue o #rrggbb. Los campos (-f) van en columnas.
+--dry-run imprime el JSON sin enviarlo. Credenciales en /etc/discord-notify.env
+(DISCORD_BOT_TOKEN y DISCORD_USER_ID).
+"""
+
+import argparse
+import datetime
+import json
+import socket
+import sys
+import urllib.request
+
+ENV_FILE = "/etc/discord-notify.env"
+API = "https://discord.com/api/v10"
+COLORS = {"green": 0x22C55E, "amber": 0xF59E0B, "red": 0xEF4444, "blue": 0x3B82F6}
+
+
+def load_env(path):
+    env = {}
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.removeprefix("export ").split("=", 1)
+            env[key.strip()] = value.strip().strip("'\"")
+    return env
+
+
+def color(value):
+    if value in COLORS:
+        return COLORS[value]
+    if value.startswith("#") and len(value) == 7:
+        return int(value[1:], 16)
+    raise argparse.ArgumentTypeError(f"color no válido: {value}")
+
+
+def pair(value):
+    if "=" not in value:
+        raise argparse.ArgumentTypeError(f"se esperaba Nombre=Valor: {value}")
+    name, val = value.split("=", 1)
+    return name.strip(), val.strip()
+
+
+def build_message(args):
+    embed = {
+        "color": args.color,
+        "footer": {"text": args.footer or socket.gethostname()},
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    if args.title:
+        embed["title"] = args.title[:256]
+    text = " ".join(args.text)
+    if text:
+        embed["description"] = text[:4096]
+    if args.field:
+        embed["fields"] = [
+            {"name": n[:256], "value": (v or "—")[:1024], "inline": True} for n, v in args.field[:25]
+        ]
+    message = {"embeds": [embed], "allowed_mentions": {"parse": []}}
+    if args.button:
+        message["components"] = [
+            {
+                "type": 1,
+                "components": [
+                    {"type": 2, "style": 5, "label": label[:80], "url": url}
+                    for label, url in args.button[:5]
+                ],
+            }
+        ]
+    return message
+
+
+def post(path, token, body):
+    req = urllib.request.Request(
+        f"{API}{path}",
+        data=json.dumps(body).encode(),
+        method="POST",
+        headers={
+            "Authorization": f"Bot {token}",
+            "Content-Type": "application/json",
+            # Discord rechaza el User-Agent por defecto de urllib.
+            "User-Agent": "DiscordBot (https://derkyu.lol, 1.0)",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=15) as res:
+        return json.load(res)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="DM de Discord al owner como embed.")
+    parser.add_argument("-t", "--title")
+    parser.add_argument("-c", "--color", type=color, default=COLORS["blue"])
+    parser.add_argument("-f", "--field", type=pair, action="append", metavar="NOMBRE=VALOR")
+    parser.add_argument("-b", "--button", type=pair, action="append", metavar="ETIQUETA=URL")
+    parser.add_argument("--footer", help="por defecto, el hostname")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("text", nargs="*")
+    args = parser.parse_args()
+    if not (args.title or args.text or args.field):
+        parser.error("hace falta un texto, un título o algún campo")
+
+    message = build_message(args)
+    if args.dry_run:
+        print(json.dumps(message, ensure_ascii=False, indent=2))
+        return
+
+    env = load_env(ENV_FILE)
+    token = env["DISCORD_BOT_TOKEN"]
+    channel = post("/users/@me/channels", token, {"recipient_id": env["DISCORD_USER_ID"]})
+    post(f"/channels/{channel['id']}/messages", token, message)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as err:  # noqa: BLE001 — cualquier fallo debe salir con código ≠ 0
+        print(f"discord-dm: {err}", file=sys.stderr)
+        sys.exit(1)

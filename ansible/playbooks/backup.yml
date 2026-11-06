@@ -1,0 +1,6 @@
+---
+- name: Backups
+  hosts: homelab
+  become: true
+  roles:
+    - backup

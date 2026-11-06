@@ -1,0 +1,11 @@
+---
+# Los handlers corren en el orden de este fichero: si la config no pasa el test,
+# falla aquí y no se recarga (fail2ban sigue con la anterior)
+- name: Comprobar fail2ban
+  ansible.builtin.command: fail2ban-client --test
+  changed_when: false
+
+- name: Recargar fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban.service
+    state: reloaded

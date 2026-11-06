@@ -1,0 +1,11 @@
+---
+# Igual que en fail2ban: si nginx -t falla, no se recarga y sigue con la
+# config anterior
+- name: Comprobar nginx
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Recargar nginx
+  ansible.builtin.systemd_service:
+    name: nginx.service
+    state: reloaded

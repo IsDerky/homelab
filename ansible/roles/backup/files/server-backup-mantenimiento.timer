@@ -1,0 +1,10 @@
+[Unit]
+Description=Mantenimiento semanal de backups (domingos 08:00): limpieza, verificación y resumen
+
+[Timer]
+OnCalendar=Sun *-*-* 08:00
+Unit=server-backup@mantenimiento.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

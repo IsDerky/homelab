@@ -1,0 +1,12 @@
+---
+- name: Configuración de sshd
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    # Si no pasa sshd -t no se instala: un fichero roto te deja fuera
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Recargar ssh
