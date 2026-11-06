@@ -37,6 +37,7 @@ El honeypot necesita en el servidor Docker con Compose v2, systemd e iptables.
 | `base_packages` | ver `defaults/main.yml` | Paquetes que tienen que estar instalados |
 | `base_admin_user` | `admin` | Usuario con sudo |
 | `base_admin_keys` | `[]` | Claves públicas que pueden entrar con ese usuario |
+| `base_masked_services` | `[]` | Servicios parados y enmascarados (con su `.socket` si lo tienen) |
 
 ## Rol `ssh`
 
@@ -213,6 +214,8 @@ Es idempotente: una segunda pasada sin cambios termina con `changed=0`, y solo s
 | `honeypot_hostname` | `web-prod-02` | Lo que ve el atacante |
 | `honeypot_retention` | `30d` | Antigüedad a partir de la que se borran logs y descargas |
 | `honeypot_image` | `cowrie/cowrie:3.1.4` | |
+| `honeypot_user` | `cowrie` | Usuario del host con el que corre el contenedor. La imagen trae el uid 999, que en Ubuntu suele ser de otro servicio |
+| `honeypot_data_group` | igual que el usuario | Grupo de los datos (p. ej. `systemd-journal` para leer los logs sin root) |
 
 ## Cómo se prueba
 

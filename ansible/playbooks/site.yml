@@ -19,3 +19,5 @@
   ansible.builtin.import_playbook: webs.yml
 - name: Monitorización
   ansible.builtin.import_playbook: monitoring.yml
+- name: Honeypot
+  ansible.builtin.import_playbook: honeypot.yml

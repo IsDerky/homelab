@@ -47,12 +47,25 @@
     state: directory
     mode: "0755"
 
-- name: Carpetas de datos (Cowrie corre como 999)
+# La imagen trae su usuario con uid 999, que en el host suele ser de otro
+# servicio (dnsmasq en Ubuntu). Con un usuario propio, si alguien escapara del
+# contenedor sería "cowrie" y no un usuario de verdad del sistema.
+- name: Usuario del honeypot
+  ansible.builtin.user:
+    name: "{{ honeypot_user }}"
+    system: true
+    create_home: false
+    home: /nonexistent
+    shell: /usr/sbin/nologin
+    password_lock: true
+  register: honeypot_account
+
+- name: Carpetas de datos
   ansible.builtin.file:
     path: "{{ honeypot_dir }}/{{ item }}"
     state: directory
-    owner: "999"
-    group: "999"
+    owner: "{{ honeypot_user }}"
+    group: "{{ honeypot_data_group }}"
     mode: "0750"
   loop:
     - var
@@ -62,6 +75,17 @@
     - var/lib/cowrie
     - var/lib/cowrie/downloads
     - var/lib/cowrie/tty
+
+# Lo que ya hubiera de antes (logs, sesiones, descargas) también: si no, Cowrie
+# no podría seguir escribiendo en sus ficheros
+- name: Datos existentes del usuario del honeypot
+  ansible.builtin.file:
+    path: "{{ honeypot_dir }}/var"
+    state: directory
+    recurse: true
+    owner: "{{ honeypot_user }}"
+    group: "{{ honeypot_data_group }}"
+  notify: Reiniciar honeypot
 
 - name: Compose y configuración
   ansible.builtin.template:

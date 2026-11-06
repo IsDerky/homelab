@@ -62,7 +62,7 @@ flowchart TB
 
 ## Red y exposición
 
-- **Abierto en el router**: HTTP/HTTPS, la API y el SFTP de Wings, un rango para los juegos, un servicio de ping por websocket y el honeypot. El SSH real no se abre a internet.
+- **Abierto en el router**: HTTP/HTTPS, la API y el SFTP de Wings, un rango para los juegos y el honeypot. El SSH real no se abre a internet.
 - **La app web no abre ningún puerto**: sale por Cloudflare Tunnel (conexión saliente desde el servidor) y solo escucha en `127.0.0.1`.
 - **Servicios internos solo en LAN**: nginx los limita a la red de casa. Usan certificados de Let's Encrypt emitidos con DNS-01, así que no hace falta exponerlos para tener HTTPS.
 - **ufw** deniega por defecto lo entrante y lo enrutado. Ojo: lo que publica Docker no pasa por ufw. El honeypot se aísla con reglas en `DOCKER-USER`.

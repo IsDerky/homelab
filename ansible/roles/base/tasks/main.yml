@@ -10,6 +10,15 @@
     update_cache: true
     cache_valid_time: 3600
 
+# Enmascarados: ni otro paquete ni un socket pueden volver a arrancarlos
+- name: Servicios que no se usan
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: "{{ base_masked_services }}"
+
 - name: Usuario de administración
   ansible.builtin.user:
     name: "{{ base_admin_user }}"
