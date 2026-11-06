@@ -5,6 +5,7 @@ Roles para montar piezas del homelab:
 - `base`: zona horaria, paquetes básicos y usuario de administración con sus claves SSH.
 - `ssh`: `sshd_config` desde plantilla, solo con claves por defecto.
 - `ufw` y `fail2ban`: cortafuegos y baneos, con jails y filtros propios (`playbooks/firewall.yml`).
+- `backup`: backups con restic a Google Drive (vía rclone), timers de systemd y simulacro de restauración.
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 
 ## Uso
@@ -17,7 +18,7 @@ ansible-playbook playbooks/base.yml --check --diff   # ver qué cambiaría
 ansible-playbook playbooks/base.yml
 ```
 
-Para muchas variables es más cómodo `group_vars/<grupo>.yml` que el inventario. Esa carpeta tampoco va a git.
+Para muchas variables es más cómodo `group_vars/<grupo>.yml` que el inventario. Esa carpeta tampoco va a git. Yo tengo el inventario y las variables en un repo privado aparte, con los secretos cifrados con Ansible Vault, y apunto a él con `ANSIBLE_INVENTORY`.
 
 El honeypot necesita en el servidor Docker con Compose v2, systemd e iptables.
 
@@ -61,6 +62,14 @@ ufw_rules:
     from: 192.168.1.0/24
     comment: SSH LAN
 ```
+
+## Rol `backup`
+
+Instala `server-backup` y sus timers: `sistema` cada 6 h, `clientes` a diario, `mantenimiento` los domingos (prune y `check` de un cuarto del repo) y `simulacro` el primer domingo de mes, que restaura en `/var/tmp` y comprueba que lo restaurado sirve.
+
+Los secretos (`backup_restic_password` y `backup_rclone_conf`) van en Ansible Vault y solo se escriben si el fichero no existe, es decir, en una máquina nueva. Si ya existe no se toca: sobrescribir la contraseña de un repo que ya tiene datos lo dejaría sin poder abrirse, y rclone reescribe su config al renovar el token. A cambio, el rol comprueba que la contraseña del vault es la del servidor y, al final, que restic abre el repositorio de verdad (`restic cat config`, solo lectura).
+
+El script usa `discord-dm` y `ops-ping` para avisar; no los instala este rol.
 
 ## Rol `fail2ban`
 
