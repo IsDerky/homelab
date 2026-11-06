@@ -23,6 +23,23 @@ jobs:
           ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --force
           ansible-lint playbooks roles
 
+  monitoring:
+    name: Tests del rol monitoring
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ansible/roles/monitoring
+    steps:
+      - uses: actions/checkout@v5
+      - name: ops-exporter y alert-dm
+        run: python3 -m unittest discover -s tests -v
+      # Con el promtool de la misma imagen que va al servidor
+      - name: Reglas y alertas
+        run: |
+          image=$(grep -o 'prom/prometheus:v[0-9.]*' defaults/main.yml)
+          docker run --rm -v "$PWD":/r:ro -w /r/tests --entrypoint promtool "$image" check rules ../files/rules/alertas.yml
+          docker run --rm -v "$PWD":/r:ro -w /r/tests --entrypoint promtool "$image" test rules alertas_test.yml
+
   honeypot:
     name: Rol honeypot sobre el runner
     runs-on: ubuntu-24.04

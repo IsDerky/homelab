@@ -1,0 +1,54 @@
+---
+monitoring_dir: /opt/monitoring
+
+monitoring_images:
+  prometheus: prom/prometheus:v3.15.1
+  alertmanager: prom/alertmanager:v0.34.1
+  blackbox: prom/blackbox-exporter:v0.29.1
+  node_exporter: prom/node-exporter:v1.12.1
+  grafana: grafana/grafana:13.2.4
+
+# Todo escucha en 127.0.0.1 (red del host, sin puertos publicados por Docker)
+monitoring_ports:
+  prometheus: 9090
+  alertmanager: 9093
+  blackbox: 9115
+  node_exporter: 9100
+  grafana: 3005
+  ops_exporter: 9850
+  alert_dm: 9851
+
+# Topes por contenedor: la máquina tiene más cosas que hacer
+monitoring_mem:
+  prometheus: 512m
+  alertmanager: 64m
+  blackbox: 64m
+  node_exporter: 64m
+  grafana: 384m
+
+# Lo primero que se cumpla de las dos
+monitoring_retention_time: 15d
+monitoring_retention_size: 2GB
+
+monitoring_scrape_interval: 30s
+
+# Comprobaciones HTTP con blackbox. El cuerpo tiene que casar con body_regex.
+#   - servicio: web
+#     url: http://127.0.0.1:3000/api/health
+#     body_regex: '"ok":true'
+monitoring_http_probes: []
+
+# Objetivo de disponibilidad (SLO) de las comprobaciones HTTP, en 30 días
+monitoring_slo_target: 0.995
+
+# Snapshot de ops-collect y el grupo que puede leerlo. Vacío = sin ops-exporter.
+monitoring_ops_snapshot: /var/lib/ops-collect/snapshot.json
+monitoring_ops_group: ""
+
+# Alertas por DM con discord-dm (rol avisos). false = Alertmanager sin receptor.
+monitoring_alert_dm: true
+
+# Grafana. root_url por si va detrás de nginx en un subdirectorio.
+monitoring_grafana_admin_password: ""
+monitoring_grafana_root_url: http://127.0.0.1:3005/
+monitoring_grafana_anonymous_viewer: false

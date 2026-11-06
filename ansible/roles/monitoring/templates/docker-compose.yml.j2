@@ -1,0 +1,70 @@
+# {{ ansible_managed }}
+# Todo con la red del host y escuchando solo en 127.0.0.1. Los puertos que
+# publica Docker se saltan ufw; así no se publica ninguno.
+name: monitoring
+
+services:
+  prometheus:
+    image: {{ monitoring_images.prometheus }}
+    network_mode: host
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time={{ monitoring_retention_time }}
+      - --storage.tsdb.retention.size={{ monitoring_retention_size }}
+      - --web.listen-address=127.0.0.1:{{ monitoring_ports.prometheus }}
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./rules:/etc/prometheus/rules:ro
+      - ./data/prometheus:/prometheus
+    mem_limit: {{ monitoring_mem.prometheus }}
+    restart: unless-stopped
+
+  alertmanager:
+    image: {{ monitoring_images.alertmanager }}
+    network_mode: host
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=127.0.0.1:{{ monitoring_ports.alertmanager }}
+      # Una sola instancia: sin el puerto de cluster (9094)
+      - --cluster.listen-address=
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./data/alertmanager:/alertmanager
+    mem_limit: {{ monitoring_mem.alertmanager }}
+    restart: unless-stopped
+
+  blackbox:
+    image: {{ monitoring_images.blackbox }}
+    network_mode: host
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+      - --web.listen-address=127.0.0.1:{{ monitoring_ports.blackbox }}
+    volumes:
+      - ./blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    mem_limit: {{ monitoring_mem.blackbox }}
+    restart: unless-stopped
+
+  node-exporter:
+    image: {{ monitoring_images.node_exporter }}
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=127.0.0.1:{{ monitoring_ports.node_exporter }}
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: {{ monitoring_mem.node_exporter }}
+    restart: unless-stopped
+
+  grafana:
+    image: {{ monitoring_images.grafana }}
+    network_mode: host
+    env_file: grafana.env
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./data/grafana:/var/lib/grafana
+    mem_limit: {{ monitoring_mem.grafana }}
+    restart: unless-stopped

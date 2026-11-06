@@ -1,3 +1,4 @@
 ansible/inventory.ini
 ansible/group_vars/
 *.retry
+__pycache__/

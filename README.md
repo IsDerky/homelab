@@ -20,6 +20,7 @@ Aquí no hay IPs, dominios ni credenciales. El código de cada pieza está en su
 | Honeypot Cowrie | Docker, aislado con iptables | Puertos 22 y 23 del router |
 | Bot de operaciones | Bun + discord.js, systemd con `ProtectSystem=strict` | Sale a Discord, no escucha fuera |
 | Panel de estado | Web estática + API local del bot | Solo LAN |
+| Prometheus, Alertmanager, Grafana | Docker Compose con la red del host, solo loopback | Grafana solo LAN, por nginx |
 | Runners de GitHub Actions | Un runner por repo, usuario sin shell | Solo salida a GitHub |
 
 ```mermaid
@@ -108,6 +109,8 @@ Avisa una vez al pasarse el plazo, recuerda cada 24 h y avisa cuando vuelve. El 
 **Recolector** (`ops-collect`, Python sin dependencias, timer cada 5 minutos). Junta en un JSON el estado del sistema, SMART, servicios, backups, `docker stats`, certificados, fail2ban y el honeypot. También procesa el journal y agrupa los mensajes de log por huella, para detectar lo que es nuevo.
 
 **Bot de operaciones** (Discord, solo DMs y solo yo). Lee el JSON y responde a preguntas tipo "¿cómo van los backups?" usando un LLM con herramientas. Las acciones (reiniciar la app, lanzar un backup) solo se ejecutan con un botón que caduca a los 10 minutos: el modelo propone y yo confirmo. Manda un resumen diario por la mañana y lleva las caducidades de certificados y del dominio.
+
+**Métricas** (Prometheus + Grafana, [rol `monitoring`](ansible/README.md#rol-monitoring)). node_exporter para la máquina, blackbox para comprobar la app web desde fuera del proceso, y un exportador propio en Python que convierte el JSON del recolector en métricas. Dos dashboards: el servidor, y la app con su disponibilidad y los backups. Alertmanager solo avisa de lo que no cubre lo anterior: que la app falle lo bastante como para comerse su margen de error del mes (SLO del 99,5 %), disco o memoria a punto de acabarse, y que la propia monitorización deje de ver algo.
 
 Solo me avisa de lo que importa: servidor caído, backup fallido, alguien que inicia sesión, algo que caduca. Probé a avisar de anomalías en los logs y era ruido, así que el bot las aprende en silencio y me las cuenta solo si le pregunto.
 

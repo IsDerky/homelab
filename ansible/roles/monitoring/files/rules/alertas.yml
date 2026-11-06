@@ -1,0 +1,71 @@
+# Reglas y alertas. Solo avisan de problemas graves: lo demás (backups,
+# certificados, servidor caído entero, SMART) ya lo avisan el vigilante externo,
+# el bot y smartd, y repetirlo aquí sería ruido.
+groups:
+  # Proporción de comprobaciones HTTP fallidas en varias ventanas. slo:objetivo
+  # (por servicio) sale del inventario, en slo.yml.
+  - name: slo
+    rules:
+      - record: slo:probe_errors:ratio_rate5m
+        expr: 1 - avg by (servicio) (avg_over_time(probe_success{job="blackbox"}[5m]))
+      - record: slo:probe_errors:ratio_rate30m
+        expr: 1 - avg by (servicio) (avg_over_time(probe_success{job="blackbox"}[30m]))
+      - record: slo:probe_errors:ratio_rate1h
+        expr: 1 - avg by (servicio) (avg_over_time(probe_success{job="blackbox"}[1h]))
+      - record: slo:probe_errors:ratio_rate6h
+        expr: 1 - avg by (servicio) (avg_over_time(probe_success{job="blackbox"}[6h]))
+      - record: slo:probe_errors:ratio_rate30d
+        expr: 1 - avg by (servicio) (avg_over_time(probe_success{job="blackbox"}[30d]))
+
+  - name: alertas
+    rules:
+      # Quema rápida del margen de error (multiventana, como en el libro de SRE
+      # de Google): a 14,4 veces el ritmo permitido, el margen del mes se acaba
+      # en ~2 días. La ventana de 5 min hace que deje de avisar en cuanto se
+      # arregla, sin esperar a que se vacíe la de 1 h.
+      - alert: SLOQuemaRapida
+        expr: |
+          slo:probe_errors:ratio_rate1h > on (servicio) (14.4 * (1 - slo:objetivo))
+          and
+          slo:probe_errors:ratio_rate5m > on (servicio) (14.4 * (1 - slo:objetivo))
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.servicio }} está fallando: a este ritmo se gasta el margen de error del mes en unos 2 días."
+
+      - alert: DiscoCasiLleno
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/", fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|overlay"} < 0.10
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Queda menos del 10 % del disco ({{ $value | humanizePercentage }} libre)."
+
+      - alert: MemoriaAgotada
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Queda menos del 5 % de RAM disponible ({{ $value | humanizePercentage }})."
+
+      # Si una pieza de la monitorización deja de responder, las alertas que
+      # dependen de ella tampoco saltarían
+      - alert: ObjetivoCaido
+        expr: up == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus no puede leer {{ $labels.job }} ({{ $labels.instance }}) desde hace 15 min."
+
+      - alert: RecolectorParado
+        expr: time() - ops_snapshot_timestamp_seconds > 1800
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ops-collect no actualiza el snapshot desde hace más de 30 min."
