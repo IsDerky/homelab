@@ -1,8 +1,12 @@
 ---
 # Vhosts: <nginx_sites_dir>/<name>.conf → sites-available. enabled: false lo
-# deja preparado sin activar.
+# deja preparado sin activar. check (opcional): URL que tiene que dar 200 con
+# esa cabecera Host cuando el vhost está activo.
 #   - name: web
 #     enabled: true
+#     check:
+#       url: http://127.0.0.1:8084/
+#       host: web.example.com
 nginx_sites: []
 
 # Por defecto, files/nginx junto al inventario (los vhosts son de cada servidor)

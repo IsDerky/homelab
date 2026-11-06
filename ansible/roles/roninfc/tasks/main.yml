@@ -1,0 +1,69 @@
+---
+- name: Usuario roninfc (sin shell ni contraseña)
+  ansible.builtin.user:
+    name: roninfc
+    system: true
+    home: /var/lib/roninfc
+    create_home: false
+    shell: /usr/sbin/nologin
+    password_lock: true
+
+# De root: las versiones son de solo lectura para el servicio salvo su .next,
+# que el CI le cambia de dueño al publicar
+- name: Carpetas de versiones
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ roninfc_root }}"
+    - "{{ roninfc_root }}/releases"
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: roninfc.service.j2
+    dest: /etc/systemd/system/roninfc.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Recargar systemd
+    - Reiniciar roninfc
+
+- name: Aplicar cambios pendientes antes de arrancar o parar
+  ansible.builtin.meta: flush_handlers
+
+- name: Comprobar que el CI ya ha publicado una versión
+  ansible.builtin.stat:
+    path: "{{ roninfc_root }}/current"
+  register: roninfc_current
+
+- name: Sin código no se enciende
+  ansible.builtin.assert:
+    that: roninfc_current.stat.exists
+    fail_msg: No hay versión en {{ roninfc_root }}/current. Haz push a main del repo o relanza su CI.
+    quiet: true
+  when: roninfc_enabled
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: roninfc.service
+    enabled: "{{ roninfc_enabled }}"
+    state: "{{ 'started' if roninfc_enabled else 'stopped' }}"
+
+# deploy-repo usa la misma prueba antes de dar una versión por buena
+- name: Comprobar que devuelve datos
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ roninfc_port }}{{ roninfc_check_path }}
+    return_content: true
+    timeout: "{{ roninfc_check_timeout }}"
+  register: roninfc_check
+  until: >-
+    roninfc_check.status == 200
+    and (roninfc_check.json.success | default(false))
+    and (roninfc_check.json.data | default([]) | length > 0)
+  retries: 15
+  delay: 4
+  when: roninfc_enabled

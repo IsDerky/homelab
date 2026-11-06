@@ -1,0 +1,19 @@
+---
+# false = todo instalado pero el servicio parado y deshabilitado (antes del
+# corte). true = arrancado y comprobado.
+roninfc_enabled: false
+
+# Solo escucha en loopback: entra por el túnel de Cloudflare
+roninfc_port: 3051
+
+# El CI (deploy-repo) publica cada versión en releases/<sha> y enlaza current.
+# Las rutas están fijadas también allí.
+roninfc_root: /srv/roninfc
+
+# Como el max_memory_restart 1G que tenía en PM2, con margen para Chrome
+roninfc_memory_max: 1536M
+
+# Ruta que tiene que devolver datos para dar el servicio por bueno. Tira de
+# scraping, así que la primera respuesta puede tardar.
+roninfc_check_path: /api/partidos
+roninfc_check_timeout: 90

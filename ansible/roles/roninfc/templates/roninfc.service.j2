@@ -1,0 +1,47 @@
+# {{ ansible_managed }}
+# El código lo publica el CI (deploy-repo roninfc) en {{ roninfc_root }}/current.
+[Unit]
+Description=Ronin FC (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=roninfc
+Group=roninfc
+WorkingDirectory={{ roninfc_root }}/current
+Environment=NODE_ENV=production
+Environment=PORT={{ roninfc_port }}
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=HOME=/var/lib/roninfc
+Environment=XDG_CONFIG_HOME=/var/lib/roninfc/.config
+Environment=XDG_CACHE_HOME=/var/lib/roninfc/.cache
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p {{ roninfc_port }}
+Restart=always
+RestartSec=5
+# next start sale con SIGTERM al pararlo: no es un fallo
+SuccessExitStatus=143
+
+# Chrome (puppeteer) corre con --no-sandbox: el encierro lo pone systemd.
+# Solo puede escribir en su .next (caché de ISR) y en /var/lib/roninfc.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+StateDirectory=roninfc
+ReadWritePaths={{ roninfc_root }}/releases
+MemoryMax={{ roninfc_memory_max }}
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target

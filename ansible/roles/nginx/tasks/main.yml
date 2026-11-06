@@ -87,3 +87,17 @@
     name: nginx.service
     enabled: true
     state: started
+
+- name: Aplicar cambios de nginx antes de comprobar
+  ansible.builtin.meta: flush_handlers
+
+- name: Webs activas responden
+  ansible.builtin.uri:
+    url: "{{ item.check.url }}"
+    headers:
+      Host: "{{ item.check.host }}"
+    status_code: 200
+  loop: "{{ nginx_sites | selectattr('check', 'defined') }}"
+  loop_control:
+    label: "{{ item.name }}: {{ item.check.host }}"
+  when: item.enabled | default(true)

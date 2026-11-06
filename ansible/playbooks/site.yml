@@ -15,3 +15,5 @@
   ansible.builtin.import_playbook: nginx.yml
 - name: Túnel
   ansible.builtin.import_playbook: cloudflared.yml
+- name: Webs
+  ansible.builtin.import_playbook: webs.yml
