@@ -5,7 +5,8 @@ backup_packages:
   - sqlite3
   - python3
 
-# Timers que se instalan y activan (files/server-backup-<modo>.timer)
+# Timers que se instalan y activan (files/server-backup-<modo>.timer). Hay
+# también nas (necesita /srv/nas).
 backup_modes:
   - sistema
   - clientes
@@ -16,6 +17,11 @@ backup_modes:
 backup_repository: rclone:gdrive:servidor-backup
 backup_password_file: /root/.restic-pass
 backup_rclone_config: /root/.config/rclone/rclone.conf
+
+# Segunda copia en un disco local (punto de montaje y repo; tienen que
+# coincidir con LOCAL_MOUNT y LOCAL_REPO del script). Vacío = sin copia local.
+backup_local_mount: ""
+backup_local_repo: "{{ backup_local_mount }}/restic"
 
 # Secretos: definirlos con Ansible Vault. Solo se escriben si el fichero no
 # existe (máquina nueva); si ya está, el rol comprueba que coincide.

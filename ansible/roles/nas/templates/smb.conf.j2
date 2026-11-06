@@ -1,0 +1,41 @@
+# {{ ansible_managed }}
+[global]
+   workgroup = WORKGROUP
+   server string = homelab
+   server role = standalone server
+
+   # Solo SMB3, y cifrado si el cliente lo admite (Windows 8 en adelante)
+   server min protocol = SMB3
+   server smb encrypt = desired
+
+   # Solo en la LAN, sin NetBIOS (nmbd) ni puerto 139
+   interfaces = lo {{ nas_interfaces | join(' ') }}
+   bind interfaces only = yes
+   hosts allow = 127.0.0.1 {{ nas_hosts_allow | join(' ') }}
+   hosts deny = 0.0.0.0/0
+   smb ports = 445
+   disable netbios = yes
+
+   # Nada de invitados ni sesiones anónimas
+   map to guest = never
+   restrict anonymous = 2
+
+   # Sin impresoras
+   load printers = no
+   printing = bsd
+   printcap name = /dev/null
+   disable spoolss = yes
+
+   logging = file
+   log file = /var/log/samba/log.%m
+   max log size = 1000
+
+[{{ nas_share }}]
+   path = {{ nas_path }}
+   valid users = {{ nas_user }}
+   read only = no
+   force user = {{ nas_user }}
+   create mask = 0660
+   directory mask = 0770
+   # La de ext4 en la raíz del volumen: es de root y no sirve desde Windows
+   veto files = /lost+found/

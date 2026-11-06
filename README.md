@@ -7,6 +7,7 @@ Aquí no hay IPs, dominios ni credenciales. El código de cada pieza está en su
 ## Máquina
 
 - Dell OptiPlex con un i5-8500 (6 núcleos), 38 GB de RAM y un SSD de 256 GB.
+- Un SSD NVMe externo de 250 GB por USB-C (10 Gbps), con LVM: copia local de los backups y NAS.
 - Ubuntu Server 24.04, sin escritorio.
 
 ## Qué corre
@@ -78,13 +79,14 @@ flowchart TB
 
 ## Backups
 
-restic sobre rclone a Google Drive. Todo se cifra en el servidor antes de subirlo. Un script (`server-backup`) con cuatro modos, cada uno con su timer de systemd:
+restic sobre rclone a Google Drive, y una segunda copia en el disco USB. Todo se cifra en el servidor antes de subirlo. Un script (`server-backup`) con cuatro modos, cada uno con su timer de systemd:
 
 | Modo | Cuándo | Qué hace | Retención |
 |---|---|---|---|
 | `sistema` | Cada 6 h | BD de la app (`sqlite3 .backup`), dump del panel, `/etc`, `/opt`, scripts, crons | 7 diarios, 4 semanales, 12 mensuales |
 | `clientes` | A diario | Volúmenes y backups de los servidores de juego | 7 diarios, 4 semanales, 3 mensuales |
 | `mantenimiento` | Domingos | `prune` y `check` de una cuarta parte de los datos (cada mes se verifica todo) | — |
+| `nas` | A diario | La carpeta del NAS, solo a Drive (en local estaría en el mismo disco) | 7 diarios, 4 semanales, 6 mensuales |
 | `simulacro` | Primer domingo de mes | Restaura en `/var/tmp`, pasa `integrity_check` a la BD, comprueba el dump del panel y un fichero de un servidor de juego | — |
 
 Los volúmenes de los servidores de juego se copian como ficheros desde el host, sin ejecutar nada dentro de sus servidores. Es una copia "como si se fuera la luz" (crash-consistent); por eso se guardan varias versiones.
@@ -132,7 +134,7 @@ Push a `main` = despliegue. Hay dos variantes:
 ## Decisiones y compromisos
 
 - **Una máquina, sin Kubernetes.** systemd y Docker Compose cubren lo que necesito con mucha menos complejidad. Cada servicio es una unidad con su usuario y sus límites.
-- **Un solo disco.** Es el punto débil. Lo cubro con backups fuera de casa cada 6 h y simulacros mensuales; el siguiente paso es un segundo SSD para tener también copia local (3-2-1).
+- **Un solo disco interno.** Lo cubren los backups fuera de casa cada 6 h, los simulacros mensuales y una segunda copia en un SSD externo por USB (3-2-1: tres copias, dos soportes, una fuera). La carcasa USB no deja leer el SMART, así que la salud de ese disco se comprueba con un `restic check --read-data` completo cada semana.
 - **Google Drive como destino de backups.** Ya tenía el espacio pagado y restic cifra antes de subir, así que el proveedor no ve nada. La app OAuth de rclone solo tiene acceso a los ficheros que crea ella.
 - **Cloudflare Tunnel para la app web.** No abro puertos y Cloudflare filtra por delante. El precio es depender de un tercero para ese servicio.
 - **Configuración en Ansible** ([`ansible/`](ansible/)). Empezó como scripts en bash idempotentes: para una máquina funcionaban, pero reconstruirla desde cero costaba. Ahora SSH, cortafuegos, fail2ban, backups, avisos, nginx, el túnel, la app principal, AdGuard, el honeypot, la monitorización y las webs son roles, y `site.yml` aplica el servidor entero (una segunda pasada da `changed=0`). Los valores y secretos van en un repo privado con Ansible Vault. El honeypot además se prueba en el CI aplicándolo de verdad sobre el runner.
@@ -141,7 +143,6 @@ Push a `main` = despliegue. Hay dos variantes:
 ## Pendiente
 
 - Traer las dos webs que quedan en un VPS que no se renueva ([runbook](docs/runbook-migracion-vps.md)). Preparadas y apagadas; falta el corte de DNS.
-- Segundo SSD para copia local.
 - Resolver DNS recursivo propio (Unbound) detrás de AdGuard.
 - Pila de la BIOS y arranque automático tras un corte de luz.
 - Reconstruir el servidor en una VM vacía solo con `site.yml`, para probar que de verdad basta.

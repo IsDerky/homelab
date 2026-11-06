@@ -1,0 +1,6 @@
+---
+- name: Disco USB
+  hosts: homelab
+  become: true
+  roles:
+    - usb_storage

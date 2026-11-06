@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: nas
+  namespace: isderky
+  description: Carpeta compartida por Samba solo con SMB3, solo para la LAN y con un usuario propio
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []
