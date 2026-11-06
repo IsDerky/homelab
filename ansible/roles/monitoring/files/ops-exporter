@@ -20,6 +20,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SNAPSHOT = os.environ.get("OPS_SNAPSHOT", "/var/lib/ops-collect/snapshot.json")
+BACKUP_STATE = os.environ.get("OPS_BACKUP_STATE", "/var/lib/server-backup/estado")
 LISTEN = os.environ.get("OPS_LISTEN", "127.0.0.1:9850")
 
 
@@ -177,16 +178,50 @@ def collect(snapshot):
     return m
 
 
-def render(path=SNAPSHOT):
+def backup_state(m, directory):
+    """Un JSON por modo y destino que deja server-backup (<modo>-<destino>.json)."""
+    try:
+        names = sorted(os.listdir(directory))
+    except OSError:
+        return
+    for name in names:
+        if not name.endswith(".json") or "-" not in name:
+            continue
+        mode, _, dest = name[:-5].rpartition("-")
+        try:
+            with open(os.path.join(directory, name)) as f:
+                run = json.load(f)
+        except (OSError, ValueError):
+            continue
+        labels = {"modo": mode, "destino": dest}
+        m.add("ops_backup_run_success", "1 si la última ejecución fue bien", 1 if run.get("ok") else 0, labels)
+        m.add("ops_backup_run_timestamp_seconds", "Cuándo fue la última ejecución", run.get("at"), labels)
+        m.add(
+            "ops_backup_run_last_success_timestamp_seconds",
+            "Cuándo fue la última ejecución buena",
+            run.get("last_ok_at"),
+            labels,
+        )
+        m.add(
+            "ops_backup_run_max_age_seconds",
+            "Antigüedad máxima aceptable de la última copia buena",
+            run.get("max_age_s"),
+            labels,
+        )
+        m.add("ops_backup_run_duration_seconds", "Duración de la última ejecución", run.get("duration_s"), labels)
+
+
+def render(path=SNAPSHOT, state_dir=BACKUP_STATE):
     try:
         with open(path) as f:
-            snapshot = json.load(f)
+            m = collect(json.load(f))
     except (OSError, ValueError) as err:
         print(f"no se puede leer {path}: {err}", file=sys.stderr)
         m = Metrics()
         m.add("ops_snapshot_up", "1 si el snapshot se ha podido leer", 0)
-        return m.render()
-    return collect(snapshot).render()
+    # Aparte del snapshot: si ops-collect falla, esto sigue saliendo
+    backup_state(m, state_dir)
+    return m.render()
 
 
 class Handler(BaseHTTPRequestHandler):
