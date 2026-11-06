@@ -1,0 +1,106 @@
+---
+- name: Faltan los secretos
+  ansible.builtin.assert:
+    that:
+      - backup_restic_password | length > 0
+      - backup_rclone_conf | length > 0
+    fail_msg: Define backup_restic_password y backup_rclone_conf (con Ansible Vault).
+    quiet: true
+
+- name: Paquetes
+  ansible.builtin.apt:
+    name: "{{ backup_packages }}"
+    state: present
+
+# force: false = solo en una máquina nueva. Sobrescribir la contraseña de un
+# repo que ya existe dejaría los backups sin poder abrirse. rclone.conf además
+# lo reescribe rclone al renovar el token de Drive.
+- name: Contraseña de restic
+  ansible.builtin.copy:
+    content: "{{ backup_restic_password }}\n"
+    dest: "{{ backup_password_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+  no_log: true
+
+- name: Carpeta de rclone
+  ansible.builtin.file:
+    path: "{{ backup_rclone_config | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Configuración de rclone
+  ansible.builtin.copy:
+    content: "{{ backup_rclone_conf }}"
+    dest: "{{ backup_rclone_config }}"
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+  no_log: true
+
+- name: Leer la contraseña instalada
+  ansible.builtin.slurp:
+    src: "{{ backup_password_file }}"
+  register: backup_installed_password
+  no_log: true
+
+- name: La contraseña del vault es la del servidor
+  ansible.builtin.assert:
+    that: (backup_installed_password.content | b64decode | trim) == backup_restic_password
+    fail_msg: La contraseña de restic del servidor no coincide con la del vault. Actualiza el vault.
+    quiet: true
+  no_log: true
+
+- name: Script server-backup
+  ansible.builtin.copy:
+    src: server-backup
+    dest: /usr/local/bin/server-backup
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Unidad server-backup@
+  ansible.builtin.copy:
+    src: server-backup@.service
+    dest: /etc/systemd/system/server-backup@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recargar systemd
+
+- name: Timers
+  ansible.builtin.copy:
+    src: server-backup-{{ item }}.timer
+    dest: /etc/systemd/system/server-backup-{{ item }}.timer
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ backup_modes }}"
+  notify: Recargar systemd
+
+# Antes de activar los timers, que systemd vea las unidades nuevas
+- name: Recargar systemd si hace falta
+  ansible.builtin.meta: flush_handlers
+
+- name: Timers activos
+  ansible.builtin.systemd_service:
+    name: server-backup-{{ item }}.timer
+    enabled: true
+    state: started
+  loop: "{{ backup_modes }}"
+
+# Solo lee: comprueba de verdad que la contraseña y rclone abren el repo de Drive
+- name: Restic abre el repositorio
+  ansible.builtin.command: restic cat config
+  environment:
+    RESTIC_REPOSITORY: "{{ backup_repository }}"
+    RESTIC_PASSWORD_FILE: "{{ backup_password_file }}"
+    RCLONE_CONFIG: "{{ backup_rclone_config }}"
+    RESTIC_CACHE_DIR: /var/cache/restic
+  changed_when: false
+  check_mode: false

@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: backup
+  namespace: isderky
+  description: Backups con restic a Google Drive vía rclone, con timers de systemd y simulacro de restauración
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

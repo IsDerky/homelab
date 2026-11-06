@@ -1,0 +1,11 @@
+[Unit]
+Description=Backup diario de Pterodactyl (volúmenes de clientes) a las 05:30
+
+[Timer]
+OnCalendar=*-*-* 05:30
+Unit=server-backup@clientes.service
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Backup del sistema cada 6 horas (00:30, 06:30, 12:30, 18:30)
+
+[Timer]
+OnCalendar=*-*-* 00/6:30
+Unit=server-backup@sistema.service
+# Si el servidor estaba apagado a esa hora, la copia se hace al arrancar.
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

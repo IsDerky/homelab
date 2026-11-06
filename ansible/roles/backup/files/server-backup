@@ -1,0 +1,218 @@
+#!/bin/bash
+# Backups del servidor a Google Drive con restic (vía rclone), cifrados en el
+# servidor antes de subirlos. Tres modos, cada uno con su timer de systemd:
+#
+#   server-backup sistema        cada 6 h: BD de Bentonime y del panel, /etc, scripts…
+#   server-backup clientes       a diario: volúmenes y backups de Pterodactyl
+#   server-backup mantenimiento  domingos: libera espacio, verifica ¼ del repo y resume
+#   server-backup simulacro      primer domingo de mes: restaura en /var/tmp y comprueba
+#
+#   Manual:  systemctl start --no-block server-backup@sistema
+#   Seguir:  journalctl -fu server-backup@sistema
+#
+# Pterodactyl: los volúmenes de los clientes se copian como archivos desde el
+# host, sin ejecutar nada dentro de sus servidores. La copia es "como si se
+# fuera la luz" (crash-consistent); por eso se guardan varias versiones.
+set -euo pipefail
+
+export RESTIC_REPOSITORY="rclone:gdrive:servidor-backup"
+export RESTIC_PASSWORD_FILE=/root/.restic-pass
+export RCLONE_CONFIG=/root/.config/rclone/rclone.conf
+export RESTIC_CACHE_DIR=/var/cache/restic
+# Trozos de 64 MiB en vez de 16: ~4 veces menos archivos y peticiones a Drive,
+# que limita bastante a la clave interna de rclone.
+export RESTIC_PACK_SIZE=64
+# Lo que restic borra va a la papelera de Drive (30 días): red de seguridad si
+# alguien con root borrase el repositorio. Es el comportamiento por defecto.
+
+STAGE=/var/backups/server-backup # volcados que se suben junto al resto
+BENTO=/home/bentonime/apps/bentonime
+
+SIMULACRO_RESULT=/var/lib/server-backup/simulacro.json # lo lee ops-collect
+
+mode="${1:-}"
+step=inicio
+started=$(date +%s)
+
+# Resultado del simulacro para el asistente: JSON con el paso y las comprobaciones.
+# Uso: simulacro_result true|false [clave=valor ...]
+simulacro_result() {
+  install -d -m 755 "$(dirname "$SIMULACRO_RESULT")"
+  python3 - "$SIMULACRO_RESULT" "$1" "$step" "$(($(date +%s) - started))" "${@:2}" <<'PY'
+import json, os, sys
+from datetime import datetime, timezone
+path, ok, step, secs, *pairs = sys.argv[1:]
+checks = {}
+for p in pairs:
+    k, _, v = p.partition("=")
+    checks[k] = int(v) if v.isdigit() else v
+out = {"at": datetime.now(timezone.utc).isoformat(), "ok": ok == "true", "duration_s": int(secs), "checks": checks}
+if ok != "true":
+    out["step"] = step
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(out, f, indent=1)
+os.chmod(tmp, 0o644)
+os.replace(tmp, path)
+PY
+}
+
+notify_fail() {
+  if [ "$mode" = simulacro ]; then simulacro_result false || true; fi
+  /usr/local/bin/discord-dm -t "❌ Backup fallido ($mode)" -c red \
+    -f "Paso=$step" -f "Equipo=$(hostname)" \
+    "Revisa \`journalctl -u server-backup@$mode\`." || true
+}
+trap notify_fail ERR
+
+# Los modos pueden coincidir (p. ej. clientes aún subiendo cuando toca
+# sistema): restic espera a que el otro suelte el bloqueo en vez de fallar.
+r() { restic --retry-lock 6h "$@"; }
+
+# `restic backup` sale con 3 si la copia se hizo pero algún archivo cambió o
+# desapareció mientras se leía (normal en servidores de juego en marcha).
+backup() {
+  local rc=0
+  r backup --one-file-system --exclude-caches "$@" || rc=$?
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then return "$rc"; fi
+}
+
+case "$mode" in
+  sistema)
+    install -d -m 700 "$STAGE"
+    step="BD de Bentonime"
+    sqlite3 "$BENTO/data/anime.db" ".backup '$STAGE/anime.db'"
+    step="BD del panel"
+    mariadb-dump --single-transaction --routines --triggers --databases panel >"$STAGE/panel.sql"
+    step="lista de paquetes"
+    dpkg --get-selections >"$STAGE/paquetes.txt"
+
+    step="subida"
+    paths=("$STAGE" /etc /opt /usr/local/bin /root /var/spool/cron /var/www/pterodactyl)
+    for f in "$BENTO/.env.production" "$BENTO/data/.stream-secret"; do
+      if [ -e "$f" ]; then paths+=("$f"); fi
+    done
+    backup --tag sistema \
+      --exclude /root/.cache \
+      --exclude /var/www/pterodactyl/node_modules \
+      --exclude /var/www/pterodactyl/storage/logs \
+      --exclude /var/www/pterodactyl/storage/framework/cache \
+      --exclude /opt/honeypot/var \
+      "${paths[@]}"
+
+    step="caducar versiones antiguas"
+    # Todas las de los últimos 7 días, luego 4 semanales y 12 mensuales (1 año).
+    r forget --tag sistema --group-by host,tags --keep-within 7d --keep-weekly 4 --keep-monthly 12
+    ;;
+
+  clientes)
+    step="subida"
+    paths=(/var/lib/pterodactyl/volumes)
+    if [ -d /var/lib/pterodactyl/backups ]; then paths+=(/var/lib/pterodactyl/backups); fi
+    backup --tag clientes "${paths[@]}"
+
+    step="caducar versiones antiguas"
+    r forget --tag clientes --group-by host,tags --keep-daily 7 --keep-weekly 4 --keep-monthly 3
+    ;;
+
+  mantenimiento)
+    step="liberar espacio"
+    r prune --max-unused 10%
+
+    step="verificación"
+    # Rota por semanas: en 4 domingos se ha descargado y comprobado todo el repo.
+    part=$((10#$(date +%V) % 4 + 1))
+    r check --read-data-subset="$part/4"
+
+    step="resumen"
+    count() { r snapshots --tag "$1" --json | python3 -c "import json,sys; print(len(json.load(sys.stdin)))"; }
+    stats=$(r stats --mode raw-data --json)
+    size=$(python3 -c "import json,sys; print('%.1f GB' % (json.load(sys.stdin)['total_size'] / 2**30))" <<<"$stats")
+    about=$(rclone about gdrive: --json)
+    free=$(python3 -c "import json,sys; print('%.1f GB' % (json.load(sys.stdin)['free'] / 2**30))" <<<"$about")
+    trash=$(python3 -c "import json,sys; print('%.1f GB' % (json.load(sys.stdin).get('trashed', 0) / 2**30))" <<<"$about")
+    /usr/local/bin/discord-dm -t "📦 Resumen semanal de backups" -c green \
+      -f "Versiones sistema=$(count sistema)" -f "Versiones clientes=$(count clientes)" \
+      -f "Ocupa el repo=$size" -f "Papelera de Drive=$trash" -f "Libre en Drive=$free" \
+      "Espacio liberado y verificada la parte $part de 4 del repositorio sin errores." || true
+    ;;
+
+  simulacro)
+    # Lo que haría falta si muriese el disco: ¿se puede sacar del repositorio y sirve?
+    work=$(mktemp -d /var/tmp/simulacro.XXXXXX)
+    trap 'rm -rf "$work"' EXIT
+    dumps="$work$STAGE"
+
+    step="restaurar los volcados de sistema"
+    r restore latest --tag sistema --target "$work" --include "$STAGE"
+
+    step="integridad de anime.db"
+    [ "$(sqlite3 "$dumps/anime.db" 'PRAGMA integrity_check')" = ok ]
+    animes=$(sqlite3 "$dumps/anime.db" 'SELECT COUNT(*) FROM anime')
+    usuarios=$(sqlite3 "$dumps/anime.db" 'SELECT COUNT(*) FROM user')
+    # Una comprobación por línea: con set -e, un fallo dentro de "a && b" no corta.
+    [ "$animes" -gt 0 ]
+    [ "$usuarios" -gt 0 ]
+
+    step="volcado del panel"
+    tail -n 1 "$dumps/panel.sql" | grep -q 'Dump completed'
+    tablas_panel=$(grep -c '^CREATE TABLE' "$dumps/panel.sql")
+    [ "$tablas_panel" -gt 20 ]
+
+    step="lista de paquetes"
+    paquetes=$(wc -l <"$dumps/paquetes.txt")
+    [ "$paquetes" -gt 100 ]
+
+    step="archivo de clientes"
+    # Uno cualquiera (< 50 MB) del último backup de clientes, leído entero desde
+    # Drive: su tamaño debe cuadrar con el del índice. No se mira su contenido.
+    read -r cliente_size cliente_file < <(r ls latest --tag clientes --json | python3 -c '
+import json, random, sys
+files = []
+for line in sys.stdin:
+    n = json.loads(line)
+    if n.get("type") == "file" and 0 < n.get("size", 0) < 50 * 2**20:
+        files.append((n["size"], n["path"]))
+size, path = random.choice(files)
+print(size, path)')
+    leidos=$(r dump --tag clientes latest "$cliente_file" | wc -c)
+    [ "$leidos" -eq "$cliente_size" ]
+
+    step="antigüedad de las copias"
+    age_h() {
+      r snapshots --tag "$1" --latest 1 --json | python3 -c '
+import json, re, sys
+from datetime import datetime, timezone
+s = max(json.load(sys.stdin), key=lambda s: s["time"])
+# restic da nanosegundos; fromisoformat solo admite hasta microsegundos.
+t = datetime.fromisoformat(re.sub(r"(\.\d{6})\d+", r"\1", s["time"]).replace("Z", "+00:00"))
+print(int((datetime.now(timezone.utc) - t).total_seconds() // 3600))'
+    }
+    horas_sistema=$(age_h sistema)
+    horas_clientes=$(age_h clientes)
+    [ "$horas_sistema" -lt 13 ]
+    [ "$horas_clientes" -lt 30 ]
+
+    step="resultado"
+    simulacro_result true "animes=$animes" "usuarios=$usuarios" "tablas_panel=$tablas_panel" \
+      "paquetes=$paquetes" "archivo_cliente_bytes=$leidos" \
+      "horas_ultima_copia_sistema=$horas_sistema" "horas_ultima_copia_clientes=$horas_clientes"
+    /usr/local/bin/discord-dm -t "🧪 Simulacro de restauración superado" -c green \
+      -f "anime.db=íntegra, $animes animes, $usuarios usuarios" -f "Panel=$tablas_panel tablas" \
+      -f "Clientes=archivo de $leidos bytes leído entero" \
+      -f "Copias=sistema hace ${horas_sistema} h, clientes hace ${horas_clientes} h" \
+      "Restaurado en $(($(date +%s) - started)) s y borrado después." || true
+    ;;
+
+  *)
+    echo "Uso: server-backup sistema|clientes|mantenimiento|simulacro" >&2
+    exit 2
+    ;;
+esac
+
+# Solo llega aquí si todo fue bien: el vigilante externo avisa si deja de
+# recibir esto (ver ops-ping).
+case "$mode" in
+  sistema | clientes) /usr/local/bin/ops-ping "backup-$mode" ;;
+  simulacro) /usr/local/bin/ops-ping simulacro ;;
+esac
