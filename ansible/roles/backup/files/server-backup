@@ -1,11 +1,17 @@
 #!/bin/bash
 # Backups del servidor a Google Drive con restic (vía rclone), cifrados en el
-# servidor antes de subirlos. Tres modos, cada uno con su timer de systemd:
+# servidor antes de subirlos, y una segunda copia en un disco local. Cada modo
+# tiene su timer de systemd:
 #
 #   server-backup sistema        cada 6 h: BD de Bentonime y del panel, /etc, scripts…
 #   server-backup clientes       a diario: volúmenes y backups de Pterodactyl
-#   server-backup mantenimiento  domingos: libera espacio, verifica ¼ del repo y resume
+#   server-backup nas            a diario: el NAS (solo a Drive: está en el disco local)
+#   server-backup mantenimiento  domingos: libera espacio, verifica y resume
 #   server-backup simulacro      primer domingo de mes: restaura en /var/tmp y comprueba
+#
+# sistema y clientes, después de subir a Drive, hacen la misma copia en el repo
+# local (LOCAL_REPO). Si el disco no está o falla, la copia de Drive no se ve
+# afectada: el resultado queda en ESTADO y lo vigila Prometheus.
 #
 #   Manual:  systemctl start --no-block server-backup@sistema
 #   Seguir:  journalctl -fu server-backup@sistema
@@ -13,7 +19,8 @@
 # Pterodactyl: los volúmenes de los clientes se copian como archivos desde el
 # host, sin ejecutar nada dentro de sus servidores. La copia es "como si se
 # fuera la luz" (crash-consistent); por eso se guardan varias versiones.
-set -euo pipefail
+# -E: el trap ERR (aviso por DM) también salta dentro de las funciones
+set -Eeuo pipefail
 
 export RESTIC_REPOSITORY="rclone:gdrive:servidor-backup"
 export RESTIC_PASSWORD_FILE=/root/.restic-pass
@@ -30,9 +37,51 @@ BENTO=/home/bentonime/apps/bentonime
 
 SIMULACRO_RESULT=/var/lib/server-backup/simulacro.json # lo lee ops-collect
 
+# Copia local: un repo restic en el disco USB, con la misma contraseña
+LOCAL_MOUNT=/srv/backup-local
+LOCAL_REPO=$LOCAL_MOUNT/restic
+
+# Un JSON por modo y destino con el último resultado (lo lee ops-exporter)
+ESTADO=/var/lib/server-backup/estado
+
 mode="${1:-}"
 step=inicio
 started=$(date +%s)
+destino=drive
+
+# Resultado de una ejecución. Conserva la fecha del último éxito al fallar.
+# Uso: estado <modo> <destino> true|false <antigüedad máxima en s> [error]
+estado() {
+  install -d -m 755 "$ESTADO"
+  python3 - "$ESTADO/$1-$2.json" "$3" "$4" "$(($(date +%s) - started))" "${5:-}" <<'PY'
+import json, os, sys, time
+path, ok, max_age, secs, error = sys.argv[1:]
+try:
+    with open(path) as f:
+        prev = json.load(f)
+except (OSError, ValueError):
+    prev = {}
+now = int(time.time())
+out = {"ok": ok == "true", "at": now, "duration_s": int(secs), "max_age_s": int(max_age),
+       "last_ok_at": now if ok == "true" else prev.get("last_ok_at")}
+if error:
+    out["error"] = error
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(out, f)
+os.chmod(tmp, 0o644)
+os.replace(tmp, path)
+PY
+}
+
+# Cada cuánto tiene que haber una copia buena de cada modo (para la alerta)
+max_age() {
+  case "$1" in
+    sistema) echo $((13 * 3600)) ;;
+    clientes | nas) echo $((30 * 3600)) ;;
+    mantenimiento) echo $((8 * 86400)) ;;
+  esac
+}
 
 # Resultado del simulacro para el asistente: JSON con el paso y las comprobaciones.
 # Uso: simulacro_result true|false [clave=valor ...]
@@ -59,6 +108,12 @@ PY
 
 notify_fail() {
   if [ "$mode" = simulacro ]; then simulacro_result false || true; fi
+  if [ -n "$(max_age "${tag:-$mode}")" ]; then
+    estado "${tag:-$mode}" "$destino" false "$(max_age "${tag:-$mode}")" "$step" || true
+  fi
+  # La copia local no avisa por DM: la vigila Prometheus (avisa una vez, no en
+  # cada intento fallido si el disco está desconectado)
+  [ "$mode" = _local ] && return
   /usr/local/bin/discord-dm -t "❌ Backup fallido ($mode)" -c red \
     -f "Paso=$step" -f "Equipo=$(hostname)" \
     "Revisa \`journalctl -u server-backup@$mode\`." || true
@@ -77,6 +132,56 @@ backup() {
   if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then return "$rc"; fi
 }
 
+# Qué copia cada modo y cuántas versiones guarda. Lo usan igual Drive y el repo
+# local, para que las dos copias sean la misma.
+paths_sistema() {
+  paths=("$STAGE" /etc /opt /usr/local/bin /root /var/spool/cron /var/www/pterodactyl)
+  for f in "$BENTO/.env.production" "$BENTO/data/.stream-secret"; do
+    if [ -e "$f" ]; then paths+=("$f"); fi
+  done
+  # Métricas de Prometheus: se regeneran, y serían hasta 2 GB cada 6 h
+  # Cachés de compilación de root: se regeneran solas
+  excludes=(--exclude /root/.cache
+    --exclude /root/.npm
+    --exclude /root/go/pkg
+    --exclude /var/www/pterodactyl/node_modules
+    --exclude /var/www/pterodactyl/storage/logs
+    --exclude /var/www/pterodactyl/storage/framework/cache
+    --exclude /opt/honeypot/var
+    --exclude /opt/monitoring/data/prometheus)
+  # Todas las de los últimos 7 días, luego 4 semanales y 12 mensuales (1 año)
+  keep=(--keep-within 7d --keep-weekly 4 --keep-monthly 12)
+}
+
+paths_clientes() {
+  paths=(/var/lib/pterodactyl/volumes)
+  if [ -d /var/lib/pterodactyl/backups ]; then paths+=(/var/lib/pterodactyl/backups); fi
+  excludes=()
+  keep=(--keep-daily 7 --keep-weekly 4 --keep-monthly 3)
+}
+
+paths_nas() {
+  paths=(/srv/nas)
+  excludes=(--exclude /srv/nas/lost+found)
+  keep=(--keep-daily 7 --keep-weekly 4 --keep-monthly 6)
+}
+
+# Copia un modo al repositorio actual (RESTIC_REPOSITORY) y caduca lo viejo
+copy() {
+  tag=$1
+  "paths_$tag"
+  step="subida ($destino)"
+  backup --tag "$tag" "${excludes[@]}" "${paths[@]}"
+  step="caducar versiones antiguas ($destino)"
+  r forget --tag "$tag" --group-by host,tags "${keep[@]}"
+}
+
+# Lanza la copia local en otro proceso: su set -e y su ERR no afectan a este, así
+# que un fallo del disco USB nunca marca como fallida la copia de Drive
+local_copy() {
+  "$0" _local "$1" || true
+}
+
 case "$mode" in
   sistema)
     install -d -m 700 "$STAGE"
@@ -87,32 +192,42 @@ case "$mode" in
     step="lista de paquetes"
     dpkg --get-selections >"$STAGE/paquetes.txt"
 
-    step="subida"
-    paths=("$STAGE" /etc /opt /usr/local/bin /root /var/spool/cron /var/www/pterodactyl)
-    for f in "$BENTO/.env.production" "$BENTO/data/.stream-secret"; do
-      if [ -e "$f" ]; then paths+=("$f"); fi
-    done
-    backup --tag sistema \
-      --exclude /root/.cache \
-      --exclude /var/www/pterodactyl/node_modules \
-      --exclude /var/www/pterodactyl/storage/logs \
-      --exclude /var/www/pterodactyl/storage/framework/cache \
-      --exclude /opt/honeypot/var \
-      "${paths[@]}"
-
-    step="caducar versiones antiguas"
-    # Todas las de los últimos 7 días, luego 4 semanales y 12 mensuales (1 año).
-    r forget --tag sistema --group-by host,tags --keep-within 7d --keep-weekly 4 --keep-monthly 12
+    copy sistema
+    estado sistema drive true "$(max_age sistema)"
+    # Mismos volcados que acaban de subir a Drive
+    local_copy sistema
     ;;
 
   clientes)
-    step="subida"
-    paths=(/var/lib/pterodactyl/volumes)
-    if [ -d /var/lib/pterodactyl/backups ]; then paths+=(/var/lib/pterodactyl/backups); fi
-    backup --tag clientes "${paths[@]}"
+    copy clientes
+    estado clientes drive true "$(max_age clientes)"
+    local_copy clientes
+    ;;
 
-    step="caducar versiones antiguas"
-    r forget --tag clientes --group-by host,tags --keep-daily 7 --keep-weekly 4 --keep-monthly 3
+  nas)
+    copy nas
+    estado nas drive true "$(max_age nas)"
+    ;;
+
+  # Interno: server-backup _local <modo>
+  _local)
+    tag="${2:?Uso: server-backup _local sistema|clientes|mantenimiento}"
+    destino=local
+    export RESTIC_REPOSITORY="$LOCAL_REPO"
+    unset RESTIC_CACHE_DIR
+    step="disco local montado"
+    mountpoint -q "$LOCAL_MOUNT"
+    [ -f "$LOCAL_REPO/config" ]
+    if [ "$tag" = mantenimiento ]; then
+      step="liberar espacio (local)"
+      r prune --max-unused 10%
+      # En local es rápido: se lee y comprueba todo, cada semana
+      step="verificación completa (local)"
+      r check --read-data
+    else
+      copy "$tag"
+    fi
+    estado "$tag" local true "$(max_age "$tag")"
     ;;
 
   mantenimiento)
@@ -131,8 +246,16 @@ case "$mode" in
     about=$(rclone about gdrive: --json)
     free=$(python3 -c "import json,sys; print('%.1f GB' % (json.load(sys.stdin)['free'] / 2**30))" <<<"$about")
     trash=$(python3 -c "import json,sys; print('%.1f GB' % (json.load(sys.stdin).get('trashed', 0) / 2**30))" <<<"$about")
+    estado mantenimiento drive true "$(max_age mantenimiento)"
+
+    # Después de Drive, para que el resumen diga cómo ha ido también el local
+    local_copy mantenimiento
+    local_ok=$(python3 -c "import json,sys; print('verificado entero' if json.load(open(sys.argv[1])).get('ok') else 'FALLIDO')" \
+      "$ESTADO/mantenimiento-local.json" 2>/dev/null || echo "sin datos")
+
     /usr/local/bin/discord-dm -t "📦 Resumen semanal de backups" -c green \
       -f "Versiones sistema=$(count sistema)" -f "Versiones clientes=$(count clientes)" \
+      -f "Versiones NAS=$(count nas)" -f "Copia local=$local_ok" \
       -f "Ocupa el repo=$size" -f "Papelera de Drive=$trash" -f "Libre en Drive=$free" \
       "Espacio liberado y verificada la parte $part de 4 del repositorio sin errores." || true
     ;;
@@ -205,7 +328,7 @@ print(int((datetime.now(timezone.utc) - t).total_seconds() // 3600))'
     ;;
 
   *)
-    echo "Uso: server-backup sistema|clientes|mantenimiento|simulacro" >&2
+    echo "Uso: server-backup sistema|clientes|nas|mantenimiento|simulacro" >&2
     exit 2
     ;;
 esac

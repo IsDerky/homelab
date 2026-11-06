@@ -1,0 +1,11 @@
+[Unit]
+Description=Backup diario del NAS a Google Drive a las 04:30
+
+[Timer]
+OnCalendar=*-*-* 04:30
+Unit=server-backup@nas.service
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
