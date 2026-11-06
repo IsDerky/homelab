@@ -37,3 +37,5 @@
    force user = {{ nas_user }}
    create mask = 0660
    directory mask = 0770
+   # La de ext4 en la raíz del volumen: es de root y no sirve desde Windows
+   veto files = /lost+found/
