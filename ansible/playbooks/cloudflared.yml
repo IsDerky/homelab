@@ -1,0 +1,6 @@
+---
+- name: Túnel de Cloudflare
+  hosts: homelab
+  become: true
+  roles:
+    - cloudflared

@@ -1,0 +1,10 @@
+---
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# Corta unos segundos todo lo que sale por el túnel: solo si cambia algo
+- name: Reiniciar cloudflared
+  ansible.builtin.systemd_service:
+    name: cloudflared.service
+    state: restarted

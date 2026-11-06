@@ -1,0 +1,4 @@
+---
+# Contenido de /etc/cloudflared/tunnel.env (TUNNEL_TOKEN=…). Con Ansible Vault.
+# Las rutas del túnel se gestionan en el panel de Cloudflare.
+cloudflared_tunnel_env: ""

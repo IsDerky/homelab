@@ -1,0 +1,15 @@
+[Unit]
+Description=cloudflared
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/cloudflared/tunnel.env
+TimeoutStartSec=0
+Type=notify
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run --protocol http2
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
