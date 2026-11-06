@@ -1,0 +1,80 @@
+# promtool test rules tests/alertas_test.yml (desde la carpeta del rol)
+rule_files:
+  - ../files/rules/alertas.yml
+
+evaluation_interval: 30s
+
+tests:
+  # Caída total: a los 5 min ya supera las dos ventanas; con el for de 2 min,
+  # avisa a los 7. Antes no.
+  - interval: 30s
+    input_series:
+      - series: 'probe_success{job="blackbox", servicio="web"}'
+        values: "1x60 0x30"
+      - series: 'slo:objetivo{servicio="web"}'
+        values: "0.995x90"
+    alert_rule_test:
+      - eval_time: 33m
+        alertname: SLOQuemaRapida
+        exp_alerts: []
+      - eval_time: 38m
+        alertname: SLOQuemaRapida
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              servicio: web
+            exp_annotations:
+              summary: "web está fallando: a este ritmo se gasta el margen de error del mes en unos 2 días."
+
+  # Un fallo suelto de vez en cuando no gasta el margen deprisa: no avisa
+  - interval: 30s
+    input_series:
+      - series: 'probe_success{job="blackbox", servicio="web"}'
+        values: "1x20 0 1x20 0 1x20 0 1x20"
+      - series: 'slo:objetivo{servicio="web"}'
+        values: "0.995x90"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: SLOQuemaRapida
+        exp_alerts: []
+
+  # Se arregla: la ventana de 5 min deja de pasar el umbral y se apaga, aunque
+  # la de 1 h siga alta
+  - interval: 30s
+    input_series:
+      - series: 'probe_success{job="blackbox", servicio="web"}'
+        values: "1x60 0x30 1x20"
+      - series: 'slo:objetivo{servicio="web"}'
+        values: "0.995x120"
+    alert_rule_test:
+      - eval_time: 55m
+        alertname: SLOQuemaRapida
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/", fstype="ext4"}'
+        values: "50x30"
+      - series: 'node_filesystem_size_bytes{mountpoint="/", fstype="ext4"}'
+        values: "1000x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DiscoCasiLleno
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              mountpoint: /
+              fstype: ext4
+            exp_annotations:
+              summary: "Queda menos del 10 % del disco (5% libre)."
+
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemAvailable_bytes'
+        values: "100x20"
+      - series: 'node_memory_MemTotal_bytes'
+        values: "1000x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: MemoriaAgotada
+        exp_alerts: []

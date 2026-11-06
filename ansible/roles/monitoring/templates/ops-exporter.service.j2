@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Exportador de Prometheus para el snapshot de ops-collect
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/ops-exporter
+Environment=OPS_SNAPSHOT={{ monitoring_ops_snapshot }}
+Environment=OPS_LISTEN=127.0.0.1:{{ monitoring_ports.ops_exporter }}
+Restart=on-failure
+
+# Usuario efímero que solo puede leer el snapshot (por el grupo)
+DynamicUser=yes
+SupplementaryGroups={{ monitoring_ops_group }}
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+CapabilityBoundingSet=
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

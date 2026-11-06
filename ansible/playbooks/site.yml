@@ -17,3 +17,5 @@
   ansible.builtin.import_playbook: cloudflared.yml
 - name: Webs
   ansible.builtin.import_playbook: webs.yml
+- name: Monitorización
+  ansible.builtin.import_playbook: monitoring.yml

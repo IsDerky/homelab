@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+# Un módulo por comprobación: cada una puede exigir su propio cuerpo
+modules:
+{% for probe in monitoring_http_probes %}
+  http_{{ probe.servicio }}:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: [200]
+      preferred_ip_protocol: ip4
+{% if probe.body_regex is defined %}
+      # Un 200 no basta: el cuerpo tiene que decir que va bien
+      fail_if_body_not_matches_regexp:
+        - '{{ probe.body_regex }}'
+{% endif %}
+{% else %}
+  {}
+{% endfor %}

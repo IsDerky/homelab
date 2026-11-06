@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+route:
+  receiver: {{ 'discord' if monitoring_alert_dm else 'nadie' }}
+  group_by: [alertname, servicio]
+  group_wait: 30s
+  group_interval: 5m
+  # Como el vigilante externo: si sigue igual, un recordatorio al día
+  repeat_interval: 24h
+
+receivers:
+  - name: nadie
+{% if monitoring_alert_dm %}
+  - name: discord
+    webhook_configs:
+      - url: http://127.0.0.1:{{ monitoring_ports.alert_dm }}/alertmanager
+        send_resolved: true
+{% endif %}

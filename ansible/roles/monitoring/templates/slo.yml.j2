@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+# Objetivo de disponibilidad de cada comprobación HTTP (lo usan alertas.yml y Grafana)
+groups:
+  - name: slo-objetivo
+    rules:
+{% for probe in monitoring_http_probes %}
+      - record: slo:objetivo
+        expr: vector({{ probe.slo | default(monitoring_slo_target) }})
+        labels:
+          servicio: {{ probe.servicio }}
+{% else %}
+      []
+{% endfor %}

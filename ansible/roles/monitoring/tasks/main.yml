@@ -1,0 +1,205 @@
+---
+- name: Falta la contraseña de admin de Grafana
+  ansible.builtin.assert:
+    that: monitoring_grafana_admin_password | length > 0
+    fail_msg: Define monitoring_grafana_admin_password (con Ansible Vault).
+    quiet: true
+
+- name: Comprobar que Docker Compose v2 está instalado
+  ansible.builtin.command: docker compose version
+  changed_when: false
+
+# Prometheus y Alertmanager corren como nobody (65534) y Grafana como 472
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.owner | default('root') }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { path: "" }
+    - { path: rules }
+    - { path: grafana }
+    - { path: grafana/provisioning }
+    - { path: grafana/provisioning/datasources }
+    - { path: grafana/provisioning/dashboards }
+    - { path: grafana/dashboards }
+    - { path: data, mode: "0750" }
+    - { path: data/prometheus, owner: "65534", mode: "0750" }
+    - { path: data/alertmanager, owner: "65534", mode: "0750" }
+    - { path: data/grafana, owner: "472", mode: "0750" }
+  loop_control:
+    label: "{{ item.path or monitoring_dir }}"
+
+# Antes de la configuración: las validaciones de abajo usan estas imágenes
+- name: Descargar imágenes
+  ansible.builtin.command: docker pull {{ item }}
+  loop: "{{ monitoring_images.values() | list }}"
+  register: monitoring_pull
+  changed_when: "'Downloaded newer image' in monitoring_pull.stdout"
+
+- name: Compose
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ monitoring_dir }}/docker-compose.yml"
+    mode: "0644"
+  notify: Aplicar compose
+
+- name: Configuración de Prometheus
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_dir }}/prometheus.yml"
+    mode: "0644"
+    validate: >-
+      docker run --rm --user 0 -v %s:/c.yml:ro --entrypoint promtool
+      {{ monitoring_images.prometheus }} check config --syntax-only /c.yml
+  notify: Recargar prometheus
+
+- name: Reglas y alertas
+  ansible.builtin.copy:
+    src: rules/alertas.yml
+    dest: "{{ monitoring_dir }}/rules/alertas.yml"
+    mode: "0644"
+    validate: >-
+      docker run --rm --user 0 -v %s:/r.yml:ro --entrypoint promtool
+      {{ monitoring_images.prometheus }} check rules /r.yml
+  notify: Recargar prometheus
+
+- name: Objetivos de disponibilidad
+  ansible.builtin.template:
+    src: slo.yml.j2
+    dest: "{{ monitoring_dir }}/rules/slo.yml"
+    mode: "0644"
+    validate: >-
+      docker run --rm --user 0 -v %s:/r.yml:ro --entrypoint promtool
+      {{ monitoring_images.prometheus }} check rules /r.yml
+  notify: Recargar prometheus
+
+- name: Configuración de Alertmanager
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ monitoring_dir }}/alertmanager.yml"
+    mode: "0644"
+    validate: >-
+      docker run --rm --user 0 -v %s:/a.yml:ro --entrypoint amtool
+      {{ monitoring_images.alertmanager }} check-config /a.yml
+  notify: Recargar alertmanager
+
+- name: Configuración de blackbox
+  ansible.builtin.template:
+    src: blackbox.yml.j2
+    dest: "{{ monitoring_dir }}/blackbox.yml"
+    mode: "0644"
+  notify: Recargar blackbox
+
+- name: Variables de Grafana (con la contraseña de admin)
+  ansible.builtin.template:
+    src: grafana.env.j2
+    dest: "{{ monitoring_dir }}/grafana.env"
+    mode: "0600"
+  no_log: true
+  notify: Aplicar compose
+
+- name: Fuente de datos de Grafana
+  ansible.builtin.template:
+    src: grafana-datasource.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/prometheus.yml"
+    mode: "0644"
+  notify: Reiniciar grafana
+
+- name: Proveedor de dashboards
+  ansible.builtin.copy:
+    src: grafana-dashboards.yml
+    dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/homelab.yml"
+    mode: "0644"
+  notify: Reiniciar grafana
+
+# Grafana los relee solo cada minuto
+- name: Dashboards
+  ansible.builtin.copy:
+    src: dashboards/
+    dest: "{{ monitoring_dir }}/grafana/dashboards/"
+    mode: "0644"
+
+- name: Exportador de ops-collect
+  when: monitoring_ops_group | length > 0
+  block:
+    - name: Script ops-exporter
+      ansible.builtin.copy:
+        src: ops-exporter
+        dest: /usr/local/bin/ops-exporter
+        mode: "0755"
+      notify: Reiniciar ops-exporter
+
+    - name: Unidad ops-exporter
+      ansible.builtin.template:
+        src: ops-exporter.service.j2
+        dest: /etc/systemd/system/ops-exporter.service
+        mode: "0644"
+      notify:
+        - Recargar systemd
+        - Reiniciar ops-exporter
+
+- name: Avisos por DM
+  when: monitoring_alert_dm
+  block:
+    - name: Script alert-dm
+      ansible.builtin.copy:
+        src: alert-dm
+        dest: /usr/local/bin/alert-dm
+        mode: "0755"
+      notify: Reiniciar alert-dm
+
+    - name: Unidad alert-dm
+      ansible.builtin.template:
+        src: alert-dm.service.j2
+        dest: /etc/systemd/system/alert-dm.service
+        mode: "0644"
+      notify:
+        - Recargar systemd
+        - Reiniciar alert-dm
+
+- name: Unidad monitoring
+  ansible.builtin.template:
+    src: monitoring.service.j2
+    dest: /etc/systemd/system/monitoring.service
+    mode: "0644"
+  notify: Recargar systemd
+
+- name: Recargar systemd si hay unidades nuevas
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicios
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: >-
+    {{ ['monitoring.service']
+       + (['ops-exporter.service'] if monitoring_ops_group | length > 0 else [])
+       + (['alert-dm.service'] if monitoring_alert_dm else []) }}
+
+- name: Esperar a que escuchen
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ item }}"
+    timeout: 90
+  loop: >-
+    {{ [monitoring_ports.prometheus, monitoring_ports.alertmanager, monitoring_ports.blackbox,
+        monitoring_ports.node_exporter, monitoring_ports.grafana]
+       + ([monitoring_ports.ops_exporter] if monitoring_ops_group | length > 0 else [])
+       + ([monitoring_ports.alert_dm] if monitoring_alert_dm else []) }}
+
+# Que estén arrancados no basta: Prometheus tiene que poder leerlos a todos
+- name: Todos los objetivos de Prometheus responden
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ monitoring_ports.prometheus }}/api/v1/targets?state=active
+    return_content: true
+  register: monitoring_targets
+  until: >-
+    monitoring_targets.json.data.activeTargets | length > 0
+    and monitoring_targets.json.data.activeTargets | rejectattr('health', 'equalto', 'up') | list | length == 0
+  retries: 12
+  delay: 10
+  changed_when: false
