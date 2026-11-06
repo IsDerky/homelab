@@ -1,0 +1,40 @@
+---
+- name: Alguna regla tiene que abrir SSH
+  ansible.builtin.assert:
+    that: (ufw_ssh_port | string) in (ufw_rules | map(attribute='port') | map('string'))
+    fail_msg: Ninguna regla abre el puerto {{ ufw_ssh_port }}; al activar ufw te quedarías fuera.
+    quiet: true
+
+- name: Paquete ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+# Primero las reglas y después las políticas y el enable: en una máquina nueva
+# no hay ningún momento con deny y sin la regla de SSH
+- name: Reglas
+  community.general.ufw:
+    rule: "{{ item.rule | default('allow') }}"
+    port: "{{ item.port | string }}"
+    proto: "{{ item.proto | default(omit) }}"
+    from_ip: "{{ item.from | default('any') }}"
+    comment: "{{ item.comment | default(omit) }}"
+  loop: "{{ ufw_rules }}"
+  loop_control:
+    label: "{{ item.port }}{{ '/' ~ item.proto if item.proto is defined else '' }} desde {{ item.from | default('any') }}"
+
+- name: Políticas por defecto
+  community.general.ufw:
+    direction: "{{ item.key }}"
+    default: "{{ item.value }}"
+  loop: "{{ ufw_default_policy | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}: {{ item.value }}"
+
+- name: Logging
+  community.general.ufw:
+    logging: "{{ ufw_logging }}"
+
+- name: Activar ufw
+  community.general.ufw:
+    state: enabled

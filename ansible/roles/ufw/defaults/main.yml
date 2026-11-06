@@ -1,0 +1,18 @@
+---
+ufw_default_policy:
+  incoming: deny
+  outgoing: allow
+  routed: deny
+
+ufw_logging: low
+
+# El rol se niega a seguir si ninguna regla abre este puerto
+ufw_ssh_port: 22
+
+# Cada regla: port (obligatorio), proto, from (por defecto any), rule (allow),
+# comment. Sin proto = tcp y udp.
+#   - port: "22"
+#     proto: tcp
+#     from: 192.168.1.0/24
+#     comment: SSH LAN
+ufw_rules: []
