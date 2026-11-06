@@ -18,7 +18,9 @@ jobs:
       - run: pipx install ansible-lint && pipx inject ansible-lint ansible-core
       - working-directory: ansible
         run: |
-          ansible-galaxy collection install -r requirements.yml
+          # El ansible-galaxy del runner ya trae las colecciones, pero ansible-lint
+          # (pipx) no las ve: se instalan donde las busca
+          ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --force
           ansible-lint playbooks roles
 
   honeypot:
