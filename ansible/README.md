@@ -6,6 +6,9 @@ Roles para montar piezas del homelab:
 - `ssh`: `sshd_config` desde plantilla, solo con claves por defecto.
 - `ufw` y `fail2ban`: cortafuegos y baneos, con jails y filtros propios (`playbooks/firewall.yml`).
 - `backup`: backups con restic a Google Drive (vía rclone), timers de systemd y simulacro de restauración.
+- `avisos`: DMs por Discord para inicios de sesión SSH, errores de SMART y el latido a un vigilante externo.
+- `nginx`: nginx con los vhosts del inventario y certbot con validación DNS de Cloudflare.
+- `cloudflared`: túnel de Cloudflare gestionado desde el panel, solo con el token.
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 
 ## Uso
@@ -21,6 +24,8 @@ ansible-playbook playbooks/base.yml
 Para muchas variables es más cómodo `group_vars/<grupo>.yml` que el inventario. Esa carpeta tampoco va a git. Yo tengo el inventario y las variables en un repo privado aparte, con los secretos cifrados con Ansible Vault, y apunto a él con `ANSIBLE_INVENTORY`.
 
 El honeypot necesita en el servidor Docker con Compose v2, systemd e iptables.
+
+`playbooks/site.yml` aplica todo en orden. En una máquina nueva, restaura `/etc/letsencrypt` del backup antes de llegar a nginx.
 
 ## Rol `base`
 
@@ -96,6 +101,33 @@ fail2ban_jails:
       bantime.increment: true
       action: iptables[name=wings-sftp-bots, port=2022, protocol=tcp]
 ```
+
+## Rol `avisos`
+
+Instala `discord-dm` y los scripts que lo usan:
+
+- `login-alert`, llamado desde PAM al abrir sesión por SSH. Avisa salvo si se entra desde `avisos_login_trusted_ips`. Va como `optional`, así que si falla se entra igual.
+- `smartd-discord`, que se engancha a la línea de `smartd.conf` que pongas en `avisos_smartd_line`.
+- `ops-ping` y su timer, solo si defines `avisos_watchdog_env`.
+
+`avisos_discord_env` y `avisos_watchdog_env` son el contenido de los `.env` y van en el vault.
+
+## Rol `nginx`
+
+Los vhosts no son plantillas: son los `.conf` tal cual, en `files/nginx/` junto al inventario (`nginx_sites_dir`). Antes de recargar pasa `nginx -t`.
+
+```yaml
+nginx_sites:
+  - name: pterodactyl
+  - name: web-nueva
+    enabled: false   # se copia pero no se activa
+```
+
+Los certificados no se piden desde el rol. El rol deja certbot, su plugin de Cloudflare y el token en `/root/.secrets/cloudflare.ini` (`nginx_certbot_cloudflare_ini`), y `certbot.timer` se encarga de renovar.
+
+## Rol `cloudflared`
+
+Añade el repo de Cloudflare, instala `cloudflared` y lo arranca con el token del túnel (`cloudflared_tunnel_env`, en el vault). Las rutas del túnel se gestionan en el panel de Cloudflare, no aquí. Como reiniciar el túnel corta lo que pasa por él, solo se reinicia si cambia el token o la unidad.
 
 ## Qué hace el rol `honeypot`
 
