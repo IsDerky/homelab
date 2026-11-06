@@ -9,8 +9,12 @@
   ansible.builtin.import_playbook: firewall.yml
 - name: Avisos
   ansible.builtin.import_playbook: avisos.yml
+- name: Disco USB
+  ansible.builtin.import_playbook: storage.yml
 - name: Backups
   ansible.builtin.import_playbook: backup.yml
+- name: NAS
+  ansible.builtin.import_playbook: nas.yml
 - name: Servidor web
   ansible.builtin.import_playbook: nginx.yml
 - name: Túnel

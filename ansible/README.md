@@ -81,6 +81,54 @@ Los secretos (`backup_restic_password` y `backup_rclone_conf`) van en Ansible Va
 
 El script usa `discord-dm` y `ops-ping` para avisar; no los instala este rol.
 
+### Copia local y NAS
+
+Con `backup_local_mount` (un disco montado), `sistema` y `clientes` hacen además la misma copia en un repo restic local, con la misma contraseña y la misma retención. Va en un proceso aparte (`server-backup _local <modo>`): si el disco no está o falla, la copia de Drive ya está hecha y no se marca como fallida. `mantenimiento` hace en local un `check --read-data` completo cada semana. En local es rápido, y es la única forma de saber que el disco está sano cuando la carcasa USB no deja leer el SMART.
+
+El modo `nas` copia la carpeta del NAS a Drive a diario. No a local: estaría en el mismo disco.
+
+Cada ejecución deja su resultado en `/var/lib/server-backup/estado/<modo>-<destino>.json` (si fue bien, cuándo, la última vez que fue bien y la antigüedad máxima aceptable). `ops-exporter` lo publica y el rol `monitoring` avisa si una copia local falla o si alguna copia se queda atrás. Los fallos de Drive siguen avisando por DM desde el script, como antes.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `backup_modes` | sistema, clientes, mantenimiento, simulacro | Timers que se instalan. Hay también `nas` |
+| `backup_local_mount` | `""` | Disco para la copia local. Vacío = sin copia local |
+
+## Rol `usb_storage`
+
+Un disco externo con LVM: una partición, un grupo de volúmenes y los volúmenes del inventario, cada uno en ext4 y montado por UUID. Lo que no se asigna queda libre en el grupo, y agrandar un volumen después es cambiar su tamaño en el inventario y `resize2fs`, sin mover datos.
+
+```yaml
+usb_storage_device: /dev/disk/by-id/usb-...   # no /dev/sdX: cambia según el orden de conexión
+usb_storage_volumes:
+  - { name: backup, size: 80g, mount: /srv/backup-local, owner: root, mode: "0700" }
+  - { name: nas, size: 120g, mount: /srv/nas }
+```
+
+- **Lo único que borra datos** (firmas y tabla de particiones) solo se ejecuta con `-e usb_storage_init=true` y si el disco aún no es de LVM. Una pasada normal nunca formatea: `lvol` no reduce volúmenes (`shrink: false`) y `filesystem` no reformatea uno que ya existe.
+- Montaje con `nofail` y un timeout de 10 s: si el disco no está, el servidor arranca igual.
+- Los permisos de cada volumen solo se tocan si tiene `owner`. Si no, los pone el rol que lo usa (así dos roles no se los cambian en cada pasada).
+
+Para desconectar el disco sin riesgo:
+
+```bash
+systemctl stop smbd                     # suelta el NAS
+umount /srv/nas /srv/backup-local
+vgchange -an usb
+```
+
+Al volver a conectarlo: `mount -a && systemctl start smbd`.
+
+## Rol `nas`
+
+Una carpeta compartida por Samba para la LAN:
+
+- Solo SMB3, con cifrado si el cliente lo admite. Sin NetBIOS (`nmbd` enmascarado, solo el puerto 445), sin invitados ni sesiones anónimas, sin impresoras.
+- Escucha solo en las interfaces de `nas_interfaces` y acepta solo `nas_hosts_allow`. El cortafuegos va aparte (regla del 445 solo para la LAN en `ufw_rules`).
+- Un usuario de sistema sin shell. La contraseña de Samba sale del vault y solo se pone al crearlo. Para cambiarla: `smbpasswd <usuario>` en el servidor y actualizar el vault.
+- Con `nas_require_mount` (por defecto) se niega a seguir si la carpeta no está montada. Si no, sería una carpeta vacía en el disco del sistema y los archivos acabarían ahí.
+- La configuración se valida con `testparm` antes de instalarla.
+
 ## Rol `fail2ban`
 
 Cada jail y cada filtro va en su fichero de `jail.d/` y `filter.d/`. Si algo cambia, primero pasa `fail2ban-client --test` y solo entonces recarga; con una config rota, fail2ban sigue con la anterior. Deja esas carpetas solo para root, porque fail2ban ejecuta como root las `action` que haya en ellas.
