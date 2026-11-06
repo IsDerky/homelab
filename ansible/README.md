@@ -9,6 +9,8 @@ Roles para montar piezas del homelab:
 - `avisos`: DMs por Discord para inicios de sesión SSH, errores de SMART y el latido a un vigilante externo.
 - `nginx`: nginx con los vhosts del inventario y certbot con validación DNS de Cloudflare.
 - `cloudflared`: túnel de Cloudflare gestionado desde el panel, solo con el token.
+- `bentonime`: la parte de sistema de la app principal (usuario, unidad systemd, sudo mínimo para el deploy). El código lo despliega su CI.
+- `adguard`: AdGuard Home en Docker Compose como servicio systemd (`playbooks/apps.yml`, junto con `bentonime`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox y node_exporter, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
@@ -37,6 +39,7 @@ El honeypot necesita en el servidor Docker con Compose v2, systemd e iptables.
 | `base_packages` | ver `defaults/main.yml` | Paquetes que tienen que estar instalados |
 | `base_admin_user` | `admin` | Usuario con sudo |
 | `base_admin_keys` | `[]` | Claves públicas que pueden entrar con ese usuario |
+| `base_masked_services` | `[]` | Servicios parados y enmascarados (con su `.socket` si lo tienen) |
 
 ## Rol `ssh`
 
@@ -136,6 +139,16 @@ Los certificados no se piden desde el rol. El rol deja certbot, su plugin de Clo
 
 Añade el repo de Cloudflare, instala `cloudflared` y lo arranca con el token del túnel (`cloudflared_tunnel_env`, en el vault). Las rutas del túnel se gestionan en el panel de Cloudflare, no aquí. Como reiniciar el túnel corta lo que pasa por él, solo se reinicia si cambia el token o la unidad.
 
+## Rol `bentonime`
+
+Solo lo que es del sistema: el usuario (con el grupo `render` para que ffmpeg use la GPU), la unidad systemd y un sudoers que deja al deploy reiniciar y consultar su servicio y nada más (validado con `visudo -cf` antes de instalarlo). El código, las dependencias y las migraciones los hace el CI de la app, por versiones y con vuelta atrás.
+
+Al cambiar la unidad **solo recarga systemd, no reinicia la app**, para no cortar a quien esté viendo algo. El siguiente deploy reinicia y aplica el cambio. El `.env.production` (con los secretos) no lo crea el rol: si falta, falla y pide restaurarlo del backup.
+
+## Rol `adguard`
+
+AdGuard Home con el DNS solo en la IP de la LAN (`adguard_dns_listen`; en `127.0.0.53:53` ya está systemd-resolved) y el panel en loopback para nginx. `conf/` y `work/` son datos de AdGuard y van en el backup, no en Ansible. El compose es el mismo que había, así que aplicar el rol no recrea el contenedor: en un servidor que es el único DNS de la casa, eso es un corte.
+
 ## Rol `roninfc`
 
 La web que vino del VPS ([runbook de la migración](../docs/runbook-migracion-vps.md)). El rol solo prepara la máquina: usuario de sistema sin shell, `/srv/roninfc/releases` y la unidad systemd. El código no lo toca: lo compila y publica el CI en `releases/<sha>` y enlaza `current`.
@@ -213,6 +226,8 @@ Es idempotente: una segunda pasada sin cambios termina con `changed=0`, y solo s
 | `honeypot_hostname` | `web-prod-02` | Lo que ve el atacante |
 | `honeypot_retention` | `30d` | Antigüedad a partir de la que se borran logs y descargas |
 | `honeypot_image` | `cowrie/cowrie:3.1.4` | |
+| `honeypot_user` | `cowrie` | Usuario del host con el que corre el contenedor. La imagen trae el uid 999, que en Ubuntu suele ser de otro servicio |
+| `honeypot_data_group` | igual que el usuario | Grupo de los datos (p. ej. `systemd-journal` para leer los logs sin root) |
 
 ## Cómo se prueba
 

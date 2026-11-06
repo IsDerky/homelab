@@ -4,6 +4,11 @@ honeypot_dir: /opt/honeypot
 
 honeypot_image: cowrie/cowrie:3.1.4
 
+# Usuario del host con el que corre el contenedor (se crea si no existe) y
+# grupo de sus datos (p. ej. systemd-journal para leer los logs sin ser root)
+honeypot_user: cowrie
+honeypot_data_group: "{{ honeypot_user }}"
+
 # Subred Docker del honeypot. El cortafuegos aísla por ella; tiene que estar libre.
 honeypot_subnet: 172.30.250.0/24
 

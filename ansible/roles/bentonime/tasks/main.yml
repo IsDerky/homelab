@@ -1,0 +1,59 @@
+---
+- name: Usuario
+  ansible.builtin.user:
+    name: "{{ bentonime_user }}"
+    home: "{{ bentonime_home }}"
+    shell: /bin/bash
+    groups: "{{ bentonime_groups }}"
+    append: true
+
+- name: Carpeta de la app
+  ansible.builtin.file:
+    path: "{{ bentonime_home }}/apps"
+    state: directory
+    owner: "{{ bentonime_user }}"
+    group: "{{ bentonime_user }}"
+    mode: "0755"
+
+# Lleva los secretos (Discord, firma de URLs…). No lo crea el rol: en una
+# máquina nueva se restaura del backup junto con data/.
+- name: Comprobar el .env.production
+  ansible.builtin.stat:
+    path: "{{ bentonime_home }}/apps/bentonime/.env.production"
+  register: bentonime_env
+
+- name: Sin .env.production no arranca
+  ansible.builtin.assert:
+    that: bentonime_env.stat.exists
+    fail_msg: Falta {{ bentonime_home }}/apps/bentonime/.env.production. Restáuralo del backup (modo sistema).
+    quiet: true
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: bentonime.service.j2
+    dest: /etc/systemd/system/bentonime.service
+    mode: "0644"
+  notify: Recargar systemd
+
+# Ahora va en la unidad
+- name: Quitar el drop-in de SuccessExitStatus
+  ansible.builtin.file:
+    path: /etc/systemd/system/bentonime.service.d
+    state: absent
+  notify: Recargar systemd
+
+- name: Sudo del deploy
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/bentonime
+    mode: "0440"
+    validate: visudo -cf %s
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: bentonime.service
+    enabled: true
+    state: started

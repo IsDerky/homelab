@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+# El código lo despliega el CI (scripts/deploy-release.sh) en apps/releases/<sha>
+# y enlaza apps/current. apps/bentonime guarda .git, data/ y .env.production.
+[Unit]
+Description=Bentonime anime app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ bentonime_user }}
+WorkingDirectory={{ bentonime_home }}/apps/current
+Environment="PATH={{ bentonime_home }}/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile={{ bentonime_home }}/apps/bentonime/.env.production
+ExecStart={{ bentonime_home }}/.bun/bin/bun --bun run start
+Restart=on-failure
+RestartSec=5
+# next start sale con SIGTERM (143) al pararlo: no es un fallo
+SuccessExitStatus=143
+StandardOutput=journal
+StandardError=journal
+MemoryMax={{ bentonime_memory_max }}
+TasksMax={{ bentonime_tasks_max }}
+
+[Install]
+WantedBy=multi-user.target

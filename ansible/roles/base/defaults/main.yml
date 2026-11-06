@@ -13,6 +13,10 @@ base_packages:
   - tree
   - unattended-upgrades
 
+# Servicios que tienen que estar parados y enmascarados (p. ej. restos de
+# escritorio). Con su .socket si lo tienen, o el socket lo volvería a arrancar.
+base_masked_services: []
+
 # Usuario con sudo para no tener que entrar como root
 base_admin_user: admin
 

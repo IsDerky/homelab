@@ -1,0 +1,11 @@
+---
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# up -d solo recrea el contenedor si el compose ha cambiado
+- name: Aplicar compose de adguard
+  ansible.builtin.command: docker compose up -d --remove-orphans
+  args:
+    chdir: "{{ adguard_dir }}"
+  changed_when: true

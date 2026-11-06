@@ -1,0 +1,6 @@
+---
+# Solo recarga: no reinicia la app para no cortar a nadie. El próximo deploy
+# (que reinicia) aplica los cambios de la unidad.
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true

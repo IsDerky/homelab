@@ -24,7 +24,7 @@ services:
     networks:
       - honeypot
     # Sin privilegios y sin poder escribir fuera de ./var.
-    user: "999:999"
+    user: "{{ honeypot_account.uid }}:{{ honeypot_account.group }}"
     read_only: true
     tmpfs:
       - /tmp:size=16m

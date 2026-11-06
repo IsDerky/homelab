@@ -62,7 +62,7 @@ flowchart TB
 
 ## Red y exposición
 
-- **Abierto en el router**: HTTP/HTTPS, la API y el SFTP de Wings, un rango para los juegos, un servicio de ping por websocket y el honeypot. El SSH real no se abre a internet.
+- **Abierto en el router**: HTTP/HTTPS, la API y el SFTP de Wings, un rango para los juegos y el honeypot. El SSH real no se abre a internet.
 - **La app web no abre ningún puerto**: sale por Cloudflare Tunnel (conexión saliente desde el servidor) y solo escucha en `127.0.0.1`.
 - **Servicios internos solo en LAN**: nginx los limita a la red de casa. Usan certificados de Let's Encrypt emitidos con DNS-01, así que no hace falta exponerlos para tener HTTPS.
 - **ufw** deniega por defecto lo entrante y lo enrutado. Ojo: lo que publica Docker no pasa por ufw. El honeypot se aísla con reglas en `DOCKER-USER`.
@@ -135,7 +135,7 @@ Push a `main` = despliegue. Hay dos variantes:
 - **Un solo disco.** Es el punto débil. Lo cubro con backups fuera de casa cada 6 h y simulacros mensuales; el siguiente paso es un segundo SSD para tener también copia local (3-2-1).
 - **Google Drive como destino de backups.** Ya tenía el espacio pagado y restic cifra antes de subir, así que el proveedor no ve nada. La app OAuth de rclone solo tiene acceso a los ficheros que crea ella.
 - **Cloudflare Tunnel para la app web.** No abro puertos y Cloudflare filtra por delante. El precio es depender de un tercero para ese servicio.
-- **Configuración en Ansible** ([`ansible/`](ansible/)). Empezó como scripts en bash idempotentes: para una máquina funcionaban, pero reconstruirla desde cero costaba. Ahora SSH, cortafuegos, fail2ban, backups, avisos, nginx, el túnel y las webs son roles, y `site.yml` aplica el servidor entero (una segunda pasada da `changed=0`). Los valores y secretos van en un repo privado con Ansible Vault. El honeypot además se prueba en el CI aplicándolo de verdad sobre el runner.
+- **Configuración en Ansible** ([`ansible/`](ansible/)). Empezó como scripts en bash idempotentes: para una máquina funcionaban, pero reconstruirla desde cero costaba. Ahora SSH, cortafuegos, fail2ban, backups, avisos, nginx, el túnel, la app principal, AdGuard, el honeypot, la monitorización y las webs son roles, y `site.yml` aplica el servidor entero (una segunda pasada da `changed=0`). Los valores y secretos van en un repo privado con Ansible Vault. El honeypot además se prueba en el CI aplicándolo de verdad sobre el runner.
 - **El bot no tiene poder propio.** Todo lo que puede hacer está en una lista blanca con permisos mínimos (polkit o sudoers con argumentos fijos) y necesita mi clic.
 
 ## Pendiente

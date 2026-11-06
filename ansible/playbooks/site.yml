@@ -15,7 +15,11 @@
   ansible.builtin.import_playbook: nginx.yml
 - name: Túnel
   ansible.builtin.import_playbook: cloudflared.yml
+- name: Aplicaciones
+  ansible.builtin.import_playbook: apps.yml
 - name: Webs
   ansible.builtin.import_playbook: webs.yml
 - name: Monitorización
   ansible.builtin.import_playbook: monitoring.yml
+- name: Honeypot
+  ansible.builtin.import_playbook: honeypot.yml

@@ -1,0 +1,8 @@
+---
+# Bentonime (solo la parte de sistema: el código lo despliega su CI) y AdGuard
+- name: Aplicaciones
+  hosts: homelab
+  become: true
+  roles:
+    - bentonime
+    - adguard
