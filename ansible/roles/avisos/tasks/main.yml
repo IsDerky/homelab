@@ -1,0 +1,93 @@
+---
+- name: Falta la configuración de Discord
+  ansible.builtin.assert:
+    that: avisos_discord_env | length > 0
+    fail_msg: Define avisos_discord_env (con Ansible Vault).
+    quiet: true
+
+- name: Paquetes
+  ansible.builtin.apt:
+    name:
+      - python3
+      - curl
+      - smartmontools
+    state: present
+
+- name: Credenciales de Discord
+  ansible.builtin.copy:
+    content: "{{ avisos_discord_env }}"
+    dest: /etc/discord-notify.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /usr/local/bin/{{ item }}
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - discord-dm
+    - smartd-discord
+    - ops-ping
+
+# Aviso de inicios de sesión por SSH
+- name: Script login-alert
+  ansible.builtin.template:
+    src: login-alert.j2
+    dest: /usr/local/bin/login-alert
+    owner: root
+    group: root
+    mode: "0755"
+
+# optional: si el script falla, se entra igual
+- name: Aviso de inicios de sesión en PAM de sshd
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/sshd
+    line: session optional pam_exec.so quiet /usr/local/bin/login-alert
+    insertafter: EOF
+
+- name: Aviso de smartd
+  ansible.builtin.lineinfile:
+    path: /etc/smartd.conf
+    regexp: ^(DEVICESCAN|/dev/)
+    line: "{{ avisos_smartd_line }}"
+  when: avisos_smartd_line | length > 0
+  notify: Reiniciar smartd
+
+# Latido al vigilante externo
+- name: Credenciales del vigilante
+  ansible.builtin.copy:
+    content: "{{ avisos_watchdog_env }}"
+    dest: /etc/ops-watchdog.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: avisos_watchdog_env | length > 0
+
+- name: Unidades del latido
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - ops-ping-servidor.service
+    - ops-ping-servidor.timer
+  when: avisos_watchdog_env | length > 0
+  notify: Recargar systemd
+
+- name: Recargar systemd si hace falta
+  ansible.builtin.meta: flush_handlers
+
+- name: Timer del latido
+  ansible.builtin.systemd_service:
+    name: ops-ping-servidor.timer
+    enabled: true
+    state: started
+  when: avisos_watchdog_env | length > 0

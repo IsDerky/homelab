@@ -1,0 +1,23 @@
+#!/bin/bash
+# Avisa al vigilante externo (Worker de Cloudflare `ops-watchdog`) de que una
+# señal sigue viva. Si deja de llegar, el Worker manda un DM.
+#
+#   ops-ping servidor          latido (timer ops-ping-servidor, cada 5 min)
+#   ops-ping backup-sistema    al acabar bien cada backup (lo llama server-backup)
+#
+# Config en /etc/ops-watchdog.env (root, 600): OPS_WATCHDOG_URL y
+# OPS_WATCHDOG_TOKEN. El timer corre sin privilegios y recibe una copia vía
+# LoadCredential (OPS_WATCHDOG_ENV apunta a ella).
+# Nunca falla hacia fuera: un vigilante caído no debe romper un backup.
+set -uo pipefail
+
+name="${1:?Uso: ops-ping <señal>}"
+env_file="${OPS_WATCHDOG_ENV:-/etc/ops-watchdog.env}"
+# shellcheck source=/dev/null
+. "$env_file" 2>/dev/null || { echo "ops-ping: no se puede leer $env_file" >&2; exit 0; }
+
+curl -fsS --max-time 15 --retry 3 --retry-delay 5 -X POST \
+  -H "Authorization: Bearer $OPS_WATCHDOG_TOKEN" \
+  "${OPS_WATCHDOG_URL%/}/ping/$name" >/dev/null ||
+  echo "ops-ping: no se pudo avisar de '$name'" >&2
+exit 0
