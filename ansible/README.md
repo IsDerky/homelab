@@ -9,6 +9,8 @@ Roles para montar piezas del homelab:
 - `avisos`: DMs por Discord para inicios de sesión SSH, errores de SMART y el latido a un vigilante externo.
 - `nginx`: nginx con los vhosts del inventario y certbot con validación DNS de Cloudflare.
 - `cloudflared`: túnel de Cloudflare gestionado desde el panel, solo con el token.
+- `bentonime`: la parte de sistema de la app principal (usuario, unidad systemd, sudo mínimo para el deploy). El código lo despliega su CI.
+- `adguard`: AdGuard Home en Docker Compose como servicio systemd (`playbooks/apps.yml`, junto con `bentonime`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox y node_exporter, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
@@ -136,6 +138,16 @@ Los certificados no se piden desde el rol. El rol deja certbot, su plugin de Clo
 ## Rol `cloudflared`
 
 Añade el repo de Cloudflare, instala `cloudflared` y lo arranca con el token del túnel (`cloudflared_tunnel_env`, en el vault). Las rutas del túnel se gestionan en el panel de Cloudflare, no aquí. Como reiniciar el túnel corta lo que pasa por él, solo se reinicia si cambia el token o la unidad.
+
+## Rol `bentonime`
+
+Solo lo que es del sistema: el usuario (con el grupo `render` para que ffmpeg use la GPU), la unidad systemd y un sudoers que deja al deploy reiniciar y consultar su servicio y nada más (validado con `visudo -cf` antes de instalarlo). El código, las dependencias y las migraciones los hace el CI de la app, por versiones y con vuelta atrás.
+
+Al cambiar la unidad **solo recarga systemd, no reinicia la app**, para no cortar a quien esté viendo algo. El siguiente deploy reinicia y aplica el cambio. El `.env.production` (con los secretos) no lo crea el rol: si falta, falla y pide restaurarlo del backup.
+
+## Rol `adguard`
+
+AdGuard Home con el DNS solo en la IP de la LAN (`adguard_dns_listen`; en `127.0.0.53:53` ya está systemd-resolved) y el panel en loopback para nginx. `conf/` y `work/` son datos de AdGuard y van en el backup, no en Ansible. El compose es el mismo que había, así que aplicar el rol no recrea el contenedor: en un servidor que es el único DNS de la casa, eso es un corte.
 
 ## Rol `roninfc`
 

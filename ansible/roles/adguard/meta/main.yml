@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: adguard
+  namespace: isderky
+  description: AdGuard Home en Docker Compose como servicio systemd, con el DNS solo en la IP de la LAN
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

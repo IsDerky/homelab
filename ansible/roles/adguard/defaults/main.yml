@@ -1,0 +1,10 @@
+---
+adguard_dir: /opt/adguard
+adguard_image: adguard/adguardhome:v0.107.79
+
+# IP donde escucha el DNS (53 tcp/udp). Obligatoria: en 127.0.0.53:53 ya está
+# systemd-resolved, así que no puede ser 0.0.0.0.
+adguard_dns_listen: ""
+
+# Panel (y DoH) solo en loopback, para nginx
+adguard_panel_port: 3000

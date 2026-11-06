@@ -1,0 +1,52 @@
+---
+- name: Falta la IP del DNS
+  ansible.builtin.assert:
+    that: adguard_dns_listen | length > 0
+    fail_msg: Define adguard_dns_listen (la IP de la LAN del servidor).
+    quiet: true
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ adguard_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: ["", conf, work]
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ adguard_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de adguard
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: adguard.service.j2
+    dest: /etc/systemd/system/adguard.service
+    mode: "0644"
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: adguard.service
+    enabled: true
+    state: started
+
+- name: El DNS escucha
+  ansible.builtin.wait_for:
+    host: "{{ adguard_dns_listen }}"
+    port: 53
+    timeout: 60
+
+# Sin configurar redirige al asistente de instalación; configurado, al login
+- name: El panel responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ adguard_panel_port }}/
+    follow_redirects: none
+    status_code: [200, 302]
+  changed_when: false

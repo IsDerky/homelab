@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# conf/ y work/ son datos de AdGuard (su configuración y estadísticas): no los
+# gestiona Ansible, van en el backup.
+services:
+  adguardhome:
+    image: {{ adguard_image }}
+    container_name: adguardhome
+    restart: unless-stopped
+    ports:
+      # Solo en la IP de la LAN: 127.0.0.53:53 es de systemd-resolved
+      - "{{ adguard_dns_listen }}:53:53/tcp"
+      - "{{ adguard_dns_listen }}:53:53/udp"
+      # Panel y DoH, solo para nginx
+      - "127.0.0.1:{{ adguard_panel_port }}:3000/tcp"
+    volumes:
+      - ./work:/opt/adguardhome/work
+      - ./conf:/opt/adguardhome/conf

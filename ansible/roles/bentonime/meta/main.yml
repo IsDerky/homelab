@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: bentonime
+  namespace: isderky
+  description: Parte de sistema de una app Next.js con Bun (usuario, unidad systemd, sudo mínimo); el código lo despliega el CI
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

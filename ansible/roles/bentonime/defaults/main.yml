@@ -1,0 +1,8 @@
+---
+bentonime_user: bentonime
+bentonime_home: /home/bentonime
+# Grupos extra: render para que ffmpeg pueda usar la GPU (/dev/dri)
+bentonime_groups: [render]
+
+bentonime_memory_max: 6G
+bentonime_tasks_max: 200
