@@ -1,0 +1,89 @@
+---
+- name: Paquetes
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - certbot
+      - python3-certbot-nginx
+      - python3-certbot-dns-cloudflare
+    state: present
+
+- name: Sin el vhost por defecto
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify:
+    - Comprobar nginx
+    - Recargar nginx
+
+- name: Vhosts
+  ansible.builtin.copy:
+    src: "{{ nginx_sites_dir }}/{{ item.name }}.conf"
+    dest: /etc/nginx/sites-available/{{ item.name }}.conf
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify:
+    - Comprobar nginx
+    - Recargar nginx
+
+- name: Vhosts activos
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/{{ item.name }}.conf
+    dest: /etc/nginx/sites-enabled/{{ item.name }}.conf
+    state: link
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.enabled | default(true)
+  notify:
+    - Comprobar nginx
+    - Recargar nginx
+
+- name: Vhosts preparados sin activar
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/{{ item.name }}.conf
+    state: absent
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not (item.enabled | default(true))
+  notify:
+    - Comprobar nginx
+    - Recargar nginx
+
+# Los certificados no se piden aquí: en una máquina nueva se restaura
+# /etc/letsencrypt del backup antes de este rol (si no, nginx -t falla).
+- name: Carpeta de secretos de certbot
+  ansible.builtin.file:
+    path: /root/.secrets
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: nginx_certbot_cloudflare_ini | length > 0
+
+- name: Token de Cloudflare para certbot
+  ansible.builtin.copy:
+    content: "{{ nginx_certbot_cloudflare_ini }}"
+    dest: /root/.secrets/cloudflare.ini
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: nginx_certbot_cloudflare_ini | length > 0
+
+- name: Renovación automática
+  ansible.builtin.systemd_service:
+    name: certbot.timer
+    enabled: true
+    state: started
+
+- name: Servicio nginx
+  ansible.builtin.systemd_service:
+    name: nginx.service
+    enabled: true
+    state: started

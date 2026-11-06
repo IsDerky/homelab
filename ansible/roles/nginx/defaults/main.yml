@@ -1,0 +1,13 @@
+---
+# Vhosts: <nginx_sites_dir>/<name>.conf → sites-available. enabled: false lo
+# deja preparado sin activar.
+#   - name: web
+#     enabled: true
+nginx_sites: []
+
+# Por defecto, files/nginx junto al inventario (los vhosts son de cada servidor)
+nginx_sites_dir: "{{ inventory_dir }}/files/nginx"
+
+# Contenido de /root/.secrets/cloudflare.ini para certbot con DNS-01
+# (dns_cloudflare_api_token = …). Con Ansible Vault. Vacío = no se instala.
+nginx_certbot_cloudflare_ini: ""
