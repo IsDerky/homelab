@@ -36,8 +36,9 @@ Encender en el servidor y cambiar el DNS son pasos separados a propósito: la we
    ```
    El rol pasa `nginx -t`, recarga y comprueba que una ruta inventada devuelve el `index.html` (200). Eso demuestra a la vez que nginx sirve la versión publicada y que el fallback de la SPA funciona.
 2. En Cloudflare, para cada dominio de la web:
-   - DNS: borrar el registro A que apunta al VPS.
-   - Túnel → Public Hostnames → añadir el dominio con servicio `http://localhost:8084`. Cloudflare crea solo el CNAME al túnel.
+   - DNS: borrar el registro A que apunta al VPS. **Antes** de añadir la ruta: si el registro sigue ahí, la ruta se crea en el túnel pero el DNS no cambia y el tráfico sigue yendo al VPS.
+   - Túnel → Public Hostnames → añadir el dominio con servicio `http://localhost:8084` (`http`: el HTTPS lo pone Cloudflare). Cloudflare crea solo el CNAME al túnel.
+   - Comprobar en DNS que existe ese CNAME (`<id-del-túnel>.cfargotunnel.com`, con proxy). Si no está, crearlo a mano: editar la ruta y guardarla sin cambios no lo crea. El ID sale en el log de cloudflared (`journalctl -u cloudflared | grep tunnelID`).
 3. Comprobar:
    ```bash
    curl -sI https://<dominio>/          # 200
@@ -53,10 +54,11 @@ Encender en el servidor y cambiar el DNS son pasos separados a propósito: la we
    ansible-playbook playbooks/webs.yml
    ```
    El rol se niega a encenderla si el CI no ha publicado ninguna versión. Después la arranca y espera a que `/api/partidos` devuelva datos de verdad, no solo un 200 (esa ruta hace scraping con Chrome, así que prueba que puppeteer funciona dentro del encierro de systemd).
-2. En Cloudflare:
+2. En Cloudflare (lo mismo que arriba: primero borrar el A, luego la ruta, y comprobar el CNAME):
    - DNS: borrar el registro A del dominio raíz.
    - Túnel → Public Hostnames → el dominio raíz con servicio `http://localhost:3051`.
-   - `www`: sin ruta en el túnel. Una Redirect Rule "www a raíz" (301) y un registro `www` con proxy (AAAA `100::` vale; nunca recibe tráfico, solo sirve para que Cloudflare aplique la regla).
+   - `www`: sin ruta en el túnel. Una Redirect Rule "www a raíz" (301, conservando la cadena de consulta) y un registro `www` **A `192.0.2.1`** con proxy. Esa IP es de documentación y nunca recibe tráfico: el registro solo sirve para que Cloudflare responda y aplique la regla. No vale un AAAA `100::`: con solo AAAA, Cloudflare responde solo por IPv6 y quien tenga solo IPv4 no llega.
+   - Comprobar el `www` sin esperar a cachés de DNS, contra una IP de Cloudflare: `curl -sI --resolve www.<dominio>:443:<ip-de-la-raíz> https://www.<dominio>/` → 301.
 3. Comprobar:
    ```bash
    curl -s https://<dominio>/api/partidos | head -c 200
