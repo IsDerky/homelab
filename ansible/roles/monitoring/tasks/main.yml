@@ -19,7 +19,10 @@
     mode: "{{ item.mode | default('0755') }}"
   loop:
     - { path: "" }
-    - { path: rules }
+    - { path: prometheus }
+    - { path: prometheus/rules }
+    - { path: alertmanager }
+    - { path: blackbox }
     - { path: grafana }
     - { path: grafana/provisioning }
     - { path: grafana/provisioning/datasources }
@@ -49,7 +52,7 @@
 - name: Configuración de Prometheus
   ansible.builtin.template:
     src: prometheus.yml.j2
-    dest: "{{ monitoring_dir }}/prometheus.yml"
+    dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
     mode: "0644"
     validate: >-
       docker run --rm --user 0 -v %s:/c.yml:ro --entrypoint promtool
@@ -59,7 +62,7 @@
 - name: Reglas y alertas
   ansible.builtin.copy:
     src: rules/alertas.yml
-    dest: "{{ monitoring_dir }}/rules/alertas.yml"
+    dest: "{{ monitoring_dir }}/prometheus/rules/alertas.yml"
     mode: "0644"
     validate: >-
       docker run --rm --user 0 -v %s:/r.yml:ro --entrypoint promtool
@@ -69,7 +72,7 @@
 - name: Objetivos de disponibilidad
   ansible.builtin.template:
     src: slo.yml.j2
-    dest: "{{ monitoring_dir }}/rules/slo.yml"
+    dest: "{{ monitoring_dir }}/prometheus/rules/slo.yml"
     mode: "0644"
     validate: >-
       docker run --rm --user 0 -v %s:/r.yml:ro --entrypoint promtool
@@ -79,7 +82,7 @@
 - name: Configuración de Alertmanager
   ansible.builtin.template:
     src: alertmanager.yml.j2
-    dest: "{{ monitoring_dir }}/alertmanager.yml"
+    dest: "{{ monitoring_dir }}/alertmanager/alertmanager.yml"
     mode: "0644"
     validate: >-
       docker run --rm --user 0 -v %s:/a.yml:ro --entrypoint amtool
@@ -89,9 +92,21 @@
 - name: Configuración de blackbox
   ansible.builtin.template:
     src: blackbox.yml.j2
-    dest: "{{ monitoring_dir }}/blackbox.yml"
+    dest: "{{ monitoring_dir }}/blackbox/blackbox.yml"
     mode: "0644"
   notify: Recargar blackbox
+
+# Restos de cuando la configuración se montaba fichero a fichero
+- name: Quitar la configuración de la estructura anterior
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/{{ item }}"
+    state: absent
+  loop:
+    - prometheus.yml
+    - rules
+    - alertmanager.yml
+    - blackbox.yml
+  notify: Aplicar compose
 
 - name: Variables de Grafana (con la contraseña de admin)
   ansible.builtin.template:
