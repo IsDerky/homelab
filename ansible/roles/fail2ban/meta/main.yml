@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: fail2ban
+  namespace: isderky
+  description: fail2ban con jails y filtros propios desde variables, comprobados antes de recargar
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+dependencies: []

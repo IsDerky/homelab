@@ -1,0 +1,16 @@
+---
+# Un fichero por jail en jail.d/<name>.conf:
+#   - name: sshd-extra
+#     settings:
+#       enabled: true
+#       filter: sshd
+#       maxretry: 3
+#       bantime: 1d
+fail2ban_jails: []
+
+# Un fichero por filtro en filter.d/<name>.conf (sección [Definition]):
+#   - name: mi-app
+#     definition:
+#       journalmatch: _SYSTEMD_UNIT=mi-app.service
+#       failregex: 'login failed ip=<HOST>'
+fail2ban_filters: []

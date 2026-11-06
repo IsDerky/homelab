@@ -1,0 +1,58 @@
+---
+- name: Paquete fail2ban
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+
+# fail2ban corre como root y ejecuta las action de estos ficheros: solo root
+# puede escribir aquí
+- name: Carpetas de configuración solo de root
+  ansible.builtin.file:
+    path: /etc/fail2ban/{{ item }}
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - jail.d
+    - filter.d
+
+- name: Filtros
+  ansible.builtin.template:
+    src: section.conf.j2
+    dest: /etc/fail2ban/filter.d/{{ item.name }}.conf
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    section: Definition
+    options: "{{ item.definition }}"
+  loop: "{{ fail2ban_filters }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify:
+    - Comprobar fail2ban
+    - Recargar fail2ban
+
+- name: Jails
+  ansible.builtin.template:
+    src: section.conf.j2
+    dest: /etc/fail2ban/jail.d/{{ item.name }}.conf
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    section: "{{ item.name }}"
+    options: "{{ item.settings }}"
+  loop: "{{ fail2ban_jails }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify:
+    - Comprobar fail2ban
+    - Recargar fail2ban
+
+- name: Servicio fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban.service
+    enabled: true
+    state: started
