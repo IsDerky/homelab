@@ -15,3 +15,15 @@ nginx_sites_dir: "{{ inventory_dir }}/files/nginx"
 # Contenido de /root/.secrets/cloudflare.ini para certbot con DNS-01
 # (dns_cloudflare_api_token = …). Con Ansible Vault. Vacío = no se instala.
 nginx_certbot_cloudflare_ini: ""
+
+# Certificados (nombre en certbot) que se renuevan por DNS-01 con ese token en
+# vez de por HTTP en el puerto 80. Así no dependen de que el 80 esté abierto
+# ni de por dónde llegue el tráfico web (p. ej. detrás de un túnel).
+nginx_certbot_dns_certs: []
+
+# Comando a lanzar cuando se renueva un certificado concreto. Para servicios
+# que leen el certificado solo al arrancar.
+#   - name: wings
+#     cert: node.example.com
+#     command: systemctl restart wings
+nginx_certbot_deploy_hooks: []
