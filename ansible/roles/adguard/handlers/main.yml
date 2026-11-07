@@ -15,3 +15,10 @@
   args:
     chdir: "{{ adguard_dir }}"
   changed_when: true
+
+# AdGuard también, para que olvide las respuestas vacías que tenga en caché
+- name: Reiniciar unbound
+  ansible.builtin.command: docker compose restart unbound adguardhome
+  args:
+    chdir: "{{ adguard_dir }}"
+  changed_when: true

@@ -215,6 +215,7 @@ Con `adguard_unbound: true`, AdGuard deja de mandar las consultas a un DNS públ
 - El upstream está en `conf/AdGuardHome.yaml`, que es de AdGuard: el rol lo lee, cambia solo `upstream_dns` y `fallback_dns`, guarda copia del anterior y reinicia el contenedor. Como respaldo se queda con los upstream de antes (o `adguard_fallback_dns`), así que si Unbound se cae la casa sigue teniendo DNS.
 - Activarlo la primera vez recrea AdGuard (cambia de red): unos segundos sin DNS.
 - Que la LAN resuelve se comprueba desde un cliente permitido, no desde el servidor: con `allowed_clients`, AdGuard le responde REFUSED al propio servidor. Desde Windows: `Resolve-DnsName nlnetlabs.nl -Server <ip>` tiene que resolver y `dnssec-failed.org` tiene que fallar.
+- Unbound descarta las respuestas que apuntan a IPs privadas (protección contra DNS rebinding), así que un registro público como `oficina.derkyu.lol → 192.168.1.50` se queda sin respuesta. Los dominios de `adguard_unbound_private_domains` sí pueden devolverlas; el rol los pone en `unbound/lan.conf`, que se monta en `custom.conf.d/` de la imagen.
 
 | Variable | Por defecto | |
 |---|---|---|
@@ -223,6 +224,7 @@ Con `adguard_unbound: true`, AdGuard deja de mandar las consultas a un DNS públ
 | `adguard_network_subnet` | `172.31.53.0/24` | Red del compose |
 | `adguard_unbound_ip` | `172.31.53.53` | |
 | `adguard_fallback_dns` | `[]` | Vacío = los upstream que tuviera AdGuard |
+| `adguard_unbound_private_domains` | `[]` | Dominios propios que pueden resolver a IPs de la LAN |
 
 ## Rol `code_server`
 

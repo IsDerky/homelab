@@ -12,7 +12,15 @@
     owner: root
     group: root
     mode: "0755"
-  loop: ["", conf, work]
+  loop: "{{ ['', 'conf', 'work'] + (['unbound'] if adguard_unbound else []) }}"
+
+- name: Dominios con IP de la LAN para Unbound
+  ansible.builtin.template:
+    src: unbound-lan.conf.j2
+    dest: "{{ adguard_dir }}/unbound/lan.conf"
+    mode: "0644"
+  when: adguard_unbound
+  notify: Reiniciar unbound
 
 - name: Compose
   ansible.builtin.template:
