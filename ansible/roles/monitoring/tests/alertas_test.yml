@@ -78,3 +78,49 @@ tests:
       - eval_time: 15m
         alertname: MemoriaAgotada
         exp_alerts: []
+
+  # Copia local fallida: avisa a los 5 min
+  - interval: 1m
+    input_series:
+      - series: 'ops_backup_run_success{modo="sistema", destino="local"}'
+        values: "1x5 0x10"
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: BackupLocalFallido
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: BackupLocalFallido
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              modo: sistema
+              destino: local
+            exp_annotations:
+              summary: "La copia local de sistema ha fallado (¿disco USB desconectado?)."
+
+  # Atrasada: la del NAS sí avisa; la de sistema en Drive no (la vigila el
+  # vigilante externo) aunque esté igual de atrasada
+  - interval: 1m
+    input_series:
+      - series: 'ops_backup_run_last_success_timestamp_seconds{modo="nas", destino="drive"}'
+        values: "0x40"
+      - series: 'ops_backup_run_max_age_seconds{modo="nas", destino="drive"}'
+        values: "600x40"
+      - series: 'ops_backup_run_success{modo="nas", destino="drive"}'
+        values: "1x40"
+      - series: 'ops_backup_run_last_success_timestamp_seconds{modo="sistema", destino="drive"}'
+        values: "0x40"
+      - series: 'ops_backup_run_max_age_seconds{modo="sistema", destino="drive"}'
+        values: "600x40"
+      - series: 'ops_backup_run_success{modo="sistema", destino="drive"}'
+        values: "1x40"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: BackupAtrasado
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              modo: nas
+              destino: drive
+            exp_annotations:
+              summary: "No hay una copia buena de nas (drive) desde hace 30m 0s."

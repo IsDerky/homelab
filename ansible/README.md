@@ -40,6 +40,9 @@ El honeypot necesita en el servidor Docker con Compose v2, systemd e iptables.
 | `base_admin_user` | `admin` | Usuario con sudo |
 | `base_admin_keys` | `[]` | Claves públicas que pueden entrar con ese usuario |
 | `base_masked_services` | `[]` | Servicios parados y enmascarados (con su `.socket` si lo tienen) |
+| `base_disable_cloud_init` | `false` | Crea `/etc/cloud/cloud-init.disabled` |
+
+En una instalación de Ubuntu con escritorio que luego se queda como servidor sobran cosas que siguen arrancando: wifi, bluetooth, perfiles de energía, automontaje de discos… Enmascararlas (no solo deshabilitarlas) evita que D-Bus u otro paquete las vuelva a levantar.
 
 ## Rol `ssh`
 
@@ -80,6 +83,54 @@ Instala `server-backup` y sus timers: `sistema` cada 6 h, `clientes` a diario, `
 Los secretos (`backup_restic_password` y `backup_rclone_conf`) van en Ansible Vault y solo se escriben si el fichero no existe, es decir, en una máquina nueva. Si ya existe no se toca: sobrescribir la contraseña de un repo que ya tiene datos lo dejaría sin poder abrirse, y rclone reescribe su config al renovar el token. A cambio, el rol comprueba que la contraseña del vault es la del servidor y, al final, que restic abre el repositorio de verdad (`restic cat config`, solo lectura).
 
 El script usa `discord-dm` y `ops-ping` para avisar; no los instala este rol.
+
+### Copia local y NAS
+
+Con `backup_local_mount` (un disco montado), `sistema` y `clientes` hacen además la misma copia en un repo restic local, con la misma contraseña y la misma retención. Va en un proceso aparte (`server-backup _local <modo>`): si el disco no está o falla, la copia de Drive ya está hecha y no se marca como fallida. `mantenimiento` hace en local un `check --read-data` completo cada semana. En local es rápido, y es la única forma de saber que el disco está sano cuando la carcasa USB no deja leer el SMART.
+
+El modo `nas` copia la carpeta del NAS a Drive a diario. No a local: estaría en el mismo disco.
+
+Cada ejecución deja su resultado en `/var/lib/server-backup/estado/<modo>-<destino>.json` (si fue bien, cuándo, la última vez que fue bien y la antigüedad máxima aceptable). `ops-exporter` lo publica y el rol `monitoring` avisa si una copia local falla o si alguna copia se queda atrás. Los fallos de Drive siguen avisando por DM desde el script, como antes.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `backup_modes` | sistema, clientes, mantenimiento, simulacro | Timers que se instalan. Hay también `nas` |
+| `backup_local_mount` | `""` | Disco para la copia local. Vacío = sin copia local |
+
+## Rol `usb_storage`
+
+Un disco externo con LVM: una partición, un grupo de volúmenes y los volúmenes del inventario, cada uno en ext4 y montado por UUID. Lo que no se asigna queda libre en el grupo, y agrandar un volumen después es cambiar su tamaño en el inventario y `resize2fs`, sin mover datos.
+
+```yaml
+usb_storage_device: /dev/disk/by-id/usb-...   # no /dev/sdX: cambia según el orden de conexión
+usb_storage_volumes:
+  - { name: backup, size: 80g, mount: /srv/backup-local, owner: root, mode: "0700" }
+  - { name: nas, size: 120g, mount: /srv/nas }
+```
+
+- **Lo único que borra datos** (firmas y tabla de particiones) solo se ejecuta con `-e usb_storage_init=true` y si el disco aún no es de LVM. Una pasada normal nunca formatea: `lvol` no reduce volúmenes (`shrink: false`) y `filesystem` no reformatea uno que ya existe.
+- Montaje con `nofail` y un timeout de 10 s: si el disco no está, el servidor arranca igual.
+- Los permisos de cada volumen solo se tocan si tiene `owner`. Si no, los pone el rol que lo usa (así dos roles no se los cambian en cada pasada).
+
+Para desconectar el disco sin riesgo:
+
+```bash
+systemctl stop smbd                     # suelta el NAS
+umount /srv/nas /srv/backup-local
+vgchange -an usb
+```
+
+Al volver a conectarlo: `mount -a && systemctl start smbd`.
+
+## Rol `nas`
+
+Una carpeta compartida por Samba para la LAN:
+
+- Solo SMB3, con cifrado si el cliente lo admite. Sin NetBIOS (`nmbd` enmascarado, solo el puerto 445), sin invitados ni sesiones anónimas, sin impresoras.
+- Escucha solo en las interfaces de `nas_interfaces` y acepta solo `nas_hosts_allow`. El cortafuegos va aparte (regla del 445 solo para la LAN en `ufw_rules`).
+- Un usuario de sistema sin shell. La contraseña de Samba sale del vault y solo se pone al crearlo. Para cambiarla: `smbpasswd <usuario>` en el servidor y actualizar el vault.
+- Con `nas_require_mount` (por defecto) se niega a seguir si la carpeta no está montada. Si no, sería una carpeta vacía en el disco del sistema y los archivos acabarían ahí.
+- La configuración se valida con `testparm` antes de instalarla.
 
 ## Rol `fail2ban`
 
@@ -148,6 +199,23 @@ Al cambiar la unidad **solo recarga systemd, no reinicia la app**, para no corta
 ## Rol `adguard`
 
 AdGuard Home con el DNS solo en la IP de la LAN (`adguard_dns_listen`; en `127.0.0.53:53` ya está systemd-resolved) y el panel en loopback para nginx. `conf/` y `work/` son datos de AdGuard y van en el backup, no en Ansible. El compose es el mismo que había, así que aplicar el rol no recrea el contenedor: en un servidor que es el único DNS de la casa, eso es un corte.
+
+### Unbound
+
+Con `adguard_unbound: true`, AdGuard deja de mandar las consultas a un DNS público y se las pasa a Unbound, que resuelve él mismo desde los servidores raíz y valida DNSSEC. Nadie de fuera ve todas las consultas de la casa juntas, y una respuesta falsificada con la firma rota se rechaza. A cambio, la primera consulta a un dominio tarda algo más (luego sale de caché, y Unbound la renueva antes de que caduque).
+
+- Unbound va en el mismo compose, en una red propia con IP fija y sin puertos publicados: solo le llega AdGuard.
+- Antes de tocar AdGuard, el rol comprueba que Unbound resuelve y que devuelve SERVFAIL para `dnssec-failed.org`, un dominio con la firma rota a propósito. Si falla, AdGuard sigue como estaba.
+- El upstream está en `conf/AdGuardHome.yaml`, que es de AdGuard: el rol lo lee, cambia solo `upstream_dns` y `fallback_dns`, guarda copia del anterior y reinicia el contenedor. Como respaldo se queda con los upstream de antes (o `adguard_fallback_dns`), así que si Unbound se cae la casa sigue teniendo DNS.
+- Activarlo la primera vez recrea AdGuard (cambia de red): unos segundos sin DNS.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `adguard_unbound` | `false` | |
+| `adguard_unbound_image` | `klutchell/unbound:1.26.2` | |
+| `adguard_network_subnet` | `172.31.53.0/24` | Red del compose |
+| `adguard_unbound_ip` | `172.31.53.53` | |
+| `adguard_fallback_dns` | `[]` | Vacío = los upstream que tuviera AdGuard |
 
 ## Rol `roninfc`
 

@@ -104,3 +104,32 @@
     RESTIC_CACHE_DIR: /var/cache/restic
   changed_when: false
   check_mode: false
+
+- name: Repositorio local
+  when: backup_local_mount | length > 0
+  block:
+    - name: El disco local tiene que estar montado
+      ansible.builtin.command: mountpoint -q {{ backup_local_mount }}
+      changed_when: false
+
+    - name: ¿Existe ya el repositorio local?
+      ansible.builtin.stat:
+        path: "{{ backup_local_repo }}/config"
+      register: backup_local_config
+
+    # Misma contraseña que el de Drive: con el vault se abren los dos
+    - name: Crear el repositorio local
+      ansible.builtin.command: restic init
+      environment:
+        RESTIC_REPOSITORY: "{{ backup_local_repo }}"
+        RESTIC_PASSWORD_FILE: "{{ backup_password_file }}"
+      when: not backup_local_config.stat.exists
+      changed_when: true
+
+    - name: Restic abre el repositorio local
+      ansible.builtin.command: restic cat config
+      environment:
+        RESTIC_REPOSITORY: "{{ backup_local_repo }}"
+        RESTIC_PASSWORD_FILE: "{{ backup_password_file }}"
+      changed_when: false
+      check_mode: false

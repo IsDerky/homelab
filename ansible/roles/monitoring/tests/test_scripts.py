@@ -94,10 +94,26 @@ class ExporterTest(unittest.TestCase):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
             f.write("{roto")
         try:
-            self.assertEqual(samples(exporter.render(f.name)), {"ops_snapshot_up": 0})
+            self.assertEqual(samples(exporter.render(f.name, "/no/existe")), {"ops_snapshot_up": 0})
         finally:
             os.unlink(f.name)
-        self.assertEqual(samples(exporter.render("/no/existe.json")), {"ops_snapshot_up": 0})
+        self.assertEqual(samples(exporter.render("/no/existe.json", "/no/existe")), {"ops_snapshot_up": 0})
+
+    def test_estado_de_los_backups(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "sistema-local.json"), "w") as f:
+                json.dump({"ok": False, "at": 2000, "last_ok_at": 1000, "max_age_s": 46800, "duration_s": 3}, f)
+            with open(os.path.join(d, "nas-drive.json"), "w") as f:
+                json.dump({"ok": True, "at": 3000, "last_ok_at": 3000, "max_age_s": 108000}, f)
+            with open(os.path.join(d, "roto-local.json"), "w") as f:
+                f.write("{roto")
+            s = samples(exporter.render("/no/existe.json", d))
+        # El snapshot no se lee, pero el estado de los backups sale igual
+        self.assertEqual(s["ops_snapshot_up"], 0)
+        self.assertEqual(s['ops_backup_run_success{destino="local",modo="sistema"}'], 0)
+        self.assertEqual(s['ops_backup_run_last_success_timestamp_seconds{destino="local",modo="sistema"}'], 1000)
+        self.assertEqual(s['ops_backup_run_success{destino="drive",modo="nas"}'], 1)
+        self.assertFalse(any("roto" in k for k in s))
 
     def test_snapshot_vacio(self):
         self.assertEqual(samples(exporter.collect({}).render()), {"ops_snapshot_up": 1})

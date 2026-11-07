@@ -15,3 +15,23 @@ services:
     volumes:
       - ./work:/opt/adguardhome/work
       - ./conf:/opt/adguardhome/conf
+{% if adguard_unbound %}
+    networks:
+      - dns
+
+  # Sin puertos publicados: solo le pregunta AdGuard, por la red del compose
+  unbound:
+    image: {{ adguard_unbound_image }}
+    container_name: unbound
+    restart: unless-stopped
+    mem_limit: 384m
+    networks:
+      dns:
+        ipv4_address: {{ adguard_unbound_ip }}
+
+networks:
+  dns:
+    ipam:
+      config:
+        - subnet: {{ adguard_network_subnet }}
+{% endif %}

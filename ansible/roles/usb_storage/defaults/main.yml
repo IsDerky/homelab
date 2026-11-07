@@ -1,0 +1,22 @@
+---
+# Disco por su ruta estable (/dev/disk/by-id/...): /dev/sdX cambia según el
+# orden en que se conecten los USB.
+usb_storage_device: ""
+
+usb_storage_vg: usb
+
+# Volúmenes lógicos. Lo que no se asigne queda libre en el grupo para crecer.
+#   - name: backup
+#     size: 80g
+#     mount: /srv/backup-local
+#     owner: root
+#     mode: "0700"
+usb_storage_volumes: []
+
+# Opciones de montaje: nofail para que el servidor arranque sin el disco, y un
+# timeout corto para no esperarlo 90 s.
+usb_storage_mount_opts: defaults,noatime,nofail,x-systemd.device-timeout=10s
+
+# BORRA el disco (firmas, tabla de particiones) y crea la partición LVM. Solo
+# se aplica si el disco aún no es de LVM. Pasarlo una vez con -e, nunca fijo.
+usb_storage_init: false

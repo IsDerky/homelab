@@ -50,3 +50,7 @@
     follow_redirects: none
     status_code: [200, 302]
   changed_when: false
+
+- name: Unbound
+  ansible.builtin.include_tasks: unbound.yml
+  when: adguard_unbound

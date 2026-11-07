@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: usb_storage
+  namespace: isderky
+  description: Disco externo con LVM, varios volúmenes ext4 montados por UUID y sin bloquear el arranque si no está
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

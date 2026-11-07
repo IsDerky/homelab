@@ -1,0 +1,13 @@
+---
+nas_path: /srv/nas
+nas_share: nas
+# false si nas_path es una carpeta normal y no un disco montado
+nas_require_mount: true
+
+# Usuario del sistema (sin shell) y de Samba. La contraseña, en el vault.
+nas_user: nas
+nas_password: ""
+
+# Dónde escucha (además de loopback) y desde dónde se puede entrar
+nas_interfaces: []
+nas_hosts_allow: []
