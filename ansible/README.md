@@ -209,6 +209,7 @@ Con `adguard_unbound: true`, AdGuard deja de mandar las consultas a un DNS públ
 - Antes de tocar AdGuard, el rol comprueba que Unbound resuelve y que devuelve SERVFAIL para `dnssec-failed.org`, un dominio con la firma rota a propósito. Si falla, AdGuard sigue como estaba.
 - El upstream está en `conf/AdGuardHome.yaml`, que es de AdGuard: el rol lo lee, cambia solo `upstream_dns` y `fallback_dns`, guarda copia del anterior y reinicia el contenedor. Como respaldo se queda con los upstream de antes (o `adguard_fallback_dns`), así que si Unbound se cae la casa sigue teniendo DNS.
 - Activarlo la primera vez recrea AdGuard (cambia de red): unos segundos sin DNS.
+- Que la LAN resuelve se comprueba desde un cliente permitido, no desde el servidor: con `allowed_clients`, AdGuard le responde REFUSED al propio servidor. Desde Windows: `Resolve-DnsName nlnetlabs.nl -Server <ip>` tiene que resolver y `dnssec-failed.org` tiene que fallar.
 
 | Variable | Por defecto | |
 |---|---|---|

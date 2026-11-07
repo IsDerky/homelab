@@ -43,6 +43,8 @@
     dest: "{{ adguard_dir }}/conf/AdGuardHome.yaml"
     mode: "0600"
     backup: true
+  # El fichero lleva el hash de la contraseña del panel
+  diff: false
   when: >-
     adguard_conf.dns.upstream_dns != adguard_upstream
     or adguard_conf.dns.fallback_dns | default([], true) != adguard_fallback
@@ -51,10 +53,11 @@
 - name: Aplicar el reinicio
   ansible.builtin.meta: flush_handlers
 
-- name: La LAN resuelve a través de AdGuard
-  ansible.builtin.command: dig +time=3 +tries=1 @{{ adguard_dns_listen }} nlnetlabs.nl
-  register: adguard_lan_ok
-  until: "'status: NOERROR' in adguard_lan_ok.stdout"
-  retries: 10
-  delay: 3
-  changed_when: false
+# Preguntar a AdGuard desde aquí no sirve si tiene allowed_clients (al propio
+# servidor le responde REFUSED): se comprueba que vuelve a escuchar, y que
+# resuelve hay que verlo desde un cliente de la LAN
+- name: AdGuard vuelve a escuchar
+  ansible.builtin.wait_for:
+    host: "{{ adguard_dns_listen }}"
+    port: 53
+    timeout: 60
