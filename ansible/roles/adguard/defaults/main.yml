@@ -8,3 +8,13 @@ adguard_dns_listen: ""
 
 # Panel (y DoH) solo en loopback, para nginx
 adguard_panel_port: 3000
+
+# Unbound como resolvedor recursivo detrás de AdGuard: pregunta directamente a
+# los servidores raíz y valida DNSSEC, sin pasar por Quad9, Cloudflare, etc.
+adguard_unbound: false
+adguard_unbound_image: klutchell/unbound:1.26.2
+# Red propia del compose con IP fija para Unbound (AdGuard la usa como upstream)
+adguard_network_subnet: 172.31.53.0/24
+adguard_unbound_ip: 172.31.53.53
+# Por si Unbound no responde. Vacío = los upstream que tuviera AdGuard antes.
+adguard_fallback_dns: []

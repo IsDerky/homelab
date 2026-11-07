@@ -40,6 +40,9 @@ El honeypot necesita en el servidor Docker con Compose v2, systemd e iptables.
 | `base_admin_user` | `admin` | Usuario con sudo |
 | `base_admin_keys` | `[]` | Claves públicas que pueden entrar con ese usuario |
 | `base_masked_services` | `[]` | Servicios parados y enmascarados (con su `.socket` si lo tienen) |
+| `base_disable_cloud_init` | `false` | Crea `/etc/cloud/cloud-init.disabled` |
+
+En una instalación de Ubuntu con escritorio que luego se queda como servidor sobran cosas que siguen arrancando: wifi, bluetooth, perfiles de energía, automontaje de discos… Enmascararlas (no solo deshabilitarlas) evita que D-Bus u otro paquete las vuelva a levantar.
 
 ## Rol `ssh`
 
@@ -196,6 +199,23 @@ Al cambiar la unidad **solo recarga systemd, no reinicia la app**, para no corta
 ## Rol `adguard`
 
 AdGuard Home con el DNS solo en la IP de la LAN (`adguard_dns_listen`; en `127.0.0.53:53` ya está systemd-resolved) y el panel en loopback para nginx. `conf/` y `work/` son datos de AdGuard y van en el backup, no en Ansible. El compose es el mismo que había, así que aplicar el rol no recrea el contenedor: en un servidor que es el único DNS de la casa, eso es un corte.
+
+### Unbound
+
+Con `adguard_unbound: true`, AdGuard deja de mandar las consultas a un DNS público y se las pasa a Unbound, que resuelve él mismo desde los servidores raíz y valida DNSSEC. Nadie de fuera ve todas las consultas de la casa juntas, y una respuesta falsificada con la firma rota se rechaza. A cambio, la primera consulta a un dominio tarda algo más (luego sale de caché, y Unbound la renueva antes de que caduque).
+
+- Unbound va en el mismo compose, en una red propia con IP fija y sin puertos publicados: solo le llega AdGuard.
+- Antes de tocar AdGuard, el rol comprueba que Unbound resuelve y que devuelve SERVFAIL para `dnssec-failed.org`, un dominio con la firma rota a propósito. Si falla, AdGuard sigue como estaba.
+- El upstream está en `conf/AdGuardHome.yaml`, que es de AdGuard: el rol lo lee, cambia solo `upstream_dns` y `fallback_dns`, guarda copia del anterior y reinicia el contenedor. Como respaldo se queda con los upstream de antes (o `adguard_fallback_dns`), así que si Unbound se cae la casa sigue teniendo DNS.
+- Activarlo la primera vez recrea AdGuard (cambia de red): unos segundos sin DNS.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `adguard_unbound` | `false` | |
+| `adguard_unbound_image` | `klutchell/unbound:1.26.2` | |
+| `adguard_network_subnet` | `172.31.53.0/24` | Red del compose |
+| `adguard_unbound_ip` | `172.31.53.53` | |
+| `adguard_fallback_dns` | `[]` | Vacío = los upstream que tuviera AdGuard |
 
 ## Rol `roninfc`
 

@@ -1,0 +1,60 @@
+---
+# Primero que Unbound resuelva por su cuenta; si no, AdGuard no se toca.
+# dnssec-failed.org tiene la firma rota a propósito: un resolvedor que valida
+# DNSSEC tiene que devolver SERVFAIL.
+- name: Unbound resuelve
+  ansible.builtin.command: dig +time=3 +tries=1 @{{ adguard_unbound_ip }} nlnetlabs.nl
+  register: adguard_unbound_ok
+  until: "'status: NOERROR' in adguard_unbound_ok.stdout"
+  retries: 10
+  delay: 3
+  changed_when: false
+
+- name: Unbound valida DNSSEC
+  ansible.builtin.command: dig +time=3 +tries=1 @{{ adguard_unbound_ip }} dnssec-failed.org
+  register: adguard_unbound_dnssec
+  failed_when: "'status: SERVFAIL' not in adguard_unbound_dnssec.stdout"
+  changed_when: false
+
+# El upstream vive en la configuración de AdGuard (conf/), que no es de
+# Ansible: se lee, se cambian solo esas dos claves y se reinicia.
+- name: Configuración de AdGuard
+  ansible.builtin.slurp:
+    src: "{{ adguard_dir }}/conf/AdGuardHome.yaml"
+  register: adguard_conf_raw
+
+- name: Upstream y respaldo
+  ansible.builtin.set_fact:
+    adguard_conf: "{{ adguard_conf_raw.content | b64decode | from_yaml }}"
+    adguard_upstream: ["{{ adguard_unbound_ip }}"]
+
+- name: Respaldo = lo de antes si no se define otro
+  ansible.builtin.set_fact:
+    adguard_fallback: >-
+      {{ adguard_fallback_dns
+         or adguard_conf.dns.fallback_dns | default([], true)
+         or adguard_conf.dns.upstream_dns | reject('equalto', adguard_unbound_ip) | list }}
+
+- name: AdGuard pregunta a Unbound
+  ansible.builtin.copy:
+    content: >-
+      {{ adguard_conf | combine({'dns': {'upstream_dns': adguard_upstream,
+         'fallback_dns': adguard_fallback}}, recursive=True) | to_nice_yaml(indent=2) }}
+    dest: "{{ adguard_dir }}/conf/AdGuardHome.yaml"
+    mode: "0600"
+    backup: true
+  when: >-
+    adguard_conf.dns.upstream_dns != adguard_upstream
+    or adguard_conf.dns.fallback_dns | default([], true) != adguard_fallback
+  notify: Reiniciar adguard
+
+- name: Aplicar el reinicio
+  ansible.builtin.meta: flush_handlers
+
+- name: La LAN resuelve a través de AdGuard
+  ansible.builtin.command: dig +time=3 +tries=1 @{{ adguard_dns_listen }} nlnetlabs.nl
+  register: adguard_lan_ok
+  until: "'status: NOERROR' in adguard_lan_ok.stdout"
+  retries: 10
+  delay: 3
+  changed_when: false

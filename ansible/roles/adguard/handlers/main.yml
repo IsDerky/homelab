@@ -9,3 +9,9 @@
   args:
     chdir: "{{ adguard_dir }}"
   changed_when: true
+
+- name: Reiniciar adguard
+  ansible.builtin.command: docker compose restart adguardhome
+  args:
+    chdir: "{{ adguard_dir }}"
+  changed_when: true
