@@ -25,6 +25,9 @@ services:
     container_name: unbound
     restart: unless-stopped
     mem_limit: 384m
+    volumes:
+      # La imagen incluye custom.conf.d/*.conf
+      - ./unbound/lan.conf:/etc/unbound/custom.conf.d/lan.conf:ro
     networks:
       dns:
         ipv4_address: {{ adguard_unbound_ip }}

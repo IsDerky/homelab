@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Respuestas con IP privada que Unbound sí deja pasar para estos dominios
+server:
+{% for domain in adguard_unbound_private_domains %}
+    private-domain: "{{ domain }}"
+{% endfor %}
