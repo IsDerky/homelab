@@ -17,8 +17,9 @@
 
 - name: Rutas
   ansible.builtin.set_fact:
-    code_server_home: "{{ getent_passwd[code_server_user][4] }}"
-    code_server_old_home: "{{ getent_passwd[code_server_migrate_from][4] if code_server_migrate_from else '' }}"
+    code_server_home: "{{ ansible_facts.getent_passwd[code_server_user][4] }}"
+    code_server_old_home: "{{ ansible_facts.getent_passwd[code_server_migrate_from][4] if code_server_migrate_from else '' }}"
+    code_server_marca: "{{ ansible_facts.getent_passwd[code_server_user][4] }}/.config/code-server/.migrado-de-{{ code_server_migrate_from }}"
 
 - name: Migrar desde otro usuario
   ansible.builtin.include_tasks: migrar.yml
@@ -29,6 +30,9 @@
     name: code-server@{{ code_server_user }}.service
     enabled: true
     state: started
+
+- name: Aplicar el reinicio
+  ansible.builtin.meta: flush_handlers
 
 - name: Escucha
   ansible.builtin.wait_for:

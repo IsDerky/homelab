@@ -223,7 +223,7 @@ Con `adguard_unbound: true`, AdGuard deja de mandar las consultas a un DNS públ
 
 code-server (VS Code en el navegador, del paquete `.deb`) corriendo con un usuario normal en vez de root. Su terminal y sus extensiones tienen los permisos de ese usuario: si alguien llegara a entrar, no sería root directamente, y para administrar hay que pasar por `sudo` con contraseña.
 
-Con `code_server_migrate_from` hace el cambio una sola vez: para el `code-server@` del usuario anterior, copia su `config.yaml`, extensiones y ajustes (sin pisar nada si ya existe), corrige las rutas absolutas de `extensions.json` y arranca el del usuario nuevo en el mismo puerto. Lo que haya delante (en mi caso un proxy con TOTP) no se entera del cambio.
+Con `code_server_migrate_from` hace el cambio una sola vez: para el `code-server@` del usuario anterior, copia su `config.yaml`, extensiones y ajustes, corrige las rutas absolutas de `extensions.json` y arranca el del usuario nuevo en el mismo puerto. Si el usuario nuevo ya tenía un code-server suyo, sus carpetas se apartan (`*.antes-de-migrar-<fecha>`), no se borran. Al acabar deja una marca (`.migrado-de-<usuario>`) para no repetirlo. Lo que haya delante (en mi caso un proxy con TOTP) no se entera del cambio.
 
 | Variable | Por defecto | |
 |---|---|---|
