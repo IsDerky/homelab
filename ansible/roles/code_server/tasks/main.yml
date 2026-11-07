@@ -1,0 +1,37 @@
+---
+- name: Falta el usuario
+  ansible.builtin.assert:
+    that: code_server_user | length > 0
+    fail_msg: Define code_server_user.
+    quiet: true
+
+- name: Paquete instalado
+  ansible.builtin.stat:
+    path: /usr/bin/code-server
+  register: code_server_bin
+  failed_when: not code_server_bin.stat.exists
+
+- name: Carpetas personales
+  ansible.builtin.getent:
+    database: passwd
+
+- name: Rutas
+  ansible.builtin.set_fact:
+    code_server_home: "{{ getent_passwd[code_server_user][4] }}"
+    code_server_old_home: "{{ getent_passwd[code_server_migrate_from][4] if code_server_migrate_from else '' }}"
+
+- name: Migrar desde otro usuario
+  ansible.builtin.include_tasks: migrar.yml
+  when: code_server_migrate_from | length > 0 and code_server_migrate_from != code_server_user
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: code-server@{{ code_server_user }}.service
+    enabled: true
+    state: started
+
+- name: Escucha
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ code_server_port }}"
+    timeout: 60

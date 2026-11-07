@@ -10,7 +10,8 @@ Roles para montar piezas del homelab:
 - `nginx`: nginx con los vhosts del inventario y certbot con validación DNS de Cloudflare.
 - `cloudflared`: túnel de Cloudflare gestionado desde el panel, solo con el token.
 - `bentonime`: la parte de sistema de la app principal (usuario, unidad systemd, sudo mínimo para el deploy). El código lo despliega su CI.
-- `adguard`: AdGuard Home en Docker Compose como servicio systemd (`playbooks/apps.yml`, junto con `bentonime`).
+- `adguard`: AdGuard Home en Docker Compose como servicio systemd, con Unbound opcional (`playbooks/apps.yml`, junto con `bentonime`).
+- `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox y node_exporter, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
@@ -216,6 +217,18 @@ Con `adguard_unbound: true`, AdGuard deja de mandar las consultas a un DNS públ
 | `adguard_network_subnet` | `172.31.53.0/24` | Red del compose |
 | `adguard_unbound_ip` | `172.31.53.53` | |
 | `adguard_fallback_dns` | `[]` | Vacío = los upstream que tuviera AdGuard |
+
+## Rol `code_server`
+
+code-server (VS Code en el navegador, del paquete `.deb`) corriendo con un usuario normal en vez de root. Su terminal y sus extensiones tienen los permisos de ese usuario: si alguien llegara a entrar, no sería root directamente, y para administrar hay que pasar por `sudo` con contraseña.
+
+Con `code_server_migrate_from` hace el cambio una sola vez: para el `code-server@` del usuario anterior, copia su `config.yaml`, extensiones y ajustes (sin pisar nada si ya existe), corrige las rutas absolutas de `extensions.json` y arranca el del usuario nuevo en el mismo puerto. Lo que haya delante (en mi caso un proxy con TOTP) no se entera del cambio.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `code_server_user` | `""` | Obligatoria |
+| `code_server_migrate_from` | `""` | Usuario del que migrar (p. ej. `root`) |
+| `code_server_port` | `8081` | El de su `config.yaml`, para comprobar que arranca |
 
 ## Rol `roninfc`
 

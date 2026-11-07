@@ -1,0 +1,11 @@
+---
+# Usuario con el que corre code-server: su terminal es la de ese usuario, así
+# que para algo de root hace falta sudo (con contraseña)
+code_server_user: ""
+
+# Usuario del que se copian config.yaml, extensiones y ajustes la primera vez,
+# y cuyo code-server@ se para. Vacío = nada que migrar.
+code_server_migrate_from: ""
+
+# Puerto de su config.yaml (bind-addr); solo se usa para comprobar que arranca
+code_server_port: 8081

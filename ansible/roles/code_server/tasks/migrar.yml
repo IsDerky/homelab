@@ -1,0 +1,43 @@
+---
+# Primero se para el viejo: los dos usarían el mismo puerto, y así se copian
+# los datos sin que nadie los esté escribiendo
+- name: Parar el code-server anterior
+  ansible.builtin.systemd_service:
+    name: code-server@{{ code_server_migrate_from }}.service
+    enabled: false
+    state: stopped
+
+- name: Carpetas de destino
+  ansible.builtin.file:
+    path: "{{ code_server_home }}/{{ item }}"
+    state: directory
+    owner: "{{ code_server_user }}"
+    group: "{{ code_server_user }}"
+    mode: "0700"
+  loop: [.config, .local, .local/share]
+
+# Solo la primera vez: si el destino ya existe, no se pisa
+- name: Copiar configuración y datos
+  ansible.builtin.command: >-
+    cp -a {{ code_server_old_home }}/{{ item }} {{ code_server_home }}/{{ item }}
+  args:
+    creates: "{{ code_server_home }}/{{ item }}"
+    removes: "{{ code_server_old_home }}/{{ item }}"
+  loop: [.config/code-server, .local/share/code-server]
+
+- name: Dueño de lo copiado
+  ansible.builtin.file:
+    path: "{{ code_server_home }}/{{ item }}"
+    state: directory
+    recurse: true
+    owner: "{{ code_server_user }}"
+    group: "{{ code_server_user }}"
+  loop: [.config/code-server, .local/share/code-server]
+
+# extensions.json guarda la ruta absoluta de cada extensión
+- name: Extensiones apuntando a la carpeta nueva
+  ansible.builtin.replace:
+    path: "{{ code_server_home }}/.local/share/code-server/extensions/extensions.json"
+    regexp: "{{ code_server_old_home | regex_escape }}/"
+    replace: "{{ code_server_home }}/"
+  failed_when: false
