@@ -17,6 +17,10 @@ base_packages:
 # escritorio). Con su .socket si lo tienen, o el socket lo volvería a arrancar.
 base_masked_services: []
 
+# cloud-init solo hace falta en el primer arranque de una imagen de nube; en
+# una máquina instalada a mano sigue mirando la red y el disco en cada arranque
+base_disable_cloud_init: false
+
 # Usuario con sudo para no tener que entrar como root
 base_admin_user: admin
 

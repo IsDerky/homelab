@@ -19,6 +19,16 @@
     masked: true
   loop: "{{ base_masked_services }}"
 
+# La forma documentada de apagarlo: con este fichero, el generador de systemd
+# no añade sus unidades al arranque
+- name: Cloud-init desactivado
+  ansible.builtin.copy:
+    content: ""
+    dest: /etc/cloud/cloud-init.disabled
+    force: false
+    mode: "0644"
+  when: base_disable_cloud_init
+
 - name: Usuario de administración
   ansible.builtin.user:
     name: "{{ base_admin_user }}"
