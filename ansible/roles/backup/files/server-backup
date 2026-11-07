@@ -213,8 +213,8 @@ case "$mode" in
   _local)
     tag="${2:?Uso: server-backup _local sistema|clientes|mantenimiento}"
     destino=local
+    # Misma RESTIC_CACHE_DIR que Drive: restic separa la caché por repositorio
     export RESTIC_REPOSITORY="$LOCAL_REPO"
-    unset RESTIC_CACHE_DIR
     step="disco local montado"
     mountpoint -q "$LOCAL_MOUNT"
     [ -f "$LOCAL_REPO/config" ]
