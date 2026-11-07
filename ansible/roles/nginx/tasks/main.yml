@@ -76,6 +76,35 @@
   no_log: true
   when: nginx_certbot_cloudflare_ini | length > 0
 
+# reconfigure prueba la renovación (dry-run) con el método nuevo y solo lo
+# guarda si funciona; el certificado actual no se toca
+- name: Renovación por DNS de Cloudflare
+  ansible.builtin.shell: >-
+    grep -qx 'authenticator = dns-cloudflare' /etc/letsencrypt/renewal/{{ item }}.conf
+    && echo sin-cambios
+    || certbot reconfigure -n --cert-name {{ item }} --authenticator dns-cloudflare
+    --dns-cloudflare-credentials /root/.secrets/cloudflare.ini
+    --dns-cloudflare-propagation-seconds 30
+  register: nginx_certbot_reconfigure
+  changed_when: "'sin-cambios' not in nginx_certbot_reconfigure.stdout"
+  loop: "{{ nginx_certbot_dns_certs }}"
+
+- name: Hooks de certbot al renovar
+  ansible.builtin.copy:
+    content: |
+      #!/bin/sh
+      # Gestionado por Ansible (rol nginx)
+      case "$RENEWED_LINEAGE" in
+        */{{ item.cert }}) {{ item.command }} ;;
+      esac
+    dest: /etc/letsencrypt/renewal-hooks/deploy/{{ item.name }}
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ nginx_certbot_deploy_hooks }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Renovación automática
   ansible.builtin.systemd_service:
     name: certbot.timer

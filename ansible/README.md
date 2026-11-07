@@ -187,6 +187,11 @@ Con `check`, al final del rol (ya recargado nginx) pide esa URL con esa cabecera
 
 Los certificados no se piden desde el rol. El rol deja certbot, su plugin de Cloudflare y el token en `/root/.secrets/cloudflare.ini` (`nginx_certbot_cloudflare_ini`), y `certbot.timer` se encarga de renovar.
 
+- `nginx_certbot_dns_certs`: certificados creados con el plugin nginx (validan por el puerto 80) que pasan a renovarse por DNS-01. Lo hace `certbot reconfigure`, que prueba la renovación antes de guardar el cambio. Así ya no dependen del 80 ni de por dónde llegue el tráfico.
+- `nginx_certbot_deploy_hooks`: comando a lanzar cuando se renueva un certificado concreto, para servicios que solo lo leen al arrancar (Wings, por ejemplo).
+
+Pasar el panel de Pterodactyl al túnel y cerrar 80/443 en el router: [runbook](../docs/runbook-panel-por-tunel.md).
+
 ## Rol `cloudflared`
 
 Añade el repo de Cloudflare, instala `cloudflared` y lo arranca con el token del túnel (`cloudflared_tunnel_env`, en el vault). Las rutas del túnel se gestionan en el panel de Cloudflare, no aquí. Como reiniciar el túnel corta lo que pasa por él, solo se reinicia si cambia el token o la unidad.
