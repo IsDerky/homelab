@@ -1,0 +1,76 @@
+---
+# Primero se para el viejo: los dos usarían el mismo puerto, y así se copian
+# los datos sin que nadie los esté escribiendo
+- name: Parar el code-server anterior
+  ansible.builtin.systemd_service:
+    name: code-server@{{ code_server_migrate_from }}.service
+    enabled: false
+    state: stopped
+
+- name: Carpetas de destino
+  ansible.builtin.file:
+    path: "{{ code_server_home }}/{{ item }}"
+    state: directory
+    owner: "{{ code_server_user }}"
+    group: "{{ code_server_user }}"
+    mode: "0700"
+  loop: [.config, .local, .local/share]
+
+# La marca dice que la migración ya se hizo. Que exista la carpeta no basta: el
+# usuario nuevo puede tener un code-server viejo suyo (otro puerto, otra auth).
+- name: ¿Ya migrado?
+  ansible.builtin.stat:
+    path: "{{ code_server_marca }}"
+  register: code_server_migrado
+
+- name: Migrar
+  when: not code_server_migrado.stat.exists
+  block:
+    # Sin config.yaml, code-server crea uno nuevo en el 8080 con contraseña
+    # aleatoria: mejor parar antes de mover nada
+    - name: El usuario anterior tiene config.yaml
+      ansible.builtin.stat:
+        path: "{{ code_server_old_home }}/.config/code-server/config.yaml"
+      register: code_server_old_config
+      failed_when: not code_server_old_config.stat.exists
+
+    # Se aparta, no se borra
+    - name: Apartar lo que tuviera el usuario nuevo
+      ansible.builtin.command: >-
+        mv {{ code_server_home }}/{{ item }}
+        {{ code_server_home }}/{{ item }}.antes-de-migrar-{{ now(fmt='%Y%m%d%H%M%S') }}
+      args:
+        removes: "{{ code_server_home }}/{{ item }}"
+      loop: [.config/code-server, .local/share/code-server]
+
+    - name: Copiar configuración y datos
+      ansible.builtin.command: >-
+        cp -a {{ code_server_old_home }}/{{ item }} {{ code_server_home }}/{{ item }}
+      args:
+        removes: "{{ code_server_old_home }}/{{ item }}"
+      loop: [.config/code-server, .local/share/code-server]
+      notify: Reiniciar code-server
+
+    - name: Marca de migrado
+      ansible.builtin.copy:
+        content: ""
+        dest: "{{ code_server_marca }}"
+        mode: "0644"
+
+- name: Dueño de lo copiado
+  ansible.builtin.file:
+    path: "{{ code_server_home }}/{{ item }}"
+    state: directory
+    recurse: true
+    owner: "{{ code_server_user }}"
+    group: "{{ code_server_user }}"
+  loop: [.config/code-server, .local/share/code-server]
+
+# extensions.json guarda la ruta absoluta de cada extensión
+- name: Extensiones apuntando a la carpeta nueva
+  ansible.builtin.replace:
+    path: "{{ code_server_home }}/.local/share/code-server/extensions/extensions.json"
+    regexp: "{{ code_server_old_home | regex_escape }}/"
+    replace: "{{ code_server_home }}/"
+  failed_when: false
+  notify: Reiniciar code-server
