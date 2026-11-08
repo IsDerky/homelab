@@ -7,6 +7,7 @@ After=network.target
 ExecStart=/usr/local/bin/ops-exporter
 Environment=OPS_SNAPSHOT={{ monitoring_ops_snapshot }}
 Environment=OPS_LISTEN=127.0.0.1:{{ monitoring_ports.ops_exporter }}
+Environment=OPS_WINGS_NODE={{ monitoring_wings_local_node }}
 Restart=on-failure
 
 # Usuario efímero que solo puede leer el snapshot (por el grupo)

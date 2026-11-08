@@ -55,11 +55,46 @@ services:
     command:
       - --path.rootfs=/host
       - --web.listen-address=127.0.0.1:{{ monitoring_ports.node_exporter }}
+{% if monitoring_systemd_units %}
+      # Estado de las unidades de la lista (por D-Bus); todas serían cientos de series
+      - --collector.systemd
+      - --collector.systemd.unit-include=({{ monitoring_systemd_units | join('|') }})
+{% endif %}
     volumes:
       - /:/host:ro,rslave
+{% if monitoring_systemd_units %}
+      - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
+{% endif %}
     mem_limit: {{ monitoring_mem.node_exporter }}
     restart: unless-stopped
 
+{% if monitoring_cadvisor %}
+  # Consumo por contenedor (incluidos los de Wings). Solo métricas de CPU,
+  # memoria, red, E/S y presión: el resto (uso de disco por capa, procesos,
+  # TCP...) dispara las series y la CPU de cAdvisor sin aportar mucho.
+  cadvisor:
+    image: {{ monitoring_images.cadvisor }}
+    network_mode: host
+    privileged: true
+    devices:
+      - /dev/kmsg
+    command:
+      - --listen_ip=127.0.0.1
+      - --port={{ monitoring_ports.cadvisor }}
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --disable_metrics=advtcp,cpu_topology,cpuset,disk,hugetlb,memory_numa,percpu,perf_event,process,referenced_memory,resctrl,sched,tcp,udp
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    mem_limit: {{ monitoring_mem.cadvisor }}
+    restart: unless-stopped
+
+{% endif %}
   grafana:
     image: {{ monitoring_images.grafana }}
     network_mode: host

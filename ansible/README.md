@@ -13,7 +13,7 @@ Roles para montar piezas del homelab:
 - `adguard`: AdGuard Home en Docker Compose como servicio systemd, con Unbound opcional (`playbooks/apps.yml`, junto con `bentonime`).
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
-- `monitoring`: Prometheus, Alertmanager, Grafana, blackbox y node_exporter, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
+- `monitoring`: Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 
 ## Uso
@@ -256,21 +256,25 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 
 ```
 node_exporter ─┐
+cAdvisor ──────┤
 blackbox ──────┤                         ┌─ Grafana (dashboards)
 ops-exporter ──┼─→ Prometheus (15 días) ─┤
 alertmanager ──┘                         └─ Alertmanager ─→ alert-dm ─→ discord-dm ─→ DM
 ```
 
-- **Prometheus, Alertmanager, Grafana, blackbox y node_exporter** en Docker Compose, como un servicio systemd (`monitoring.service`). Todos con la red del host y escuchando solo en `127.0.0.1`: lo que publica Docker se salta ufw, así que no se publica ningún puerto. Cada contenedor tiene tope de memoria.
-- **`ops-exporter`** (Python, solo la librería estándar): lee el JSON que deja `ops-collect` cada 5 minutos (backups, simulacro, SMART, certificados, servicios, fail2ban, deploys) y lo sirve en el formato de texto de Prometheus. No repite nada de lo que da node_exporter. Corre con un usuario efímero de systemd (`DynamicUser`) que solo puede leer ese fichero, por el grupo.
+- **Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor** en Docker Compose, como un servicio systemd (`monitoring.service`). Todos con la red del host y escuchando solo en `127.0.0.1`: lo que publica Docker se salta ufw, así que no se publica ningún puerto. Cada contenedor tiene tope de memoria.
+- **node_exporter** da además el estado de las unidades systemd de `monitoring_systemd_units` (por D-Bus, con el socket montado de solo lectura). Solo las de la lista: todas serían cientos de series.
+- **cAdvisor**: CPU, memoria, swap, red, E/S y OOM de cada contenedor, incluidos los servidores de juego de Wings. Es lo que faltaba para ver si un servidor va justo de memoria o tiene la CPU limitada. Va en el 9338 (su 8080 de siempre es el de Wings) y con las métricas caras desactivadas (uso de disco por capa, procesos, TCP...).
+- **blackbox** hace dos tipos de comprobación: las HTTP de `monitoring_http_probes`, que exigen un 200 y un cuerpo concreto y cuentan para el SLO, y las TLS de `monitoring_tls_probes`, que solo piden que el servicio conteste por HTTPS con un certificado válido (Wings sin token da 401 y vale). Las TLS sirven para los nodos de Wings de fuera, que no vigila nadie más, y para avisar si un certificado no se renueva.
+- **`ops-exporter`** (Python, solo la librería estándar): lee el JSON que deja `ops-collect` cada 5 minutos (backups, simulacro, SMART, certificados, servicios, fail2ban, deploys y servidores de juego de los tres nodos de Wings) y lo sirve en el formato de texto de Prometheus. No repite nada de lo que da node_exporter. Corre con un usuario efímero de systemd (`DynamicUser`) que solo puede leer ese fichero, por el grupo.
 - **`alert-dm`**: Alertmanager solo sabe escribir en canales de Discord, y los avisos del servidor van por DM. Este pequeño receptor traduce su webhook a una llamada a `discord-dm`. El token de Discord es de root (0600): systemd se lo pasa como credencial (`LoadCredential`) a un usuario efímero, sin cambiarle los permisos. Si no consigue mandar el DM, responde 500 y Alertmanager lo reintenta.
-- **Dashboards y fuente de datos como código** (provisioning de Grafana). Lo que se cambie desde la web no se guarda.
+- **Dashboards y fuente de datos como código** (provisioning de Grafana). Lo que se cambie desde la web no se guarda. Hay cuatro: *Servidor* (node_exporter), *Bentonime y operación*, *Pterodactyl y contenedores* (nodos, servidores de juego y cAdvisor) y *Todos los servicios*, una tesela verde o roja por cada web, unidad systemd y contenedor, con enlace a la web cuando la tiene.
 
 La configuración se valida antes de instalarla (`promtool check config`, `promtool check rules` y `amtool check-config` con las mismas imágenes). Si cambia, se recarga con SIGHUP sin reiniciar. Por eso se monta por carpetas y no fichero a fichero: Ansible reemplaza cada fichero por uno nuevo, y un montaje de fichero suelto seguiría viendo el antiguo (la recarga cargaba la configuración de antes sin dar ningún error). Al final, el rol espera a que Prometheus pueda leer **todos** sus objetivos; no basta con que los contenedores estén arrancados.
 
 ### Alertas
 
-Pocas y solo de cosas graves. Lo demás (backups, certificados, servidor caído entero, SMART) ya lo avisan el vigilante externo, el bot y smartd, y repetirlo sería ruido.
+Pocas y solo de cosas graves. Lo demás (backups, certificados de este servidor, servidor caído entero, SMART) ya lo avisan el vigilante externo, el bot y smartd, y repetirlo sería ruido.
 
 | Alerta | Cuándo |
 |---|---|
@@ -279,6 +283,8 @@ Pocas y solo de cosas graves. Lo demás (backups, certificados, servidor caído 
 | `MemoriaAgotada` | Menos del 5 % de RAM disponible durante 10 min |
 | `ObjetivoCaido` | Prometheus no puede leer algún exporter en 15 min (si no, las alertas que dependen de él no saltarían) |
 | `RecolectorParado` | El snapshot de `ops-collect` lleva más de 30 min sin actualizarse |
+| `SinRespuestaHTTPS` | Una comprobación TLS falla durante 10 min (un reinicio de Wings tarda segundos y no cuenta) |
+| `CertificadoPorCaducar` | Un certificado de las comprobaciones TLS caduca en menos de 14 días. Certbot renueva a 30, así que a 14 algo ha fallado; el caso típico es Wings, que solo lee el certificado al arrancar |
 
 **El SLO.** Cada comprobación HTTP tiene un objetivo de disponibilidad en 30 días (`monitoring_slo_target`, 99,5 % por defecto: unas 3,6 h de fallo al mes). Avisar en cuanto falla una comprobación sería ruido. Esperar a incumplir el objetivo sería avisar tarde. La alerta mira **a qué ritmo se gasta el margen**, en dos ventanas a la vez, como propone el libro de SRE de Google: a 14,4 veces el ritmo permitido, el margen del mes se acaba en unos 2 días. La ventana larga (1 h) evita que salte por un fallo suelto. La corta (5 min) hace que se apague en cuanto se arregla.
 
@@ -293,6 +299,10 @@ Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): 
 | `monitoring_grafana_anonymous_viewer` | `false` | Ver sin iniciar sesión (rol Viewer) |
 | `monitoring_http_probes` | `[]` | `servicio`, `url` y opcionalmente `body_regex` y `slo` |
 | `monitoring_slo_target` | `0.995` | Objetivo por defecto de las comprobaciones |
+| `monitoring_tls_probes` | `[]` | `nombre` y `url`. No cuentan para el SLO |
+| `monitoring_systemd_units` | `[]` | Unidades cuyo estado exporta node_exporter (expresiones regulares) |
+| `monitoring_cadvisor` | `true` | Métricas por contenedor |
+| `monitoring_wings_local_node` | `local` | Nombre del nodo de Wings local en las métricas de servidores de juego |
 | `monitoring_ops_group` | `""` | Grupo que puede leer el snapshot. Vacío = sin ops-exporter |
 | `monitoring_alert_dm` | `true` | Avisos por DM (necesita `discord-dm`, del rol `avisos`) |
 | `monitoring_retention_time` / `_size` | `15d` / `2GB` | Lo primero que se cumpla |

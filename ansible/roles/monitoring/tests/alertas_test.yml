@@ -124,3 +124,43 @@ tests:
               destino: drive
             exp_annotations:
               summary: "No hay una copia buena de nas (drive) desde hace 30m 0s."
+
+  # Sin respuesta: avisa a los 10 min, no antes (un reinicio de Wings no cuenta)
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="tls", nombre="n1", instance="https://n1.invalid:8080/"}'
+        values: "1x5 0x20"
+      - series: 'probe_success{job="tls", nombre="n2", instance="https://n2.invalid:8080/"}'
+        values: "1x5 0x3 1x15"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: SinRespuestaHTTPS
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: SinRespuestaHTTPS
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: tls
+              nombre: n1
+              instance: https://n1.invalid:8080/
+            exp_annotations:
+              summary: "n1 no responde por HTTPS desde hace 10 min (https://n1.invalid:8080/)."
+
+  # Certificado a 10 días avisa; a 40 no
+  - interval: 1m
+    input_series:
+      - series: 'probe_ssl_earliest_cert_expiry{job="tls", nombre="n1"}'
+        values: "864000x80"
+      - series: 'probe_ssl_earliest_cert_expiry{job="tls", nombre="n2"}'
+        values: "3456000x80"
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: CertificadoPorCaducar
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: tls
+              nombre: n1
+            exp_annotations:
+              summary: "El certificado de n1 caduca en 9d 22h 50m 0s."

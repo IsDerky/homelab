@@ -40,6 +40,23 @@ SNAPSHOT = {
         "bentonime_deployed_at": "2026-10-30T05:28:36+00:00",
         "last_deploy": {"phase": "health", "rollback": "ok"},
     },
+    "wings": [
+        {
+            "uuid": "30c38de2-83c0-4953-9f91-d7aa7e8bcf98",
+            "state": "running",
+            "suspended": False,
+            "mem_bytes": 1000,
+            "mem_limit_bytes": 4000,
+            "cpu_pct": 250.0,
+            "disk_bytes": 9000,
+            "uptime_ms": 61500,
+        },
+        {"uuid": "d4d90d68-0840-498e-9982-d45738e5e57a", "state": "offline", "mem_bytes": 0, "uptime_ms": 0},
+    ],
+    "wings_remote": {
+        "n1.invalid": {"servers": [{"uuid": "6709f5ae-5df9", "state": "starting", "suspended": True}]},
+        "n2.invalid": {"error": "no responde"},
+    },
 }
 
 
@@ -79,6 +96,29 @@ class ExporterTest(unittest.TestCase):
         self.assertEqual(self.s['ops_fail2ban_banned{jail="sshd"}'], 2)
         self.assertEqual(self.s['ops_fail2ban_bans_since_start{jail="sshd"}'], 7)
         self.assertEqual(self.s["ops_deploy_last_ok"], 0)
+
+    def test_servidores_de_juego(self):
+        local = 'nodo="local",servidor="30c38de2"'
+        self.assertEqual(self.s[f"ops_game_server_running{{{local}}}"], 1)
+        self.assertEqual(self.s[f"ops_game_server_cpu_cores{{{local}}}"], 2.5)
+        self.assertEqual(self.s[f"ops_game_server_uptime_seconds{{{local}}}"], 61.5)
+        self.assertEqual(self.s[f"ops_game_server_memory_limit_bytes{{{local}}}"], 4000)
+        self.assertEqual(self.s['ops_game_server_running{nodo="local",servidor="d4d90d68"}'], 0)
+        self.assertEqual(self.s['ops_wings_node_servers{nodo="local"}'], 2)
+        # Arrancando no es encendido
+        self.assertEqual(self.s['ops_game_server_running{nodo="n1.invalid",servidor="6709f5ae"}'], 0)
+        self.assertEqual(self.s['ops_game_server_suspended{nodo="n1.invalid",servidor="6709f5ae"}'], 1)
+        self.assertNotIn('ops_game_server_memory_bytes{nodo="n1.invalid",servidor="6709f5ae"}', self.s)
+
+    def test_nodos_de_wings(self):
+        self.assertEqual(self.s['ops_wings_node_up{nodo="local"}'], 1)
+        self.assertEqual(self.s['ops_wings_node_up{nodo="n1.invalid"}'], 1)
+        self.assertEqual(self.s['ops_wings_node_up{nodo="n2.invalid"}'], 0)
+        self.assertFalse(any('nodo="n2.invalid",servidor' in k for k in self.s))
+        # Wings local caído o el recolector sin el fichero de nodos
+        s = samples(exporter.collect({"wings": {"error": "no responde"}, "wings_remote": {"error": "x"}}).render())
+        self.assertEqual(s['ops_wings_node_up{nodo="local"}'], 0)
+        self.assertNotIn('ops_wings_node_up{nodo="error"}', s)
 
     def test_timestamps_sin_redondear(self):
         self.assertIn("ops_snapshot_timestamp_seconds 1793992923\n", self.text)

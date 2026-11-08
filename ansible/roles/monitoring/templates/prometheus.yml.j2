@@ -29,6 +29,32 @@ scrape_configs:
     static_configs:
       - targets: ["127.0.0.1:{{ monitoring_ports.ops_exporter }}"]
 {% endif %}
+{% if monitoring_cadvisor %}
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["127.0.0.1:{{ monitoring_ports.cadvisor }}"]
+{% endif %}
+{% if monitoring_tls_probes %}
+
+  - job_name: tls
+    metrics_path: /probe
+    params:
+      module: [tls]
+    static_configs:
+{% for probe in monitoring_tls_probes %}
+      - targets: ["{{ probe.url }}"]
+        labels:
+          nombre: {{ probe.nombre }}
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:{{ monitoring_ports.blackbox }}
+{% endif %}
 {% if monitoring_http_probes %}
 
   # blackbox hace la petición; aquí cada destino pasa a ser un parámetro
