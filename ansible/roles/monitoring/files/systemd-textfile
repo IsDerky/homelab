@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Estado de unidades systemd para el colector textfile de node-exporter.
+
+El colector systemd de node-exporter pregunta a systemd por D-Bus, y el perfil
+docker-default de AppArmor no deja al contenedor hablar con el bus. En vez de
+quitarle AppArmor, esto corre en el host con un timer y escribe
+node_systemd_unit_state (mismo nombre y etiquetas que el colector) en un .prom
+que node-exporter lee del disco.
+
+Uso: systemd-textfile FICHERO REGEX...
+Las regex se comparan con el nombre completo (nginx.service, certbot.timer).
+"""
+
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+STATES = ("activating", "active", "deactivating", "failed", "inactive")
+
+
+def escape(value):
+    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def parse(text):
+    """Salida de `systemctl list-units --plain --no-legend` → {unidad: ActiveState}."""
+    units = {}
+    for line in text.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) >= 4:
+            units[parts[0]] = parts[2]
+    return units
+
+
+def render(units, patterns):
+    include = re.compile("^(?:" + "|".join(patterns) + ")$")
+    lines = [
+        "# HELP node_systemd_unit_state Estado de la unidad systemd (systemd-textfile)",
+        "# TYPE node_systemd_unit_state gauge",
+    ]
+    for name in sorted(u for u in units if include.match(u)):
+        for state in STATES:
+            value = int(units[name] == state)
+            lines.append(f'node_systemd_unit_state{{name="{escape(name)}",state="{state}"}} {value}')
+    return "\n".join(lines) + "\n"
+
+
+def write(path, content):
+    # Escritura atómica: node-exporter nunca ve el fichero a medias
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".systemd-")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+def main():
+    if len(sys.argv) < 3:
+        sys.exit("Uso: systemd-textfile FICHERO REGEX...")
+    out = subprocess.run(
+        ["systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--full"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    write(sys.argv[1], render(parse(out), sys.argv[2:]))
+
+
+if __name__ == "__main__":
+    main()
