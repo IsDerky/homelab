@@ -8,14 +8,16 @@
 
 - name: Configuración de Docker con live-restore
   ansible.builtin.copy:
-    content: >-
-      {{ (pterodactyl_daemon_actual.content | default('e30=') | b64decode | from_json)
-         | combine({'live-restore': pterodactyl_docker_live_restore}) | to_nice_json }}
+    content: "{{ pterodactyl_daemon_json | to_nice_json }}\n"
     dest: /etc/docker/daemon.json
     owner: root
     group: root
     mode: "0644"
     validate: dockerd --validate --config-file=%s
+  vars:
+    pterodactyl_daemon_json: >-
+      {{ (pterodactyl_daemon_actual.content | default('e30=') | b64decode | from_json)
+         | combine({'live-restore': pterodactyl_docker_live_restore}) }}
   notify: Recargar docker
 
 # live-restore se aplica con un reload (SIGHUP): no reinicia ningún contenedor
