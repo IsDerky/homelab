@@ -35,6 +35,8 @@
     src: /etc/nginx/sites-available/{{ item.name }}.conf
     dest: /etc/nginx/sites-enabled/{{ item.name }}.conf
     state: link
+    # En --check los vhosts nuevos no se han copiado de verdad
+    force: "{{ ansible_check_mode }}"
   loop: "{{ nginx_sites }}"
   loop_control:
     label: "{{ item.name }}"
