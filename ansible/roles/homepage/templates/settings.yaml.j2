@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+title: {{ homepage_title }}
+favicon: /icons/inicio.svg
+theme: dark
+color: zinc
+headerStyle: clean
+language: es
+hideVersion: true
+statusStyle: dot
+target: _self
+{% if homepage_layout %}
+layout:
+  {{ homepage_layout | to_nice_yaml(indent=2, sort_keys=false) | indent(2) }}
+{% endif %}

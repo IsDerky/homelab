@@ -1,0 +1,77 @@
+---
+- name: Falta el nombre de la página
+  ansible.builtin.assert:
+    that: homepage_host | length > 0
+    fail_msg: Define homepage_host (el nombre con el que se entra).
+    quiet: true
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ homepage_dir }}/{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.owner | default('root') }}"
+    mode: "0755"
+  loop:
+    - { path: "" }
+    - { path: icons }
+    # Homepage copia aquí los ficheros de ejemplo que falten y escribe sus logs
+    - { path: config, owner: "{{ homepage_uid }}" }
+  loop_control:
+    label: "{{ item.path or homepage_dir }}"
+
+- name: Iconos
+  ansible.builtin.copy:
+    src: icons/
+    dest: "{{ homepage_dir }}/icons/"
+    mode: "0644"
+
+# Homepage relee la configuración en cada petición: no hace falta reiniciar
+- name: Configuración
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ homepage_dir }}/config/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - settings.yaml
+    - services.yaml
+    - widgets.yaml
+    - bookmarks.yaml
+    - docker.yaml
+    - custom.css
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ homepage_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de homepage
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: homepage.service.j2
+    dest: /etc/systemd/system/homepage.service
+    mode: "0644"
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: homepage.service
+    enabled: true
+    state: started
+
+- name: La página responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ homepage_port }}/
+    headers:
+      Host: "{{ homepage_host }}"
+  register: homepage_check
+  until: homepage_check.status == 200
+  retries: 12
+  delay: 5
+  changed_when: false

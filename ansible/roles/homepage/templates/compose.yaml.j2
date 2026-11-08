@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+services:
+  homepage:
+    image: {{ homepage_image }}
+    container_name: homepage
+    restart: unless-stopped
+    # Red del host: las comprobaciones de estado salen desde la IP del servidor,
+    # que es de la LAN y pasa los allow de los vhosts
+    network_mode: host
+    environment:
+      HOSTNAME: 127.0.0.1
+      PORT: "{{ homepage_port }}"
+      HOMEPAGE_ALLOWED_HOSTS: {{ homepage_host }},127.0.0.1:{{ homepage_port }}
+      PUID: "{{ homepage_uid }}"
+      PGID: "{{ homepage_uid }}"
+    volumes:
+      - ./config:/app/config
+      - ./icons:/app/public/icons:ro
+    mem_limit: {{ homepage_mem }}
