@@ -23,6 +23,12 @@
         dest: /var/cache/backup-binarios/restic_{{ backup_restic_version }}.bz2
         checksum: "sha256:{{ backup_restic_sha256[backup_arch] }}"
         mode: "0600"
+        # Las descargas de releases de GitHub a veces van muy lentas
+        timeout: 120
+      register: backup_descarga
+      until: backup_descarga is succeeded
+      retries: 3
+      delay: 30
 
     # Se escribe al lado y se mueve: si algo falla a medias, el restic de antes sigue
     - name: Descomprimir restic
@@ -52,6 +58,12 @@
         dest: /var/cache/backup-binarios/rclone_{{ backup_rclone_version }}.zip
         checksum: "sha256:{{ backup_rclone_sha256[backup_arch] }}"
         mode: "0600"
+        # Las descargas de releases de GitHub a veces van muy lentas
+        timeout: 120
+      register: backup_descarga
+      until: backup_descarga is succeeded
+      retries: 3
+      delay: 30
 
     - name: Descomprimir rclone
       ansible.builtin.shell: |
