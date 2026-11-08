@@ -62,6 +62,8 @@ Los valores por defecto son los seguros. Si hace falta relajar algo mientras se 
 
 Antes de aplicarlo la primera vez: deja una sesión abierta como root y comprueba que el usuario nuevo entra con su clave y puede usar sudo.
 
+`playbooks/ssh.yml` también lo aplica a los nodos de `wings_remotos`, si los hay. Ahí no corre el rol `base`, así que antes mete las claves de `base_admin_keys` al usuario con el que entra Ansible (el `ubuntu` de la imagen de Oracle). En las imágenes de Oracle la contraseña la suele activar el propio `sshd_config`; al reescribirlo se va.
+
 ## Rol `ufw`
 
 Pone las reglas, después las políticas por defecto y al final activa ufw, así que en una máquina nueva no hay ningún momento con todo cerrado y SSH sin abrir. Si ninguna regla abre `ufw_ssh_port`, el rol falla antes de tocar nada.
