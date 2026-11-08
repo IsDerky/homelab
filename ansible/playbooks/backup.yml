@@ -52,3 +52,5 @@
             name: "{{ ansible_host }}"
             key: "{{ ansible_host }} {{ (backup_host_key.content | b64decode).split()[:2] | join(' ') }}"
           delegate_to: "{{ backup_server }}"
+          # Todos los nodos escriben el mismo fichero: de uno en uno
+          throttle: 1
