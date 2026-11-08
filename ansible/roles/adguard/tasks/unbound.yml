@@ -9,12 +9,15 @@
   retries: 10
   delay: 3
   changed_when: false
+  # Solo pregunta: también en --check (si no, el until falla siempre)
+  check_mode: false
 
 - name: Unbound valida DNSSEC
   ansible.builtin.command: dig +time=3 +tries=1 @{{ adguard_unbound_ip }} dnssec-failed.org
   register: adguard_unbound_dnssec
   failed_when: "'status: SERVFAIL' not in adguard_unbound_dnssec.stdout"
   changed_when: false
+  check_mode: false
 
 # El upstream vive en la configuración de AdGuard (conf/), que no es de
 # Ansible: se lee, se cambian solo esas dos claves y se reinicia.
