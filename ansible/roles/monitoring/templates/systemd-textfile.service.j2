@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Estado de unidades systemd para node-exporter (textfile)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/systemd-textfile {{ monitoring_textfile_dir }}/systemd.prom{% for unit in monitoring_systemd_units %} {{ unit | replace('%', '%%') | quote }}{% endfor %}
+
+# Corre cada 30 s: sin esto llena el journal de "Starting/Finished"
+LogLevelMax=warning
+
+ProtectSystem=strict
+ReadWritePaths={{ monitoring_textfile_dir }}
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+MemoryMax=64M

@@ -57,8 +57,13 @@ monitoring_tls_probes: []
 
 # Unidades systemd cuyo estado exporta node-exporter (node_systemd_unit_state),
 # con el nombre completo: nginx.service, certbot.timer... Son expresiones
-# regulares (actions.runner.* vale para todos los runners).
+# regulares (actions.runner.* vale para todos los runners). Las lee un timer del
+# host (systemd-textfile): el colector systemd necesita D-Bus y AppArmor no se
+# lo deja al contenedor.
 monitoring_systemd_units: []
+
+# Carpeta del colector textfile de node-exporter
+monitoring_textfile_dir: /var/lib/node-exporter/textfile
 
 # Nombre del nodo de Wings local en las métricas de servidores de juego (los
 # remotos salen con el dominio que tienen en wings-nodes.env)

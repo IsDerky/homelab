@@ -1,4 +1,4 @@
-"""Tests de ops-exporter y alert-dm. Uso: python3 -m unittest discover -s tests"""
+"""Tests de ops-exporter, alert-dm y systemd-textfile. Uso: python3 -m unittest discover -s tests"""
 
 import importlib.machinery
 import importlib.util
@@ -20,6 +20,7 @@ def load(name):
 
 exporter = load("ops-exporter")
 alert_dm = load("alert-dm")
+textfile = load("systemd-textfile")
 
 SNAPSHOT = {
     "collected_at": "2026-11-06T19:22:03+00:00",
@@ -188,6 +189,45 @@ class AlertDmTest(unittest.TestCase):
         finally:
             alert_dm.DISCORD_DM = old
             os.unlink(f.name)
+
+
+LIST_UNITS = """\
+nginx.service                 loaded    active   running   A high performance web server
+wings.service                 loaded    failed   failed    Pterodactyl Wings Daemon
+certbot.timer                 loaded    active   waiting   Run certbot twice daily
+code-server@derkyu.service    loaded    active   running   code-server
+actions.runner.a.b.service    loaded    inactive dead      GitHub Actions Runner
+"""
+
+
+class SystemdTextfileTest(unittest.TestCase):
+    def setUp(self):
+        self.units = textfile.parse(LIST_UNITS)
+        self.text = textfile.render(self.units, ["nginx.service", "wings.service", "code-server@derkyu.service",
+                                                 "actions.runner.*", "certbot.timer"])
+        self.s = samples(self.text)
+
+    def test_un_valor_por_estado(self):
+        self.assertEqual(self.s['node_systemd_unit_state{name="nginx.service",state="active"}'], 1)
+        self.assertEqual(self.s['node_systemd_unit_state{name="nginx.service",state="failed"}'], 0)
+        self.assertEqual(self.s['node_systemd_unit_state{name="wings.service",state="failed"}'], 1)
+        self.assertEqual(self.s['node_systemd_unit_state{name="actions.runner.a.b.service",state="inactive"}'], 1)
+        self.assertEqual(len(self.s), 5 * len(textfile.STATES))
+
+    def test_solo_las_de_la_lista(self):
+        s = samples(textfile.render(self.units, ["nginx.service"]))
+        self.assertEqual({k.split('"')[1] for k in s}, {"nginx.service"})
+
+    def test_regex_completa(self):
+        # "nginx" no coge nginx.service
+        self.assertNotIn("node_systemd_unit_state{", textfile.render(self.units, ["nginx"]))
+
+    def test_escritura_atomica(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "systemd.prom")
+            textfile.write(path, self.text)
+            self.assertEqual(os.listdir(d), ["systemd.prom"])
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o644)
 
 
 if __name__ == "__main__":

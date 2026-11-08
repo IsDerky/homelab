@@ -55,16 +55,10 @@ services:
     command:
       - --path.rootfs=/host
       - --web.listen-address=127.0.0.1:{{ monitoring_ports.node_exporter }}
-{% if monitoring_systemd_units %}
-      # Estado de las unidades de la lista (por D-Bus); todas serían cientos de series
-      - --collector.systemd
-      - --collector.systemd.unit-include=({{ monitoring_systemd_units | join('|') }})
-{% endif %}
+      # .prom que escriben scripts del host (systemd-textfile); se ve por /host
+      - --collector.textfile.directory=/host{{ monitoring_textfile_dir }}
     volumes:
       - /:/host:ro,rslave
-{% if monitoring_systemd_units %}
-      - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
-{% endif %}
     mem_limit: {{ monitoring_mem.node_exporter }}
     restart: unless-stopped
 

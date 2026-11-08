@@ -175,6 +175,29 @@
         - Recargar systemd
         - Reiniciar alert-dm
 
+- name: Carpeta del colector textfile
+  ansible.builtin.file:
+    path: "{{ monitoring_textfile_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Estado de unidades systemd
+  when: monitoring_systemd_units | length > 0
+  block:
+    - name: Script systemd-textfile
+      ansible.builtin.copy:
+        src: systemd-textfile
+        dest: /usr/local/bin/systemd-textfile
+        mode: "0755"
+
+    - name: Unidades systemd-textfile
+      ansible.builtin.template:
+        src: systemd-textfile.{{ item }}.j2
+        dest: /etc/systemd/system/systemd-textfile.{{ item }}
+        mode: "0644"
+      loop: [service, timer]
+      notify: Recargar systemd
+
 - name: Unidad monitoring
   ansible.builtin.template:
     src: monitoring.service.j2
@@ -192,6 +215,7 @@
     state: started
   loop: >-
     {{ ['monitoring.service']
+       + (['systemd-textfile.timer'] if monitoring_systemd_units | length > 0 else [])
        + (['ops-exporter.service'] if monitoring_ops_group | length > 0 else [])
        + (['alert-dm.service'] if monitoring_alert_dm else []) }}
 
