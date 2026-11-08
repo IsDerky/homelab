@@ -19,7 +19,9 @@
   block:
     - name: Descargar restic
       ansible.builtin.get_url:
-        url: "https://github.com/restic/restic/releases/download/v{{ backup_restic_version }}/restic_{{ backup_restic_version }}_linux_{{ backup_arch }}.bz2"
+        url: "https://api.github.com/repos/restic/restic/releases/assets/{{ backup_restic_asset_id[backup_arch] }}"
+        headers:
+          Accept: application/octet-stream
         dest: /var/cache/backup-binarios/restic_{{ backup_restic_version }}.bz2
         checksum: "sha256:{{ backup_restic_sha256[backup_arch] }}"
         mode: "0600"
