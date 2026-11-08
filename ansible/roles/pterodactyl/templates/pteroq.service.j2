@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Pterodactyl Queue Worker
+After=redis-server.service
+
+[Service]
+User={{ pterodactyl_panel_user }}
+Group={{ pterodactyl_panel_user }}
+Restart=always
+ExecStart={{ pterodactyl_php }} {{ pterodactyl_panel_dir }}/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3
+StartLimitInterval=180
+StartLimitBurst=30
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

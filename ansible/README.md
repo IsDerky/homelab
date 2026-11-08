@@ -15,6 +15,7 @@ Roles para montar piezas del homelab:
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox y node_exporter, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
+- `pterodactyl`: Wings (binario con versión fija, unidad y límites), live-restore de Docker y la cola y el planificador del panel (`playbooks/pterodactyl.yml`).
 
 ## Uso
 
@@ -326,3 +327,23 @@ El workflow `ansible.yml` pasa `ansible-lint` y además aplica el rol de verdad 
 2. **Control positivo**: comprueba que un contenedor normal sí llega a los dos. Si no llegara, la prueba no demostraría nada.
 3. Aplica el rol con esos señuelos como destinos prohibidos. La prueba de aislamiento del rol tiene que pasar.
 4. Lo aplica otra vez y exige `changed=0`.
+
+## Rol `pterodactyl`
+
+Lo que rodea a Pterodactyl y se puede describir como configuración. El código del panel no: se actualiza a mano con Blueprint y sus extensiones, y eso no encaja en un rol.
+
+- **Wings** con versión fija y el SHA-256 de cada arquitectura. Si el binario instalado ya coincide, no se descarga nada; para actualizar, se cambian versión y sumas en `defaults/main.yml`. La unidad es la de la documentación, y el límite de ficheros abiertos va en un ajuste aparte (`wings.service.d/limites.conf`): con el 4096 de la documentación, Wings avisa al arrancar de que se queda corto.
+- **live-restore en Docker.** docker-ce viene de un repositorio de fuera y unattended-upgrades no lo actualiza, así que se actualiza a mano. Sin live-restore, reiniciar dockerd reinicia todos los contenedores, también los servidores de juego. Con él, siguen funcionando mientras dockerd vuelve. Se añade a lo que ya hubiera en `daemon.json` y se aplica con un reload, sin reiniciar nada.
+- **Panel** (solo en el nodo que lo tiene): la unidad de la cola (`pteroq`) y el planificador (`schedule:run` cada minuto) en `/etc/cron.d/pterodactyl`. Antes estaba a mano en el crontab de root: el rol lo quita de ahí antes de ponerlo, para que no corra dos veces.
+
+Reiniciar Wings no para los servidores de juego (son contenedores y Wings se reengancha al volver). Solo se cortan unos segundos la consola web y el SFTP. El rol lo reinicia cuando cambia el binario, la unidad o el límite.
+
+`playbooks/pterodactyl.yml` lo aplica a este servidor con el panel y a los nodos del grupo `wings_remotos` (solo Wings y Docker), si el inventario lo tiene.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `pterodactyl_wings_version` / `_sha256` | `1.13.4` | Sumas por arquitectura (`amd64`, `arm64`) |
+| `pterodactyl_wings_nofile` | `65536` | `LimitNOFILE` de Wings |
+| `pterodactyl_docker_live_restore` | `true` | |
+| `pterodactyl_panel` | `false` | Cola y planificador del panel |
+| `pterodactyl_panel_dir` / `_user` | `/var/www/pterodactyl` / `www-data` | |

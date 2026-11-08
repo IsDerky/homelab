@@ -1,0 +1,16 @@
+---
+# Este servidor tiene panel y Wings. Los nodos de fuera (grupo wings_remotos
+# del inventario, si existe) solo Wings y Docker.
+- name: Pterodactyl
+  hosts: homelab
+  become: true
+  roles:
+    - role: pterodactyl
+      vars:
+        pterodactyl_panel: true
+
+- name: Nodos de Wings remotos
+  hosts: wings_remotos
+  become: true
+  roles:
+    - pterodactyl
