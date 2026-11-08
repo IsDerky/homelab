@@ -205,12 +205,28 @@ nginx_sites:
 
 Con `check`, al final del rol (ya recargado nginx) pide esa URL con esa cabecera `Host` y falla si no da 200. Solo para los vhosts activos.
 
-Los certificados no se piden desde el rol. El rol deja certbot, su plugin de Cloudflare y el token en `/root/.secrets/cloudflare.ini` (`nginx_certbot_cloudflare_ini`), y `certbot.timer` se encarga de renovar.
+Los certificados no se piden desde el rol, salvo el comodín de la LAN (abajo). El rol deja certbot, su plugin de Cloudflare y el token en `/root/.secrets/cloudflare.ini` (`nginx_certbot_cloudflare_ini`), y `certbot.timer` se encarga de renovar.
 
 - `nginx_certbot_dns_certs`: certificados creados con el plugin nginx (validan por el puerto 80) que pasan a renovarse por DNS-01. Lo hace `certbot reconfigure`, que prueba la renovación antes de guardar el cambio. Así ya no dependen del 80 ni de por dónde llegue el tráfico.
 - `nginx_certbot_deploy_hooks`: comando a lanzar cuando se renueva un certificado concreto, para servicios que solo lo leen al arrancar (Wings, por ejemplo).
 
 Pasar el panel de Pterodactyl al túnel y cerrar 80/443 en el router: [runbook](../docs/runbook-panel-por-tunel.md).
+
+### Servicios de la LAN, cada uno con su nombre
+
+Cada servicio que solo se usa desde casa tiene su propio nombre (`grafana.derkyu.lol`, `honeypot.derkyu.lol`…) en vez de colgar de otro como subcarpeta. Así cada uno tiene su vhost, sus cabeceras y su CSP, y una app no rompe a la otra al desplegarse.
+
+```yaml
+nginx_lan_zone: derkyu.lol
+nginx_lan_ip: 192.168.1.50
+nginx_lan_names: [inicio, oficina, honeypot, grafana]
+```
+
+Para cada nombre, el rol crea o corrige en Cloudflare un registro A a `nginx_lan_ip` (sin proxy: es una IP privada y desde fuera no lleva a ningún sitio) con el mismo token de certbot. Y saca un solo certificado comodín `*.derkyu.lol` por DNS-01 (`/etc/letsencrypt/live/lan`) que vale para todos, así que añadir un servicio no pide otro certificado. Las llamadas a Cloudflare llevan el token y van con `no_log`; qué nombres se van a tocar sale en una tarea aparte.
+
+El nombre por sí solo no abre nada: cada vhost tiene `allow 192.168.1.0/24; deny all;`, y desde fuera el 443 no llega (el panel y las webs públicas van por el túnel).
+
+Añadir un servicio: su nombre en `nginx_lan_names` y su `.conf` en `nginx_sites` con `ssl_certificate /etc/letsencrypt/live/lan/...`.
 
 ## Rol `cloudflared`
 
@@ -257,6 +273,22 @@ Con `code_server_migrate_from` hace el cambio una sola vez: para el `code-server
 | `code_server_user` | `""` | Obligatoria |
 | `code_server_migrate_from` | `""` | Usuario del que migrar (p. ej. `root`) |
 | `code_server_port` | `8081` | El de su `config.yaml`, para comprobar que arranca |
+
+## Rol `homepage`
+
+Una página de inicio con [Homepage](https://gethomepage.dev): una tarjeta por servicio con su icono, un punto de estado y, arriba, la CPU, la memoria y el disco del servidor. Va en Docker Compose como servicio systemd, en `127.0.0.1:3010` (el 3000 es de AdGuard) y detrás de nginx.
+
+- **Iconos pixel-art propios** en `files/icons/`, con la paleta de la oficina. Salen de `files/iconos.py`: cada icono es un dibujo de 16×16 caracteres en el propio script, y `python3 iconos.py` regenera los SVG. Para uno nuevo, se añade el dibujo y se usa como `/icons/<nombre>.svg`.
+- **Estado de cada servicio con `siteMonitor`**, no con el socket de Docker: el socket es root en el servidor y una página web no lo necesita. El contenedor va con la red del host para que las comprobaciones salgan desde la IP de la LAN del servidor y pasen el `allow` de los vhosts.
+- La configuración (`services.yaml`, `settings.yaml`…) sale del inventario (`homepage_services`, `homepage_layout`) y Homepage la relee en cada petición: cambiarla no reinicia nada.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `homepage_host` | `""` | Obligatoria. El nombre con el que se entra (Homepage rechaza otros `Host`) |
+| `homepage_services` | `[]` | Grupos y tarjetas, en el formato de `services.yaml` |
+| `homepage_layout` | `{}` | Columnas por grupo |
+| `homepage_title` | `Inicio` | |
+| `homepage_image` | `ghcr.io/gethomepage/homepage:v2.7.0` | |
 
 ## Rol `roninfc`
 

@@ -1,6 +1,6 @@
 ---
-# Bentonime (solo la parte de sistema: el código lo despliega su CI), AdGuard
-# y code-server
+# Bentonime (solo la parte de sistema: el código lo despliega su CI), AdGuard,
+# code-server y la página de inicio
 - name: Aplicaciones
   hosts: homelab
   become: true
@@ -8,3 +8,5 @@
     - bentonime
     - adguard
     - code_server
+    - role: homepage
+      when: homepage_host is defined

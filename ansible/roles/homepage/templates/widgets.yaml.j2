@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# CPU y memoria del servidor (el contenedor ve las del host) y el disco raíz
+- resources:
+    cpu: true
+    memory: true
+    disk: /
+- datetime:
+    locale: es
+    format:
+      dateStyle: long
+      timeStyle: short

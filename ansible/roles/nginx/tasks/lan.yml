@@ -1,0 +1,78 @@
+---
+- name: Faltan datos para los nombres de la LAN
+  ansible.builtin.assert:
+    that:
+      - nginx_certbot_cloudflare_ini | length > 0
+      - nginx_lan_zone | length > 0
+      - nginx_lan_ip | length > 0
+    fail_msg: Los nombres de la LAN necesitan nginx_certbot_cloudflare_ini, nginx_lan_zone y nginx_lan_ip.
+    quiet: true
+
+- name: Token de Cloudflare
+  ansible.builtin.set_fact:
+    nginx_cf_token: "{{ nginx_certbot_cloudflare_ini | regex_search('dns_cloudflare_api_token\\s*=\\s*(\\S+)', '\\1') | first }}"
+  no_log: true
+
+# Las consultas no cambian nada: también en --check
+- name: Zona de Cloudflare
+  ansible.builtin.uri:
+    url: https://api.cloudflare.com/client/v4/zones?name={{ nginx_lan_zone }}
+    headers:
+      Authorization: Bearer {{ nginx_cf_token }}
+  register: nginx_cf_zone
+  check_mode: false
+  no_log: true
+
+- name: Registros actuales
+  ansible.builtin.uri:
+    url: https://api.cloudflare.com/client/v4/zones/{{ nginx_cf_zone.json.result[0].id }}/dns_records?type=A&name={{ item }}.{{ nginx_lan_zone }}
+    headers:
+      Authorization: Bearer {{ nginx_cf_token }}
+  loop: "{{ nginx_lan_names }}"
+  register: nginx_cf_records
+  check_mode: false
+  no_log: true
+
+# Crea el que falta o corrige el que apunta a otra IP o va con proxy. La
+# llamada lleva el token (no_log): qué nombres cambian se ve en esta lista.
+- name: Nombres que hay que crear o corregir
+  ansible.builtin.debug:
+    msg: "{{ nginx_cf_records.results | rejectattr('json.result') | map(attribute='item') | list
+             + (nginx_cf_records.results | selectattr('json.result')
+                | selectattr('json.result.0.content', 'ne', nginx_lan_ip) | map(attribute='item') | list) }}"
+
+- name: Registros A de la LAN
+  ansible.builtin.uri:
+    url: >-
+      https://api.cloudflare.com/client/v4/zones/{{ nginx_cf_zone.json.result[0].id }}/dns_records{{
+      ('/' ~ item.json.result[0].id) if item.json.result else '' }}
+    method: "{{ 'PUT' if item.json.result else 'POST' }}"
+    headers:
+      Authorization: Bearer {{ nginx_cf_token }}
+    body_format: json
+    body:
+      type: A
+      name: "{{ item.item }}.{{ nginx_lan_zone }}"
+      content: "{{ nginx_lan_ip }}"
+      ttl: 300
+      proxied: false
+      comment: Solo LAN (Ansible, rol nginx)
+  loop: "{{ nginx_cf_records.results }}"
+  loop_control:
+    label: "{{ item.item }}.{{ nginx_lan_zone }}"
+  when: >-
+    not item.json.result
+    or item.json.result[0].content != nginx_lan_ip
+    or item.json.result[0].proxied
+  changed_when: true
+  no_log: true
+
+- name: Certificado comodín de la LAN
+  ansible.builtin.command: >-
+    certbot certonly -n --agree-tos --keep-until-expiring
+    --dns-cloudflare --dns-cloudflare-credentials /root/.secrets/cloudflare.ini
+    --dns-cloudflare-propagation-seconds 30
+    --cert-name {{ nginx_lan_cert }} -d *.{{ nginx_lan_zone }}
+    --deploy-hook "systemctl reload nginx"
+  args:
+    creates: /etc/letsencrypt/live/{{ nginx_lan_cert }}/fullchain.pem

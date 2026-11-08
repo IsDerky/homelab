@@ -27,3 +27,13 @@ nginx_certbot_dns_certs: []
 #     cert: node.example.com
 #     command: systemctl restart wings
 nginx_certbot_deploy_hooks: []
+
+# Servicios solo de la LAN, cada uno con su nombre: registro A en Cloudflare
+# (sin proxy) a nginx_lan_ip y un certificado comodín *.<zona> por DNS-01 que
+# los cubre a todos (necesita nginx_certbot_cloudflare_ini). El acceso lo
+# limita cada vhost (allow 192.168.1.0/24). Añadir un servicio = un nombre aquí
+# y su vhost con el certificado nginx_lan_cert.
+nginx_lan_zone: ""
+nginx_lan_ip: ""
+nginx_lan_names: []
+nginx_lan_cert: lan

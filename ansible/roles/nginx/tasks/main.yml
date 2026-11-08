@@ -89,6 +89,12 @@
   changed_when: "'sin-cambios' not in nginx_certbot_reconfigure.stdout"
   loop: "{{ nginx_certbot_dns_certs }}"
 
+# Después del token: el certificado de la LAN lo necesita. Los vhosts de
+# arriba se comprueban al final (handler), cuando el certificado ya existe.
+- name: Nombres de la LAN
+  ansible.builtin.import_tasks: lan.yml
+  when: nginx_lan_names | length > 0
+
 - name: Hooks de certbot al renovar
   ansible.builtin.copy:
     content: |

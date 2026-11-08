@@ -1,0 +1,26 @@
+---
+homepage_dir: /opt/homepage
+homepage_image: ghcr.io/gethomepage/homepage:v2.7.0
+
+# Solo en loopback, para nginx (el 3000 es de AdGuard)
+homepage_port: 3010
+homepage_mem: 256m
+# Nombre con el que se entra (Homepage rechaza las peticiones con otro Host)
+homepage_host: ""
+# Usuario del contenedor (escribe sus logs en config/logs)
+homepage_uid: 65534
+
+homepage_title: Inicio
+
+# Grupos de services.yaml, en el formato de Homepage. Los iconos propios van en
+# files/icons (iconos.py) y se ponen como /icons/<nombre>.svg.
+#   - Servidor:
+#       - Grafana:
+#           href: https://grafana.ejemplo.com/
+#           description: Métricas
+#           icon: /icons/grafana.svg
+#           siteMonitor: https://grafana.ejemplo.com/api/health
+homepage_services: []
+
+# layout de settings.yaml (columnas por grupo)
+homepage_layout: {}
