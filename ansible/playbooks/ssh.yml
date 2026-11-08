@@ -4,3 +4,19 @@
   become: true
   roles:
     - ssh
+
+# Nodos de Oracle: entran con el usuario de la imagen (ubuntu). Las claves de
+# admin van antes de quitar la contraseña, para no quedarse fuera.
+- name: SSH de los nodos de Wings remotos
+  hosts: wings_remotos
+  become: true
+  pre_tasks:
+    - name: Claves de administración
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        key: "{{ item }}"
+      loop: "{{ base_admin_keys }}"
+      loop_control:
+        label: "{{ item.split() | last }}"
+  roles:
+    - ssh
