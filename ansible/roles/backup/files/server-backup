@@ -4,7 +4,7 @@
 # tiene su timer de systemd:
 #
 #   server-backup sistema        cada 6 h: BD de Bentonime y del panel, /etc, scripts…
-#   server-backup clientes       a diario: volúmenes y backups de Pterodactyl
+#   server-backup clientes       a diario: volúmenes y backups de Pterodactyl (y los de los nodos de fuera)
 #   server-backup nas            a diario: el NAS (solo a Drive: está en el disco local)
 #   server-backup mantenimiento  domingos: libera espacio, verifica y resume
 #   server-backup simulacro      primer domingo de mes: restaura en /var/tmp y comprueba
@@ -44,6 +44,14 @@ LOCAL_REPO=$LOCAL_MOUNT/restic
 # Un JSON por modo y destino con el último resultado (lo lee ops-exporter)
 ESTADO=/var/lib/server-backup/estado
 
+# Nodos de Wings de fuera: antes de clientes se traen sus volúmenes por rsync y
+# se suben con los de aquí. En el nodo, la clave solo puede leer esa carpeta
+# (rrsync -ro); los nodos no tienen nada de Drive ni la contraseña de restic.
+NODOS_CONF=/etc/server-backup/nodos # "nombre host" por línea; sin fichero = sin nodos
+NODOS_DIR=/var/lib/server-backup/nodos
+NODOS_KEY=/root/.ssh/nodos-backup
+NODOS_KNOWN=/root/.ssh/nodos_known_hosts
+
 mode="${1:-}"
 step=inicio
 started=$(date +%s)
@@ -78,7 +86,7 @@ PY
 max_age() {
   case "$1" in
     sistema) echo $((13 * 3600)) ;;
-    clientes | nas) echo $((30 * 3600)) ;;
+    clientes | nas | nodo-*) echo $((30 * 3600)) ;;
     mantenimiento) echo $((8 * 86400)) ;;
   esac
 }
@@ -156,6 +164,7 @@ paths_sistema() {
 paths_clientes() {
   paths=(/var/lib/pterodactyl/volumes)
   if [ -d /var/lib/pterodactyl/backups ]; then paths+=(/var/lib/pterodactyl/backups); fi
+  if [ -d "$NODOS_DIR" ]; then paths+=("$NODOS_DIR"); fi
   excludes=()
   keep=(--keep-daily 7 --keep-weekly 4 --keep-monthly 3)
 }
@@ -174,6 +183,33 @@ copy() {
   backup --tag "$tag" "${excludes[@]}" "${paths[@]}"
   step="caducar versiones antiguas ($destino)"
   r forget --tag "$tag" --group-by host,tags "${keep[@]}"
+}
+
+# Trae los volúmenes de cada nodo a NODOS_DIR/<nombre>. La carpeta se queda
+# entre copias, así que solo viaja lo que ha cambiado. Un nodo caído no para la
+# copia: se sube lo último que se trajo, avisa por DM y queda en ESTADO
+# (nodo-<nombre>-traida), que vigila Prometheus.
+pull_nodes() {
+  [ -f "$NODOS_CONF" ] || return 0
+  local nombre host rc started
+  while read -r nombre host; do
+    if [ -z "$nombre" ] || [ "${nombre:0:1}" = "#" ]; then continue; fi
+    started=$(date +%s)
+    install -d -m 700 "$NODOS_DIR/$nombre"
+    rc=0
+    rsync -a --delete --numeric-ids --timeout=300 \
+      -e "ssh -i $NODOS_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$NODOS_KNOWN -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=30" \
+      "root@$host:./" "$NODOS_DIR/$nombre/" </dev/null || rc=$?
+    # 24: algún archivo desapareció mientras se copiaba (normal con servidores en marcha)
+    if [ "$rc" -eq 0 ] || [ "$rc" -eq 24 ]; then
+      estado "nodo-$nombre" traida true "$(max_age nodo-)"
+    else
+      estado "nodo-$nombre" traida false "$(max_age nodo-)" "rsync salió con $rc"
+      /usr/local/bin/discord-dm -t "❌ No se pudo traer $nombre" -c red \
+        -f "Nodo=$host" -f "rsync=$rc" \
+        "Se sube la última copia que había. Revisa \`journalctl -u server-backup@clientes\`." || true
+    fi
+  done <"$NODOS_CONF"
 }
 
 # Lanza la copia local en otro proceso: su set -e y su ERR no afectan a este, así
@@ -199,6 +235,8 @@ case "$mode" in
     ;;
 
   clientes)
+    step="traer los nodos"
+    pull_nodes
     copy clientes
     estado clientes drive true "$(max_age clientes)"
     local_copy clientes

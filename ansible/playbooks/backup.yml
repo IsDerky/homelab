@@ -4,3 +4,51 @@
   become: true
   roles:
     - backup
+
+# En los nodos de backup_remote_nodes, root solo entra con la clave del servidor
+# de backups y solo para leer los volúmenes (rrsync -ro). El rol ssh tiene que
+# dejarlo: root en ssh_allow_users y ssh_permit_root_login: forced-commands-only.
+# Va en la misma pasada que la de arriba, que es la que lee la clave.
+- name: Backups de los nodos de Wings remotos
+  hosts: wings_remotos
+  become: true
+  vars:
+    backup_server: "{{ groups['homelab'] | first }}"
+  tasks:
+    - name: Acceso de solo lectura para el servidor de backups
+      when: hostvars[backup_server].backup_remote_nodes | default([]) | length > 0
+      block:
+        - name: La clave del servidor de backups se ha leído en esta pasada
+          ansible.builtin.assert:
+            that: hostvars[backup_server].backup_nodes_pubkey is defined
+            fail_msg: Lanza el playbook entero, sin --limit a los nodos.
+            quiet: true
+
+        - name: Comprobar rrsync
+          ansible.builtin.stat:
+            path: /usr/bin/rrsync
+          register: backup_rrsync
+
+        - name: Falta rrsync
+          ansible.builtin.assert:
+            that: backup_rrsync.stat.exists
+            fail_msg: No está /usr/bin/rrsync (viene con rsync >= 3.2.4).
+            quiet: true
+
+        - name: Clave del servidor de backups, solo lectura de los volúmenes
+          ansible.posix.authorized_key:
+            user: root
+            key: "{{ hostvars[backup_server].backup_nodes_pubkey }}"
+            key_options: restrict,command="/usr/bin/rrsync -ro /var/lib/pterodactyl/volumes"
+
+        - name: Leer la clave de host
+          ansible.builtin.slurp:
+            src: /etc/ssh/ssh_host_ed25519_key.pub
+          register: backup_host_key
+
+        - name: El servidor de backups conoce el nodo
+          ansible.builtin.known_hosts:
+            path: /root/.ssh/nodos_known_hosts
+            name: "{{ ansible_host }}"
+            key: "{{ ansible_host }} {{ (backup_host_key.content | b64decode).split()[:2] | join(' ') }}"
+          delegate_to: "{{ backup_server }}"
