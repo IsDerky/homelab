@@ -1,0 +1,45 @@
+---
+# La parte de los nodos (clave restringida y clave de host) está en
+# playbooks/backup.yml y usa backup_nodes_pubkey de aquí.
+- name: Paquete rsync
+  ansible.builtin.apt:
+    name: rsync
+    state: present
+
+# También en --check: sin la clave, la jugada de los nodos no tiene qué poner
+- name: Clave para traer los nodos
+  ansible.builtin.command: >-
+    ssh-keygen -q -t ed25519 -N "" -C "server-backup@{{ inventory_hostname }}"
+    -f /root/.ssh/nodos-backup
+  args:
+    creates: /root/.ssh/nodos-backup
+  check_mode: false
+
+- name: Carpeta de configuración
+  ansible.builtin.file:
+    path: /etc/server-backup
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Lista de nodos
+  ansible.builtin.copy:
+    content: |
+      # Lo escribe Ansible (backup_remote_nodes): nombre host
+      {% for nodo in backup_remote_nodes %}
+      {{ nodo.nombre }} {{ nodo.host }}
+      {% endfor %}
+    dest: /etc/server-backup/nodos
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Leer la clave pública
+  ansible.builtin.slurp:
+    src: /root/.ssh/nodos-backup.pub
+  register: backup_nodes_pubkey_raw
+
+- name: Clave pública para la jugada de los nodos
+  ansible.builtin.set_fact:
+    backup_nodes_pubkey: "{{ backup_nodes_pubkey_raw.content | b64decode | trim }}"

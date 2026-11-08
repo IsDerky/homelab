@@ -41,6 +41,13 @@ backup_rclone_config: /root/.config/rclone/rclone.conf
 backup_local_mount: ""
 backup_local_repo: "{{ backup_local_mount }}/restic"
 
+# Nodos de Wings de fuera: antes de clientes se traen sus volúmenes por rsync
+# con una clave que en el nodo solo puede leerlos (la parte del nodo está en
+# playbooks/backup.yml). host = el ansible_host del nodo. Vacío = sin nodos.
+#   - nombre: nodo1
+#     host: nodo1.ejemplo.com
+backup_remote_nodes: []
+
 # Secretos: definirlos con Ansible Vault. Solo se escriben si el fichero no
 # existe (máquina nueva); si ya está, el rol comprueba que coincide.
 backup_restic_password: ""

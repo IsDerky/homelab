@@ -136,3 +136,7 @@
         RESTIC_PASSWORD_FILE: "{{ backup_password_file }}"
       changed_when: false
       check_mode: false
+
+- name: Nodos de Wings de fuera
+  ansible.builtin.import_tasks: nodos.yml
+  when: backup_remote_nodes | length > 0

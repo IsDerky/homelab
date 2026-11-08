@@ -100,8 +100,21 @@ Cada ejecución deja su resultado en `/var/lib/server-backup/estado/<modo>-<dest
 
 | Variable | Por defecto | |
 |---|---|---|
+### Nodos de Wings de fuera
+
+Los volúmenes de los nodos remotos (`backup_remote_nodes`) entran en la copia de `clientes`. Antes de subir, el servidor los trae por rsync a `/var/lib/server-backup/nodos/<nodo>` y restic los sube con los de aquí, a Drive y al disco local, con la misma retención. Esa carpeta se queda entre copias, así que cada día solo viaja lo que ha cambiado.
+
+Es el servidor el que tira de los nodos, y no al revés, para que los nodos no guarden ni la contraseña de restic ni el acceso a Drive. En cada nodo, root tiene la clave del servidor en `authorized_keys` con `restrict,command="rrsync -ro /var/lib/pterodactyl/volumes"`: con ella no hay shell ni reenvío de puertos, solo se puede leer esa carpeta y no se puede escribir. Para que sshd lo deje, el nodo necesita `ssh_permit_root_login: forced-commands-only` y `root` en `ssh_allow_users`.
+
+Si un nodo no responde, la copia sigue con los demás y se sube lo último que se trajo de él. Avisa por DM y deja `nodo-<nombre>-traida.json` en el estado, así que Prometheus avisa también si pasa más de 30 h sin traerlo.
+
+La clave se genera en el servidor (`/root/.ssh/nodos-backup`) y la segunda jugada de `playbooks/backup.yml` la instala en los nodos y apunta sus claves de host. Las dos jugadas tienen que ir en la misma pasada.
+
+| Variable | Por defecto | |
+|---|---|---|
 | `backup_modes` | sistema, clientes, mantenimiento, simulacro | Timers que se instalan. Hay también `nas` |
 | `backup_local_mount` | `""` | Disco para la copia local. Vacío = sin copia local |
+| `backup_remote_nodes` | `[]` | Nodos de los que traer los volúmenes (`nombre`, `host`) |
 | `backup_restic_version` / `_sha256` | `0.19.1` | Sumas por arquitectura (`amd64`, `arm64`) |
 | `backup_rclone_version` / `_sha256` | `1.75.2` | |
 
