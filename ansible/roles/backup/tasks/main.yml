@@ -12,6 +12,9 @@
     name: "{{ backup_packages }}"
     state: present
 
+- name: Binarios de restic y rclone
+  ansible.builtin.import_tasks: binarios.yml
+
 # force: false = solo en una máquina nueva. Sobrescribir la contraseña de un
 # repo que ya existe dejaría los backups sin poder abrirse. rclone.conf además
 # lo reescribe rclone al renovar el token de Drive.

@@ -1,9 +1,22 @@
 ---
 backup_packages:
-  - restic
-  - rclone
   - sqlite3
   - python3
+  - bzip2
+  - unzip
+
+# restic y rclone con los binarios oficiales, no los de Ubuntu (noble trae
+# restic 0.16 y un rclone de 2022). Sumas SHA-256 de cada descarga por
+# arquitectura: restic de la API de GitHub de la release, rclone de su SHA256SUMS.
+backup_restic_version: 0.19.1
+backup_restic_sha256:
+  amd64: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
+  arm64: a5f64aaab53d51e311fa3829124c5b703f2d14cf187d8640b6be3b2b49376465
+backup_rclone_version: 1.75.2
+backup_rclone_sha256:
+  amd64: 349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702
+  arm64: 7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10
+backup_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts.architecture] }}"
 
 # Timers que se instalan y activan (files/server-backup-<modo>.timer). Hay
 # también nas (necesita /srv/nas).
