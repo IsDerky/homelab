@@ -85,6 +85,8 @@ Los secretos (`backup_restic_password` y `backup_rclone_conf`) van en Ansible Va
 
 El script usa `discord-dm` y `ops-ping` para avisar; no los instala este rol.
 
+restic y rclone son los binarios oficiales, con versión y SHA-256 fijos, en `/usr/local/bin`. Los paquetes de Ubuntu 24.04 se quedaban muy atrás (restic 0.16 y un rclone de 2022) y se desinstalan. El nuevo se escribe al lado, se comprueba que da la versión esperada y solo entonces sustituye al anterior. Los paquetes de apt se quitan al final, para que un backup que salte en medio no se quede sin restic. Para actualizar, se cambian versión y sumas en `defaults/main.yml`.
+
 ### Copia local y NAS
 
 Con `backup_local_mount` (un disco montado), `sistema` y `clientes` hacen además la misma copia en un repo restic local, con la misma contraseña y la misma retención. Va en un proceso aparte (`server-backup _local <modo>`): si el disco no está o falla, la copia de Drive ya está hecha y no se marca como fallida. `mantenimiento` hace en local un `check --read-data` completo cada semana. En local es rápido, y es la única forma de saber que el disco está sano cuando la carcasa USB no deja leer el SMART.
@@ -97,6 +99,8 @@ Cada ejecución deja su resultado en `/var/lib/server-backup/estado/<modo>-<dest
 |---|---|---|
 | `backup_modes` | sistema, clientes, mantenimiento, simulacro | Timers que se instalan. Hay también `nas` |
 | `backup_local_mount` | `""` | Disco para la copia local. Vacío = sin copia local |
+| `backup_restic_version` / `_sha256` | `0.19.1` | Sumas por arquitectura (`amd64`, `arm64`) |
+| `backup_rclone_version` / `_sha256` | `1.75.2` | |
 
 ## Rol `usb_storage`
 
