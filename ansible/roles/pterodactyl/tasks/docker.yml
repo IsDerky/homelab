@@ -1,0 +1,31 @@
+---
+# Se respeta lo que ya hubiera en daemon.json: solo se añade live-restore
+- name: Leer el daemon.json actual
+  ansible.builtin.slurp:
+    src: /etc/docker/daemon.json
+  register: pterodactyl_daemon_actual
+  failed_when: false
+
+- name: Configuración de Docker con live-restore
+  ansible.builtin.copy:
+    content: >-
+      {{ (pterodactyl_daemon_actual.content | default('e30=') | b64decode | from_json)
+         | combine({'live-restore': pterodactyl_docker_live_restore}) | to_nice_json }}
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    validate: dockerd --validate --config-file=%s
+  notify: Recargar docker
+
+# live-restore se aplica con un reload (SIGHUP): no reinicia ningún contenedor
+- name: Aplicar la configuración de Docker
+  ansible.builtin.meta: flush_handlers
+
+- name: Docker tiene live-restore como toca
+  ansible.builtin.command: docker info --format {{ '{{' }}.LiveRestoreEnabled{{ '}}' }}
+  register: pterodactyl_live_restore
+  changed_when: false
+  failed_when: pterodactyl_live_restore.stdout | trim | bool != pterodactyl_docker_live_restore
+  # En --check el reload no se hace y fallaría siempre
+  when: not ansible_check_mode

@@ -1,0 +1,51 @@
+---
+- name: Binario de Wings
+  ansible.builtin.get_url:
+    url: "https://github.com/pterodactyl/wings/releases/download/v{{ pterodactyl_wings_version }}/wings_linux_{{ pterodactyl_arch }}"
+    dest: /usr/local/bin/wings
+    checksum: "sha256:{{ pterodactyl_wings_sha256[pterodactyl_arch] }}"
+    owner: root
+    group: root
+    mode: "0755"
+  vars:
+    pterodactyl_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts.architecture] }}"
+  notify: Reiniciar wings
+
+- name: Unidad de Wings
+  ansible.builtin.template:
+    src: wings.service.j2
+    dest: /etc/systemd/system/wings.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Recargar systemd
+    - Reiniciar wings
+
+- name: Carpeta de ajustes de Wings
+  ansible.builtin.file:
+    path: /etc/systemd/system/wings.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Límite de ficheros abiertos de Wings
+  ansible.builtin.copy:
+    content: |
+      # {{ ansible_managed }}
+      [Service]
+      LimitNOFILE={{ pterodactyl_wings_nofile }}
+    dest: /etc/systemd/system/wings.service.d/limites.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Recargar systemd
+    - Reiniciar wings
+
+- name: Wings activo
+  ansible.builtin.systemd_service:
+    name: wings.service
+    enabled: true
+    state: started

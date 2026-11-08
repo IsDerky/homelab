@@ -1,0 +1,48 @@
+---
+- name: El panel está instalado
+  ansible.builtin.stat:
+    path: "{{ pterodactyl_panel_dir }}/artisan"
+  register: pterodactyl_artisan
+  failed_when: not pterodactyl_artisan.stat.exists
+
+- name: Unidad de la cola (pteroq)
+  ansible.builtin.template:
+    src: pteroq.service.j2
+    dest: /etc/systemd/system/pteroq.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Recargar systemd
+    - Reiniciar pteroq
+
+- name: Cola activa
+  ansible.builtin.systemd_service:
+    name: pteroq.service
+    enabled: true
+    state: started
+
+# El planificador estaba a mano en el crontab de root; pasa a /etc/cron.d. Se
+# quita primero: con las dos a la vez correría dos veces en el mismo minuto.
+- name: Leer el crontab de root
+  ansible.builtin.command: crontab -l -u root
+  register: pterodactyl_crontab_root
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Quitar el planificador del crontab de root
+  ansible.builtin.shell: |
+    set -o pipefail
+    crontab -l -u root | { grep -vF 'artisan schedule:run' || true; } | crontab -u root -
+  args:
+    executable: /bin/bash
+  when: "'artisan schedule:run' in pterodactyl_crontab_root.stdout"
+  changed_when: true
+
+- name: Planificador del panel
+  ansible.builtin.cron:
+    name: Planificador de Pterodactyl
+    cron_file: pterodactyl
+    user: root
+    job: "{{ pterodactyl_php }} {{ pterodactyl_panel_dir }}/artisan schedule:run >> /dev/null 2>&1"

@@ -1,0 +1,22 @@
+---
+# Wings con versión fija y el SHA-256 de cada binario (los da la API de GitHub
+# de la release). Si el que hay instalado ya coincide, no se descarga nada.
+pterodactyl_wings_version: 1.13.4
+pterodactyl_wings_sha256:
+  amd64: 7e763389bb5d386a7d32ccdd46cffcf1ab9ed697e5c2aca7fe44183b527cd4c0
+  arm64: 516cc0b86fec092feb9893bacab2e1bf478b5477a5459ad9d722676c7549faa5
+
+# La unidad de ejemplo de Pterodactyl trae 4096 y Wings avisa al arrancar de
+# que se queda corto (http=2304 sftp=768)
+pterodactyl_wings_nofile: 65536
+
+# Que los contenedores sigan vivos mientras dockerd se reinicia. Sin esto,
+# actualizar docker-ce (unattended-upgrades no lo cubre, es de un repo de
+# fuera) reinicia todos los servidores de juego.
+pterodactyl_docker_live_restore: true
+
+# Panel: solo en el nodo que lo tiene
+pterodactyl_panel: false
+pterodactyl_panel_dir: /var/www/pterodactyl
+pterodactyl_panel_user: www-data
+pterodactyl_php: /usr/bin/php

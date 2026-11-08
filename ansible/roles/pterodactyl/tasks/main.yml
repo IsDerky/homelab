@@ -1,0 +1,10 @@
+---
+- name: Docker
+  ansible.builtin.import_tasks: docker.yml
+
+- name: Wings
+  ansible.builtin.import_tasks: wings.yml
+
+- name: Panel
+  ansible.builtin.import_tasks: panel.yml
+  when: pterodactyl_panel
