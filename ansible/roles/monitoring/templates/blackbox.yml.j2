@@ -1,5 +1,5 @@
 # {{ ansible_managed }}
-# Un módulo por comprobación: cada una puede exigir su propio cuerpo
+# Un módulo por comprobación HTTP: cada una puede exigir su propio cuerpo
 modules:
 {% for probe in monitoring_http_probes %}
   http_{{ probe.servicio }}:
@@ -13,6 +13,18 @@ modules:
       fail_if_body_not_matches_regexp:
         - '{{ probe.body_regex }}'
 {% endif %}
-{% else %}
-  {}
 {% endfor %}
+{% if monitoring_tls_probes %}
+  # Basta con que conteste por HTTPS con un certificado válido. Wings sin token
+  # da 401; un 5xx sí cuenta como caído.
+  tls:
+    prober: http
+    timeout: 10s
+    http:
+      valid_status_codes: [200, 301, 302, 401, 403, 404]
+      fail_if_not_ssl: true
+      preferred_ip_protocol: ip4
+{% endif %}
+{% if not monitoring_http_probes and not monitoring_tls_probes %}
+  {}
+{% endif %}

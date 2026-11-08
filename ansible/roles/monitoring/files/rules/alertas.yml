@@ -1,6 +1,7 @@
 # Reglas y alertas. Solo avisan de problemas graves: lo demás (backups,
-# certificados, servidor caído entero, SMART) ya lo avisan el vigilante externo,
-# el bot y smartd, y repetirlo aquí sería ruido.
+# certificados de este servidor, servidor caído entero, SMART) ya lo avisan el
+# vigilante externo, el bot y smartd, y repetirlo aquí sería ruido. Los nodos de
+# Wings de fuera no los mira nadie más: esos sí.
 groups:
   # Proporción de comprobaciones HTTP fallidas en varias ventanas. slo:objetivo
   # (por servicio) sale del inventario, en slo.yml.
@@ -83,6 +84,27 @@ groups:
           severity: critical
         annotations:
           summary: "No hay una copia buena de {{ $labels.modo }} ({{ $labels.destino }}) desde hace {{ $value | humanizeDuration }}."
+
+      # Comprobaciones TLS (nodos de Wings, panel y webs). 10 min para no avisar por
+      # un reinicio de Wings, que tarda unos segundos.
+      - alert: SinRespuestaHTTPS
+        expr: probe_success{job="tls"} == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.nombre }} no responde por HTTPS desde hace 10 min ({{ $labels.instance }})."
+
+      # Wings lee el certificado solo al arrancar: si renueva y nadie lo
+      # reinicia, sigue sirviendo el viejo hasta que caduca. Certbot renueva a
+      # 30 días, así que a 14 algo ha fallado.
+      - alert: CertificadoPorCaducar
+        expr: probe_ssl_earliest_cert_expiry{job="tls"} - time() < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "El certificado de {{ $labels.nombre }} caduca en {{ $value | humanizeDuration }}."
 
       - alert: RecolectorParado
         expr: time() - ops_snapshot_timestamp_seconds > 1800

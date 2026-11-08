@@ -203,6 +203,7 @@
   loop: >-
     {{ [monitoring_ports.prometheus, monitoring_ports.alertmanager, monitoring_ports.blackbox,
         monitoring_ports.node_exporter, monitoring_ports.grafana]
+       + ([monitoring_ports.cadvisor] if monitoring_cadvisor else [])
        + ([monitoring_ports.ops_exporter] if monitoring_ops_group | length > 0 else [])
        + ([monitoring_ports.alert_dm] if monitoring_alert_dm else []) }}
 

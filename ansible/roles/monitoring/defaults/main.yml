@@ -7,14 +7,17 @@ monitoring_images:
   blackbox: prom/blackbox-exporter:v0.29.1
   node_exporter: prom/node-exporter:v1.12.1
   grafana: grafana/grafana:13.2.4
+  cadvisor: ghcr.io/google/cadvisor:v0.60.6
 
-# Todo escucha en 127.0.0.1 (red del host, sin puertos publicados por Docker)
+# Todo escucha en 127.0.0.1 (red del host, sin puertos publicados por Docker).
+# cAdvisor no en su 8080 de siempre, que es el de Wings.
 monitoring_ports:
   prometheus: 9090
   alertmanager: 9093
   blackbox: 9115
   node_exporter: 9100
   grafana: 3005
+  cadvisor: 9338
   ops_exporter: 9850
   alert_dm: 9851
 
@@ -25,6 +28,10 @@ monitoring_mem:
   blackbox: 64m
   node_exporter: 64m
   grafana: 384m
+  cadvisor: 256m
+
+# Métricas por contenedor. false = sin cAdvisor.
+monitoring_cadvisor: true
 
 # Lo primero que se cumpla de las dos
 monitoring_retention_time: 15d
@@ -40,6 +47,22 @@ monitoring_http_probes: []
 
 # Objetivo de disponibilidad (SLO) de las comprobaciones HTTP, en 30 días
 monitoring_slo_target: 0.995
+
+# Comprobaciones TLS: que el servicio responda por HTTPS con un certificado
+# válido, sin mirar el cuerpo (Wings da 401 sin token). Avisan si cae o si el
+# certificado caduca en menos de 14 días. No cuentan en el SLO.
+#   - nombre: nodo1
+#     url: https://nodo1.ejemplo.com:8080/
+monitoring_tls_probes: []
+
+# Unidades systemd cuyo estado exporta node-exporter (node_systemd_unit_state),
+# con el nombre completo: nginx.service, certbot.timer... Son expresiones
+# regulares (actions.runner.* vale para todos los runners).
+monitoring_systemd_units: []
+
+# Nombre del nodo de Wings local en las métricas de servidores de juego (los
+# remotos salen con el dominio que tienen en wings-nodes.env)
+monitoring_wings_local_node: local
 
 # Snapshot de ops-collect y el grupo que puede leerlo. Vacío = sin ops-exporter.
 monitoring_ops_snapshot: /var/lib/ops-collect/snapshot.json

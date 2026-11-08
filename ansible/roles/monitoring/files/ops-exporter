@@ -2,7 +2,8 @@
 """Exportador de Prometheus para el snapshot de ops-collect.
 
 ops-collect deja cada 5 minutos un JSON con el estado del servidor (backups,
-simulacro, SMART, certificados, servicios, fail2ban, deploys). Esto lo lee en
+simulacro, SMART, certificados, servicios, fail2ban, deploys, servidores de
+juego de los nodos de Wings). Esto lo lee en
 cada scrape y lo devuelve en el formato de texto de Prometheus. Sin
 dependencias: solo la librería estándar.
 
@@ -11,6 +12,7 @@ Lo que ya da node_exporter (CPU, memoria, disco, red) no se repite aquí.
 Variables de entorno:
   OPS_SNAPSHOT  ruta del snapshot (/var/lib/ops-collect/snapshot.json)
   OPS_LISTEN    dirección y puerto (127.0.0.1:9850)
+  OPS_WINGS_NODE  nombre del nodo de Wings local en las métricas (local)
 """
 
 import json
@@ -22,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 SNAPSHOT = os.environ.get("OPS_SNAPSHOT", "/var/lib/ops-collect/snapshot.json")
 BACKUP_STATE = os.environ.get("OPS_BACKUP_STATE", "/var/lib/server-backup/estado")
 LISTEN = os.environ.get("OPS_LISTEN", "127.0.0.1:9850")
+WINGS_NODE = os.environ.get("OPS_WINGS_NODE", "local")
 
 
 def escape(value):
@@ -175,7 +178,54 @@ def collect(snapshot):
             "1 si el último deploy terminó bien (0 si falló o hizo rollback)",
             1 if last.get("phase") == "ok" else 0,
         )
+
+    if "wings" in snapshot:
+        game_servers(m, WINGS_NODE, snapshot["wings"])
+    remote = snapshot.get("wings_remote") or {}
+    if "error" not in remote:
+        for node, info in remote.items():
+            # {"servers": [...]} o {"error": ...}
+            game_servers(m, node, (info or {}).get("servers", info))
     return m
+
+
+def game_servers(m, node, servers):
+    """Servidores de juego de un nodo, según su Wings. servers es la lista del
+    snapshot o un dict con "error" si el nodo no contestó."""
+    up = isinstance(servers, list)
+    m.add("ops_wings_node_up", "1 si Wings del nodo contestó al recolector", 1 if up else 0, {"nodo": node})
+    if not up:
+        return
+    m.add("ops_wings_node_servers", "Servidores en el nodo", len(servers), {"nodo": node})
+    for s in servers:
+        if not s.get("uuid"):
+            continue
+        # El id corto del panel (primer bloque del uuid)
+        labels = {"nodo": node, "servidor": s["uuid"].split("-")[0]}
+        m.add(
+            "ops_game_server_running",
+            "1 si el servidor está encendido",
+            1 if s.get("state") == "running" else 0,
+            labels,
+        )
+        m.add("ops_game_server_suspended", "1 si está suspendido", 1 if s.get("suspended") else 0, labels)
+        m.add("ops_game_server_memory_bytes", "Memoria en uso", s.get("mem_bytes"), labels)
+        m.add("ops_game_server_memory_limit_bytes", "Límite de memoria del contenedor", s.get("mem_limit_bytes"), labels)
+        cpu = s.get("cpu_pct")
+        m.add(
+            "ops_game_server_cpu_cores",
+            "CPU en uso, en núcleos (1 = un núcleo entero)",
+            cpu / 100 if cpu is not None else None,
+            labels,
+        )
+        m.add("ops_game_server_disk_bytes", "Espacio que ocupa en disco", s.get("disk_bytes"), labels)
+        uptime = s.get("uptime_ms")
+        m.add(
+            "ops_game_server_uptime_seconds",
+            "Tiempo encendido",
+            uptime / 1000 if uptime is not None else None,
+            labels,
+        )
 
 
 def backup_state(m, directory):
