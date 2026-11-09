@@ -1,0 +1,243 @@
+---
+# Retirada del panel viejo de Pterodactyl de n1, dejando solo Wings. Por fases,
+# en este orden y con días entre apagar y borrar. Sin tags no hace nada.
+#   --tags copia    vuelca las bases y guarda la config en el controlador
+#   (a mano: borrar las bases y el host de bases desde el panel nuevo)
+#   --tags apagar   para y desactiva todo, quita los crons y certs del panel y
+#                   deja el cert de Wings renovándose sin nginx
+#   --tags borrar   desinstala y borra
+- name: Retirar el panel viejo
+  hosts: n1
+  become: true
+  vars:
+    retiro_servicios:
+      - pteroq
+      - websocket-ping-paris
+      - pm2-root
+      - nginx
+      - php8.1-fpm
+      - redis-server
+      - mariadb
+    retiro_rutas:
+      - /var/www/pterodactyl
+      - /opt/websocket-ping
+      - /opt/websocket-ping-n1
+      - /root/.pm2
+      - /etc/systemd/system/pteroq.service
+      - /etc/systemd/system/websocket-ping-paris.service
+      - /etc/systemd/system/pm2-root.service
+    retiro_paquetes: '^(nginx(-common|-core|-full)?|libnginx-mod-.*|php8\.1.*|redis-(server|tools)|mariadb-(server|client|common).*)$'
+    retiro_certs:
+      - panel.derkyu.lol
+      - ping.n1.derkyu.lol
+    retiro_wings_cert: n1.derkyu.lol
+    retiro_verificar: true
+    retiro_nodo: /root/retiro-panel
+    retiro_copia: "{{ lookup('ansible.builtin.env', 'HOME') }}/copias/retiro-panel/{{ inventory_hostname }}"
+    retiro_bases_sistema: [information_schema, performance_schema, sys, mysql]
+
+  tasks:
+    - name: Copia
+      tags: [never, copia]
+      block:
+        - name: Carpeta de la copia en el nodo
+          ansible.builtin.file:
+            path: "{{ retiro_nodo }}"
+            state: directory
+            mode: "0700"
+
+        - name: Bases de datos
+          ansible.builtin.command: mysql -N -e "show databases"
+          register: retiro_bases
+          changed_when: false
+
+        # mysql también, por los usuarios y permisos
+        - name: Volcar cada base
+          ansible.builtin.shell: |
+            set -o pipefail
+            mysqldump --single-transaction --routines --events --databases {{ item }} | gzip > {{ retiro_nodo }}/{{ item }}.sql.gz
+          args:
+            executable: /bin/bash
+          loop: "{{ retiro_bases.stdout_lines | difference(retiro_bases_sistema | difference(['mysql'])) }}"
+          changed_when: true
+
+        - name: Comprobar qué rutas existen
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          loop: "{{ retiro_rutas + ['/etc/nginx', '/etc/letsencrypt/renewal', '/var/spool/cron/crontabs'] }}"
+          register: retiro_existen
+
+        - name: Empaquetar la config
+          vars:
+            rutas: "{{ retiro_existen.results | selectattr('stat.exists') | map(attribute='item') | map('regex_replace', '^/', '') | list }}"
+          ansible.builtin.command:
+            argv: "{{ ['tar', 'czf', retiro_nodo ~ '/ficheros.tar.gz', '-C', '/'] + rutas }}"
+          changed_when: true
+
+        - name: Ficheros de la copia
+          ansible.builtin.find:
+            paths: "{{ retiro_nodo }}"
+          register: retiro_ficheros
+
+        - name: Traer la copia
+          ansible.builtin.fetch:
+            src: "{{ item.path }}"
+            dest: "{{ retiro_copia }}/{{ item.path | basename }}"
+            flat: true
+          loop: "{{ retiro_ficheros.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+
+        # Lleva usuarios y contraseñas del panel: solo para mí
+        - name: Permisos de la copia en el controlador
+          ansible.builtin.file:
+            path: "{{ retiro_copia }}"
+            mode: "0700"
+          delegate_to: localhost
+          become: false
+
+    - name: Apagar
+      tags: [never, apagar]
+      block:
+        - name: La copia existe
+          ansible.builtin.stat:
+            path: "{{ retiro_nodo }}/ficheros.tar.gz"
+          register: retiro_hay_copia
+
+        - name: Sin copia no se apaga
+          ansible.builtin.assert:
+            that: retiro_hay_copia.stat.exists
+            fail_msg: "Primero --tags copia"
+
+        - name: Bases que quedan
+          ansible.builtin.command: mysql -N -e "show databases"
+          register: retiro_quedan
+          changed_when: false
+          failed_when: false
+
+        - name: Las bases de servidores ya no están
+          ansible.builtin.assert:
+            that: retiro_quedan.stdout_lines | difference(retiro_bases_sistema + ['panel']) | length == 0
+            fail_msg: >-
+              Quedan {{ retiro_quedan.stdout_lines | difference(retiro_bases_sistema + ['panel']) | join(', ') }}:
+              bórralas desde el panel nuevo (servidor → Databases) y quita el host de bases antes de apagar MariaDB
+
+        - name: Servicios
+          ansible.builtin.service_facts:
+
+        - name: Parar y desactivar
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+            state: stopped
+            enabled: false
+          loop: "{{ retiro_servicios | select('in', ansible_facts.services | map('regex_replace', '\\.service$', '') | list) | list }}"
+
+        - name: Quitar los crons del panel y el hook de nginx
+          ansible.builtin.shell: |
+            set -o pipefail
+            for u in root www-data; do
+              actual=$(crontab -u "$u" -l 2>/dev/null) || continue
+              nuevo=$(printf '%s\n' "$actual" | grep -v artisan | sed 's/ --deploy-hook "systemctl restart nginx"//')
+              if [ "$actual" != "$nuevo" ]; then printf '%s\n' "$nuevo" | crontab -u "$u" -; echo "cambiado $u"; fi
+            done
+          args:
+            executable: /bin/bash
+          register: retiro_cron
+          changed_when: "'cambiado' in retiro_cron.stdout"
+
+        - name: Borrar los certs del panel
+          ansible.builtin.command:
+            cmd: certbot delete --non-interactive --cert-name {{ item }}
+            removes: /etc/letsencrypt/renewal/{{ item }}.conf
+          loop: "{{ retiro_certs }}"
+
+        # Wings carga el cert al arrancar; antes reiniciaba nginx
+        - name: Reiniciar Wings al renovar su cert
+          ansible.builtin.lineinfile:
+            path: /etc/letsencrypt/renewal/{{ retiro_wings_cert }}.conf
+            regexp: '^renew_hook\s*='
+            line: renew_hook = systemctl restart wings
+            insertafter: '^\[renewalparams\]'
+            mode: "0644"
+
+        - name: Puertos del panel cerrados
+          ansible.builtin.wait_for:
+            port: "{{ item }}"
+            state: stopped
+            timeout: 30
+          loop: [80, 443, 3306, 3552]
+
+        # standalone necesita el 80 libre, que es lo que fallaba con nginx delante
+        - name: La renovación del cert de Wings funciona
+          ansible.builtin.command: certbot renew --cert-name {{ retiro_wings_cert }} --dry-run
+          changed_when: false
+          when: retiro_verificar
+
+        - name: Wings sigue respondiendo con su cert
+          ansible.builtin.uri:
+            url: https://{{ retiro_wings_cert }}:8080/api/system
+            status_code: [200, 401, 403]
+          delegate_to: localhost
+          become: false
+          when: retiro_verificar
+
+    - name: Borrar
+      tags: [never, borrar]
+      block:
+        - name: Servicios
+          ansible.builtin.service_facts:
+
+        - name: Todo apagado de antes
+          ansible.builtin.assert:
+            that: ansible_facts.services[item ~ '.service'].state | default('stopped') != 'running'
+            fail_msg: "{{ item }} sigue en marcha: primero --tags apagar"
+          loop: "{{ retiro_servicios }}"
+
+        - name: Paquetes instalados
+          ansible.builtin.command:
+            argv: [dpkg-query, -W, "-f=${Package}\n"]
+          register: retiro_dpkg
+          changed_when: false
+
+        - name: Desinstalar nginx, PHP, Redis y MariaDB
+          ansible.builtin.apt:
+            name: "{{ retiro_dpkg.stdout_lines | select('match', retiro_paquetes) | list }}"
+            state: absent
+            purge: true
+            autoremove: true
+          when: retiro_dpkg.stdout_lines | select('match', retiro_paquetes) | list | length > 0
+
+        - name: Quitar pm2
+          ansible.builtin.command:
+            cmd: npm rm -g pm2
+            removes: /usr/lib/node_modules/pm2
+
+        - name: Borrar ficheros y datos
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ retiro_rutas + ['/etc/nginx', '/etc/php/8.1', '/etc/mysql', '/var/lib/mysql', '/etc/redis', '/var/lib/redis', retiro_nodo] }}"
+
+        - name: Recargar systemd
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+
+        # phpsessionclean.timer se queda en failed al quitar PHP
+        - name: Olvidar las unidades que ya no existen
+          ansible.builtin.command: systemctl reset-failed
+          changed_when: false
+
+        # Claves de los intentos de renovación fallidos; las de los certs vivos están en archive/
+        - name: Claves viejas de certbot
+          ansible.builtin.find:
+            paths: /etc/letsencrypt/keys
+            age: 7d
+          register: retiro_claves
+
+        - name: Borrar claves viejas de certbot
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ retiro_claves.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
