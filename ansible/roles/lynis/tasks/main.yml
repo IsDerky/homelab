@@ -61,6 +61,22 @@
         path: "{{ lynis_dir }}"
         state: absent
 
+    # Temporales de mktemp que Lynis borra al salir, pero no si se le corta
+    - name: Buscar temporales de Lynis
+      ansible.builtin.find:
+        paths: /tmp
+        patterns: lynis.*
+        file_type: any
+      register: lynis_temporales
+
+    - name: Borrar temporales de Lynis
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ lynis_temporales.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+
 - name: Puntuación
   vars:
     informe: "{{ lookup('ansible.builtin.file', lynis_informes ~ '/' ~ lynis_fecha ~ '/' ~ inventory_hostname ~ '/informe.dat') }}"
