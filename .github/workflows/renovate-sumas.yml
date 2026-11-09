@@ -1,6 +1,6 @@
 name: Sumas de Renovate
 
-# Renovate sube la versión de restic/rclone/Wings pero no las sumas SHA-256:
+# Renovate sube la versión de restic/rclone/Wings/Lynis pero no las sumas SHA-256:
 # se ponen aquí y se suben a la misma rama del PR.
 
 on:
@@ -8,6 +8,7 @@ on:
     paths:
       - ansible/roles/backup/defaults/main.yml
       - ansible/roles/pterodactyl/defaults/main.yml
+      - ansible/roles/lynis/defaults/main.yml
 
 permissions:
   contents: write

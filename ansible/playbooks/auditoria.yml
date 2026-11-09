@@ -1,0 +1,8 @@
+---
+# Auditoría con Lynis del servidor y los nodos. No va en site.yml: solo mide.
+# Los informes quedan en homelab-config/auditorias/<fecha>/<host>/.
+- name: Auditoría de seguridad
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - lynis
