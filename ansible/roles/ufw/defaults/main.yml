@@ -10,9 +10,14 @@ ufw_logging: low
 ufw_ssh_port: 22
 
 # Cada regla: port (obligatorio), proto, from (por defecto any), rule (allow),
-# comment. Sin proto = tcp y udp.
+# interface (solo lo que entra por ahí), comment, delete (true = quitarla).
+# Sin proto = tcp y udp.
 #   - port: "22"
 #     proto: tcp
 #     from: 192.168.1.0/24
 #     comment: SSH LAN
+#   - port: "9100"
+#     proto: tcp
+#     interface: wg0
+#     comment: node-exporter por el túnel
 ufw_rules: []

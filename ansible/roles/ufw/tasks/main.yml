@@ -1,7 +1,7 @@
 ---
 - name: Alguna regla tiene que abrir SSH
   ansible.builtin.assert:
-    that: (ufw_ssh_port | string) in (ufw_rules | map(attribute='port') | map('string'))
+    that: (ufw_ssh_port | string) in (ufw_rules | rejectattr('delete', 'defined') | map(attribute='port') | map('string'))
     fail_msg: Ninguna regla abre el puerto {{ ufw_ssh_port }}; al activar ufw te quedarías fuera.
     quiet: true
 
@@ -18,10 +18,15 @@
     port: "{{ item.port | string }}"
     proto: "{{ item.proto | default(omit) }}"
     from_ip: "{{ item.from | default('any') }}"
+    interface: "{{ item.interface | default(omit) }}"
+    direction: "{{ 'in' if item.interface is defined else omit }}"
     comment: "{{ item.comment | default(omit) }}"
+    delete: "{{ item.delete | default(false) }}"
   loop: "{{ ufw_rules }}"
   loop_control:
-    label: "{{ item.port }}{{ '/' ~ item.proto if item.proto is defined else '' }} desde {{ item.from | default('any') }}"
+    label: >-
+      {{ 'quitar ' if item.delete | default(false) else '' }}{{ item.port }}{{ '/' ~ item.proto if item.proto is defined else '' }}
+      desde {{ item.from | default('any') }}{{ ' por ' ~ item.interface if item.interface is defined else '' }}
 
 - name: Políticas por defecto
   community.general.ufw:

@@ -1,13 +1,13 @@
 ---
 - name: Comprobar rules.v4
   ansible.builtin.command: grep -qx -- '-A INPUT -j REJECT --reject-with icmp-host-prohibited' /etc/iptables/rules.v4
-  register: wireguard_oracle_iptables
+  register: wireguard_imagen_iptables
   changed_when: false
   failed_when: false
   check_mode: false
 
 - name: Reglas del túnel
-  when: wireguard_oracle_iptables.rc == 0
+  when: wireguard_imagen_iptables.rc == 0
   vars:
     wireguard_rules: >-
       {{ ([{'proto': 'udp', 'port': wireguard_listen_port | string}] if wireguard_listen_port | int > 0 else [])
