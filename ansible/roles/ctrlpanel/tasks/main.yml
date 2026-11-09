@@ -1,0 +1,166 @@
+---
+- name: Faltan datos
+  ansible.builtin.assert:
+    that:
+      - ctrlpanel_server_name | length > 0
+      - ctrlpanel_db_password | length > 0
+    fail_msg: Define ctrlpanel_server_name y ctrlpanel_db_password.
+    quiet: true
+
+- name: Paquetes de PHP
+  ansible.builtin.apt:
+    name:
+      - php{{ ctrlpanel_php }}-fpm
+      - php{{ ctrlpanel_php }}-cli
+      - php{{ ctrlpanel_php }}-mysql
+      - php{{ ctrlpanel_php }}-mbstring
+      - php{{ ctrlpanel_php }}-xml
+      - php{{ ctrlpanel_php }}-curl
+      - php{{ ctrlpanel_php }}-zip
+      - php{{ ctrlpanel_php }}-bcmath
+      - php{{ ctrlpanel_php }}-gd
+      - php{{ ctrlpanel_php }}-intl
+      - php{{ ctrlpanel_php }}-redis
+    state: present
+
+- name: Usuario de ctrlpanel (sin shell ni contraseña)
+  ansible.builtin.user:
+    name: "{{ ctrlpanel_user }}"
+    system: true
+    create_home: false
+    home: /nonexistent
+    shell: /usr/sbin/nologin
+    password_lock: true
+
+- name: Carpeta de la app
+  ansible.builtin.file:
+    path: "{{ ctrlpanel_dir }}"
+    state: directory
+    owner: "{{ ctrlpanel_user }}"
+    group: "{{ ctrlpanel_user }}"
+    mode: "0750"
+
+# Pool propio: un fallo en CtrlPanel no alcanza los ficheros del panel de
+# Pterodactyl (www-data)
+- name: Pool de PHP-FPM
+  ansible.builtin.template:
+    src: fpm-pool.conf.j2
+    dest: /etc/php/{{ ctrlpanel_php }}/fpm/pool.d/ctrlpanel.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recargar php-fpm
+
+- name: Base de datos
+  ansible.builtin.import_tasks: db.yml
+
+- name: Comprobar el .env
+  ansible.builtin.stat:
+    path: "{{ ctrlpanel_dir }}/.env"
+  register: ctrlpanel_env
+
+# El resto del .env (APP_KEY, Discord, reCAPTCHA...) viene de la migración
+- name: Base de datos y logs en el .env
+  ansible.builtin.lineinfile:
+    path: "{{ ctrlpanel_dir }}/.env"
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: DB_HOST, value: 127.0.0.1 }
+    - { key: DB_DATABASE, value: "{{ ctrlpanel_db_name }}" }
+    - { key: DB_USERNAME, value: "{{ ctrlpanel_db_user }}" }
+    - { key: DB_PASSWORD, value: "{{ ctrlpanel_db_password }}" }
+    - { key: LOG_LEVEL, value: "{{ ctrlpanel_log_level }}" }
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+  when: ctrlpanel_env.stat.exists
+  notify: Limpiar caché de config
+
+- name: Permisos del .env
+  ansible.builtin.file:
+    path: "{{ ctrlpanel_dir }}/.env"
+    owner: "{{ ctrlpanel_user }}"
+    group: "{{ ctrlpanel_user }}"
+    mode: "0600"
+  when: ctrlpanel_env.stat.exists
+
+- name: Vhost
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/sites-available/ctrlpanel.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Comprobar nginx
+    - Recargar nginx
+
+- name: Vhost activo
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/ctrlpanel.conf
+    dest: /etc/nginx/sites-enabled/ctrlpanel.conf
+    state: link
+    force: "{{ ansible_check_mode }}"
+  notify:
+    - Comprobar nginx
+    - Recargar nginx
+
+- name: Logs de la app
+  ansible.builtin.template:
+    src: logrotate.j2
+    dest: /etc/logrotate.d/ctrlpanel
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Unidades de cola y planificador
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - ctrlpanel-cola.service
+    - ctrlpanel-planificador.service
+    - ctrlpanel-planificador.timer
+  register: ctrlpanel_units
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Comprobar que la app está
+  ansible.builtin.stat:
+    path: "{{ ctrlpanel_dir }}/artisan"
+  register: ctrlpanel_artisan
+
+- name: Sin código no se enciende
+  ansible.builtin.assert:
+    that: ctrlpanel_artisan.stat.exists and ctrlpanel_env.stat.exists
+    fail_msg: Falta la app o su .env en {{ ctrlpanel_dir }} (playbooks/migrar-ctrlpanel.yml).
+    quiet: true
+  when: ctrlpanel_enabled | bool
+
+- name: Cola y planificador
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: "{{ ctrlpanel_enabled | bool }}"
+    state: "{{ 'started' if ctrlpanel_enabled | bool else 'stopped' }}"
+  loop:
+    - ctrlpanel-cola.service
+    - ctrlpanel-planificador.timer
+  when: not (ansible_check_mode and ctrlpanel_units.changed)
+
+- name: Responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ ctrlpanel_port }}/login
+    headers:
+      Host: "{{ ctrlpanel_server_name }}"
+  register: ctrlpanel_check
+  until: ctrlpanel_check.status == 200
+  retries: 6
+  delay: 5
+  changed_when: false
+  when: ctrlpanel_artisan.stat.exists and ctrlpanel_env.stat.exists and not ansible_check_mode

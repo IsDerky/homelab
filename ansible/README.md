@@ -14,6 +14,7 @@ Roles para montar piezas del homelab:
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
+- `ctrlpanel`: la parte de sistema de CtrlPanel (Laravel) con usuario y pool de PHP-FPM propios, y su migración desde otra máquina por fases (`playbooks/migrar-ctrlpanel.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 - `pterodactyl`: Wings (binario con versión fija, unidad y límites), live-restore de Docker y la cola y el planificador del panel (`playbooks/pterodactyl.yml`).
@@ -331,6 +332,27 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 | `roninfc_root` | `/srv/roninfc` | Fijada también en el script de despliegue |
 | `roninfc_memory_max` | `1536M` | Next y Chrome juntos |
 | `roninfc_check_path` / `roninfc_check_timeout` | `/api/partidos` / `90` | |
+
+## Rol `ctrlpanel`
+
+[CtrlPanel](https://github.com/Ctrlpanel-gg/panel) es un panel de facturación por créditos para Pterodactyl. El rol monta solo la parte de sistema; el código y el `.env` (con `APP_KEY` y las claves de las pasarelas) se traen de donde estaba.
+
+- **Usuario y pool de PHP-FPM propios.** Comparte PHP-FPM con el panel de Pterodactyl, pero cada uno con su usuario: un fallo en uno no puede tocar los ficheros del otro. nginx (`www-data`) es lo único que habla con su socket.
+- **En loopback y detrás del túnel.** El vhost escucha en `127.0.0.1:8085` sin TLS. La IP real sale de `CF-Connecting-IP`, solo si la petición viene de la propia máquina, y PHP ve HTTPS por `fastcgi_param`.
+- **Cola y planificador en systemd**, con el usuario de la app y `ProtectSystem=strict` (solo puede escribir en `storage/` y `bootstrap/cache`). El planificador va con un timer y no con el cron de root, como estaba.
+- **Apagado por defecto** (`ctrlpanel_enabled: false`). El planificador cobra créditos y suspende servidores en Pterodactyl: con dos copias encendidas lo haría dos veces.
+- La BD se crea con el cliente `mariadb` por el socket de root, sin PyMySQL, y la contraseña va por stdin. En el `.env` solo toca la conexión a la BD y el nivel de log. Logs con logrotate (en el sitio anterior el log en debug llegó a 2 GB).
+- `server-backup sistema` vuelca su BD y se lleva la app (sin logs ni `node_modules`). El simulacro comprueba el volcado.
+
+`playbooks/migrar-ctrlpanel.yml` hace el traslado por fases con tags: `copia` (BD y app del origen al controlador), `instalar` (la monta con todo parado; se puede repetir), `corte` (mantenimiento en el origen, copia final, importar y encender), `volver` (deshace el corte) y `retirar` (apaga CtrlPanel en el origen). Sin tags no hace nada.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `ctrlpanel_server_name` | `""` | Obligatoria |
+| `ctrlpanel_db_password` | `""` | Obligatoria. En el vault |
+| `ctrlpanel_enabled` | `false` | Cola y planificador |
+| `ctrlpanel_port` | `8085` | |
+| `ctrlpanel_log_level` | `error` | |
 
 ## Rol `monitoring`
 

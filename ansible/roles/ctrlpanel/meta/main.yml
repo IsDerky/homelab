@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: ctrlpanel
+  namespace: isderky
+  description: Parte de sistema de CtrlPanel (Laravel) con usuario y pool de PHP-FPM propios, cola y planificador en systemd
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

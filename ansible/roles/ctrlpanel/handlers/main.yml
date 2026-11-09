@@ -1,0 +1,28 @@
+---
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# reload: sin cortar las peticiones del panel de Pterodactyl (mismo php-fpm)
+- name: Recargar php-fpm
+  ansible.builtin.shell: php-fpm{{ ctrlpanel_php }} -t && systemctl reload php{{ ctrlpanel_php }}-fpm
+  changed_when: true
+  when: not ansible_check_mode
+
+- name: Comprobar nginx
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Recargar nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded
+  when: not ansible_check_mode
+
+- name: Limpiar caché de config
+  ansible.builtin.command: runuser -u {{ ctrlpanel_user }} -- php artisan config:clear
+  args:
+    chdir: "{{ ctrlpanel_dir }}"
+  changed_when: true
+  when: not ansible_check_mode

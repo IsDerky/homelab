@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+# En el sitio anterior el log llegó a 2 GB (nivel debug y sin rotar)
+{{ ctrlpanel_dir }}/storage/logs/*.log {
+    su {{ ctrlpanel_user }} {{ ctrlpanel_user }}
+    weekly
+    rotate 4
+    maxsize 100M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=CtrlPanel: tareas programadas cada minuto
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
