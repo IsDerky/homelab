@@ -9,7 +9,7 @@ Aquí no hay IPs, dominios ni credenciales. La configuración está en [`ansible
 ## Máquinas
 
 - **Servidor de casa.** Dell OptiPlex con un i5-8500, 38 GB de RAM y un SSD de 256 GB, más un SSD NVMe externo por USB-C para la copia local y el NAS. Ubuntu Server 24.04.
-- **Dos nodos en Oracle Cloud** (ARM). Solo Docker y Wings, gestionados desde el panel de casa y unidos al servidor por WireGuard.
+- **Dos nodos externos** (ARM). Solo Docker y Wings, gestionados desde el panel de casa y unidos al servidor por WireGuard.
 
 ## Qué corre
 
@@ -37,7 +37,7 @@ flowchart LR
         hp[Honeypot]
     end
 
-    subgraph oracle[Oracle Cloud]
+    subgraph externos[Nodos externos]
         nodos[2 nodos<br/>con Wings]
     end
 

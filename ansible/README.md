@@ -67,7 +67,7 @@ Los valores por defecto son los seguros. Si hace falta relajar algo mientras se 
 
 Antes de aplicarlo la primera vez: deja una sesión abierta como root y comprueba que el usuario nuevo entra con su clave y puede usar sudo.
 
-`playbooks/ssh.yml` también lo aplica a los nodos de `wings_remotos`, si los hay. Ahí no corre el rol `base`, así que antes mete las claves de `base_admin_keys` al usuario con el que entra Ansible (el `ubuntu` de la imagen de Oracle). En las imágenes de Oracle la contraseña la suele activar el propio `sshd_config`; al reescribirlo se va.
+`playbooks/ssh.yml` también lo aplica a los nodos de `wings_remotos`, si los hay. Ahí no corre el rol `base`, así que antes mete las claves de `base_admin_keys` al usuario con el que entra Ansible (el `ubuntu` de la imagen del proveedor). En esas imágenes la contraseña la suele activar el propio `sshd_config`; al reescribirlo se va.
 
 ## Rol `ufw`
 
@@ -460,7 +460,7 @@ Reiniciar Wings no para los servidores de juego (son contenedores y Wings se ree
 
 ## Rol `actualizaciones`
 
-Los nodos de Oracle tenían más de cien paquetes sin actualizar porque nadie entraba a hacerlo. El rol deja unattended-upgrades instalando solo los parches de seguridad (los orígenes que trae Ubuntu por defecto en `50unattended-upgrades`, que no se toca). Lo demás se sigue actualizando a mano.
+Los nodos externos tenían más de cien paquetes sin actualizar porque nadie entraba a hacerlo. El rol deja unattended-upgrades instalando solo los parches de seguridad (los orígenes que trae Ubuntu por defecto en `50unattended-upgrades`, que no se toca). Lo demás se sigue actualizando a mano.
 
 - **Nunca reinicia solo.** Un reinicio corta las partidas. Si un parche lo pide, queda en `/var/run/reboot-required` y el `estado.json` que se trae el servidor de backups lo dice (ver [Nodos de Wings de fuera](#nodos-de-wings-de-fuera)).
 - **Docker no se toca.** Viene de un repo de fuera y no entra en los orígenes de seguridad, pero va en la lista negra por si acaso.
@@ -477,11 +477,11 @@ Los ajustes van en `52homelab` y `20auto-upgrades`, y al final se comprueba con 
 
 ## Rol `wireguard`
 
-Túnel WireGuard entre máquinas del inventario (`playbooks/wireguard.yml`). Lo uso entre el servidor de casa y los nodos de Oracle: por ahí van las métricas de los nodos, que así no se exponen a Internet.
+Túnel WireGuard entre máquinas del inventario (`playbooks/wireguard.yml`). Lo uso entre el servidor de casa y los nodos externos: por ahí van las métricas de los nodos, que así no se exponen a Internet.
 
 - **Quién conecta con quién.** Los nodos tienen IP pública fija y escuchan en UDP 51820 (`wireguard_listen_port` y `wireguard_endpoint`). El servidor de casa no escucha: abre él la conexión y `PersistentKeepalive` mantiene abierto el NAT del router. Así no hace falta reenviar ningún puerto en el router, y si cambia la IP de casa el túnel sigue.
 - **Claves.** Cada máquina genera su clave privada (`/etc/wireguard/wg0.key`, `0600`), que no sale de ella ni pasa por la plantilla: la carga `PostUp`. Las públicas se leen en la misma pasada, así que el playbook va sin `--limit` (si falta algún peer, se niega).
-- **iptables de Oracle.** Las imágenes de Ubuntu de Oracle traen un `REJECT` al final de `INPUT` guardado en `/etc/iptables/rules.v4`. Si está, el rol mete el UDP del túnel y lo que entra por `wg0` antes del `REJECT`, en el fichero y en caliente. No usa `netfilter-persistent save`, que guardaría también las reglas de Docker. En la Security List de Oracle hay que abrir el UDP a mano.
+- **iptables de la imagen.** Algunas imágenes de Ubuntu de proveedores cloud traen un `REJECT` al final de `INPUT` guardado en `/etc/iptables/rules.v4`. Si está, el rol mete el UDP del túnel y lo que entra por `wg0` antes del `REJECT`, en el fichero y en caliente. No usa `netfilter-persistent save`, que guardaría también las reglas de Docker. En el cortafuegos del proveedor, si lo hay, hay que abrir el UDP a mano.
 - Al final hace ping a cada peer por el túnel.
 
 | Variable | Por defecto | |

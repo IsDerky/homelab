@@ -12,7 +12,7 @@ WireGuard entre el servidor de casa y cada nodo. Los nodos tienen IP fija y escu
 
 Por el túnel van las métricas: node-exporter en cada nodo escucha solo en su IP del túnel, y desde Internet ese puerto ni existe. Cada máquina genera su clave privada y no la saca de ahí: no pasa por Ansible ni por la plantilla.
 
-Las imágenes de Ubuntu de Oracle traen un iptables propio con un `REJECT` al final, guardado en `rules.v4`. El rol mete sus reglas antes, en el fichero y en caliente, sin `netfilter-persistent save`, que guardaría también las reglas de Docker.
+Algunas imágenes de Ubuntu de proveedores cloud traen un iptables propio con un `REJECT` al final, guardado en `rules.v4`. El rol mete sus reglas antes, en el fichero y en caliente, sin `netfilter-persistent save`, que guardaría también las reglas de Docker.
 
 ## Endurecimiento
 
