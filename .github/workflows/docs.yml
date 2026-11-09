@@ -6,6 +6,8 @@ on:
     paths: ["docs/**", "mkdocs.yml", "ansible/README.md", ".github/workflows/docs.yml"]
   pull_request:
     paths: ["docs/**", "mkdocs.yml", "ansible/README.md", ".github/workflows/docs.yml"]
+  # Para volver a publicar a mano (p. ej. si falló el despliegue por GitHub)
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,7 +35,7 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       pages: write
