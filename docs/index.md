@@ -7,7 +7,7 @@ Aquí no hay IPs, dominios ni credenciales. La configuración está en [Ansible]
 ## Máquinas
 
 - **Servidor de casa.** Dell OptiPlex con un i5-8500 (6 núcleos), 38 GB de RAM y un SSD de 256 GB. Un SSD NVMe externo de 250 GB por USB-C (10 Gbps), con LVM: copia local de los backups y NAS. Ubuntu Server 24.04, sin escritorio.
-- **Dos nodos en Oracle Cloud** (ARM, Ubuntu 22.04). Solo Docker y Wings: alojan servidores de juego y los gestiona el panel de casa. Se hablan con el servidor por un túnel WireGuard.
+- **Dos nodos externos** (ARM, Ubuntu 22.04). Solo Docker y Wings: alojan servidores de juego y los gestiona el panel de casa. Se hablan con el servidor por un túnel WireGuard.
 
 ## Qué corre
 

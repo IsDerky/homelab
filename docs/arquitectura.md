@@ -19,7 +19,7 @@ flowchart LR
         hp[Honeypot]
     end
 
-    subgraph oracle[Oracle Cloud]
+    subgraph externos[Nodos externos]
         nodos[2 nodos<br/>con Wings]
     end
 
@@ -42,7 +42,7 @@ flowchart LR
         runner[Runners]
     end
 
-    subgraph oracle[Oracle Cloud]
+    subgraph externos[Nodos externos]
         nodos[2 nodos<br/>node-exporter]
     end
 
