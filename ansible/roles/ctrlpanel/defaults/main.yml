@@ -4,6 +4,8 @@
 ctrlpanel_dir: /var/www/ctrlpanel
 ctrlpanel_user: ctrlpanel
 ctrlpanel_php: "8.3"
+# Usuario de nginx: solo puede atravesar ctrlpanel_dir para leer public/
+ctrlpanel_nginx_user: www-data
 
 # Nombre con el que se entra. Obligatorio.
 ctrlpanel_server_name: ""
