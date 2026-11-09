@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# Lo lanza ctrlpanel-planificador.timer cada minuto (antes, cron de root)
+[Unit]
+Description=CtrlPanel: tareas programadas (cobros, suspensiones...)
+After=network-online.target mariadb.service
+
+[Service]
+Type=oneshot
+User={{ ctrlpanel_user }}
+Group={{ ctrlpanel_user }}
+WorkingDirectory={{ ctrlpanel_dir }}
+ExecStart=/usr/bin/php {{ ctrlpanel_dir }}/artisan schedule:run
+# Cada minuto: sin esto llena el journal de "Starting/Finished"
+LogLevelMax=warning
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ ctrlpanel_dir }}/storage {{ ctrlpanel_dir }}/bootstrap/cache

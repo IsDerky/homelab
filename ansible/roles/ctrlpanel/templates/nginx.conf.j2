@@ -1,0 +1,47 @@
+# {{ ansible_managed }}
+# CtrlPanel en loopback: llega por el túnel de Cloudflare (cloudflared → aquí).
+# Sin TLS en este salto; PHP ve HTTPS por fastcgi_param.
+server {
+    listen 127.0.0.1:{{ ctrlpanel_port }};
+    server_name {{ ctrlpanel_server_name }};
+    root {{ ctrlpanel_dir }}/public;
+    index index.php;
+
+    access_log /var/log/nginx/ctrlpanel-access.log;
+    error_log /var/log/nginx/ctrlpanel-error.log error;
+
+    # La IP real la pone Cloudflare; solo se acepta si viene de cloudflared
+    set_real_ip_from 127.0.0.1;
+    real_ip_header CF-Connecting-IP;
+
+    client_max_body_size 100m;
+    client_body_timeout 120s;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Robots-Tag none always;
+    add_header Content-Security-Policy "frame-ancestors 'self'" always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy same-origin always;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:/run/php/php{{ ctrlpanel_php }}-fpm-ctrlpanel.sock;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param HTTPS on;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_buffer_size 16k;
+        fastcgi_buffers 4 16k;
+        fastcgi_read_timeout 300;
+    }
+
+    # .env, .git, .ht*... aunque estén fuera de public, por si acaso
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+}

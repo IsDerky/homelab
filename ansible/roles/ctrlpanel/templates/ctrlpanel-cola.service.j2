@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+[Unit]
+Description=CtrlPanel: cola de trabajos
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+User={{ ctrlpanel_user }}
+Group={{ ctrlpanel_user }}
+WorkingDirectory={{ ctrlpanel_dir }}
+# --max-time: se reinicia cada hora y coge el código nuevo si lo hay
+ExecStart=/usr/bin/php {{ ctrlpanel_dir }}/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ ctrlpanel_dir }}/storage {{ ctrlpanel_dir }}/bootstrap/cache
+
+[Install]
+WantedBy=multi-user.target

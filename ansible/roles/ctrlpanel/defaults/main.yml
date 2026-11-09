@@ -1,0 +1,24 @@
+---
+# CtrlPanel (Laravel): solo la parte de sistema. El código y el .env se traen
+# del sitio anterior (playbooks/migrar-ctrlpanel.yml); el rol no los genera.
+ctrlpanel_dir: /var/www/ctrlpanel
+ctrlpanel_user: ctrlpanel
+ctrlpanel_php: "8.3"
+
+# Nombre con el que se entra. Obligatorio.
+ctrlpanel_server_name: ""
+# nginx solo en loopback: delante va el túnel de Cloudflare
+ctrlpanel_port: 8085
+
+# Base de datos en el MariaDB local. La contraseña, en el vault.
+ctrlpanel_db_name: ctrlpanel
+ctrlpanel_db_user: ctrlpanel
+ctrlpanel_db_password: ""
+
+# Cola y planificador. El planificador cobra créditos y suspende servidores en
+# Pterodactyl: con dos copias encendidas a la vez lo haría dos veces. false =
+# todo instalado pero parado (para preparar una migración).
+ctrlpanel_enabled: false
+
+ctrlpanel_fpm_max_children: 5
+ctrlpanel_log_level: error

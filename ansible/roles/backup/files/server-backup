@@ -35,6 +35,7 @@ export RESTIC_PACK_SIZE=64
 STAGE=/var/backups/server-backup # volcados que se suben junto al resto
 BENTO=/home/bentonime/apps/bentonime
 VAULT=/opt/vaultwarden/data # si existe, su BD se vuelca como la de Bentonime
+CTRLPANEL=/var/www/ctrlpanel # si existe, va la app y se vuelca su BD
 
 SIMULACRO_RESULT=/var/lib/server-backup/simulacro.json # lo lee ops-collect
 
@@ -150,6 +151,7 @@ paths_sistema() {
   for f in "$BENTO/.env.production" "$BENTO/data/.stream-secret"; do
     if [ -e "$f" ]; then paths+=("$f"); fi
   done
+  if [ -d "$CTRLPANEL" ]; then paths+=("$CTRLPANEL"); fi
   # Métricas de Prometheus: se regeneran, y serían hasta 2 GB cada 6 h
   # Cachés de compilación de root: se regeneran solas
   excludes=(--exclude /root/.cache
@@ -161,7 +163,10 @@ paths_sistema() {
     --exclude /opt/honeypot/var
     --exclude /opt/monitoring/data/prometheus
     # La BD de Vaultwarden en uso: va el volcado de STAGE
-    --exclude "$VAULT/db.sqlite3*")
+    --exclude "$VAULT/db.sqlite3*"
+    --exclude "$CTRLPANEL/node_modules"
+    --exclude "$CTRLPANEL/storage/logs"
+    --exclude "$CTRLPANEL/storage/framework/cache")
   # Todas las de los últimos 7 días, luego 4 semanales y 12 mensuales (1 año)
   keep=(--keep-within 7d --keep-weekly 4 --keep-monthly 12)
 }
@@ -240,6 +245,10 @@ case "$mode" in
     fi
     step="BD del panel"
     mariadb-dump --single-transaction --routines --triggers --databases panel >"$STAGE/panel.sql"
+    if [ -n "$(mariadb -N -e "SHOW DATABASES LIKE 'ctrlpanel'")" ]; then
+      step="BD de CtrlPanel"
+      mariadb-dump --single-transaction --routines --triggers --databases ctrlpanel >"$STAGE/ctrlpanel.sql"
+    fi
     step="lista de paquetes"
     dpkg --get-selections >"$STAGE/paquetes.txt"
 
@@ -341,6 +350,13 @@ case "$mode" in
     tail -n 1 "$dumps/panel.sql" | grep -q 'Dump completed'
     tablas_panel=$(grep -c '^CREATE TABLE' "$dumps/panel.sql")
     [ "$tablas_panel" -gt 20 ]
+
+    if [ -f "$dumps/ctrlpanel.sql" ]; then
+      step="volcado de CtrlPanel"
+      tail -n 1 "$dumps/ctrlpanel.sql" | grep -q 'Dump completed'
+      tablas_ctrlpanel=$(grep -c '^CREATE TABLE' "$dumps/ctrlpanel.sql")
+      [ "$tablas_ctrlpanel" -gt 20 ]
+    fi
 
     step="lista de paquetes"
     paquetes=$(wc -l <"$dumps/paquetes.txt")

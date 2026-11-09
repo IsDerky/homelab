@@ -1,0 +1,277 @@
+---
+# Mueve CtrlPanel de un nodo de fuera al servidor, por fases (tags). Sin tags
+# no hace nada.
+#
+#   copia     trae la BD y la app del origen a ctrlpanel_copia (sin logs)
+#   instalar  la monta en el servidor con cola y planificador parados (se
+#             puede repetir; nadie la ve hasta cambiar el DNS)
+#   corte     origen en mantenimiento y sin cola ni cron, copia final,
+#             importar y encender en el servidor. Luego, cambiar el DNS.
+#   volver    deshace el corte en el origen (si algo sale mal)
+#   retirar   días después: apaga CtrlPanel en el origen (vhost, cola, cron,
+#             certificado). La app y la BD se quedan.
+#
+# La cola y el planificador nunca corren en los dos sitios a la vez: el
+# planificador cobra créditos y suspende servidores.
+
+- name: Copia desde el origen
+  hosts: "{{ ctrlpanel_origen | default('nodo2') }}"
+  become: true
+  tags: [never, copia, corte]
+  vars:
+    app: /var/www/ctrlpanel
+    tmp: /root/migracion-ctrlpanel
+    copia: "{{ ctrlpanel_copia | default(lookup('env', 'HOME') ~ '/copias/ctrlpanel') }}"
+    corte: "{{ 'corte' in ansible_run_tags }}"
+  tasks:
+    - name: La app está en el origen
+      ansible.builtin.stat:
+        path: "{{ app }}/artisan"
+      register: origen_app
+      failed_when: not origen_app.stat.exists
+
+    - name: Mantenimiento (corte)
+      ansible.builtin.command: runuser -u www-data -- php artisan down
+      args:
+        chdir: "{{ app }}"
+      when: corte
+      changed_when: true
+
+    - name: Parar la cola (corte)
+      ansible.builtin.systemd_service:
+        name: ctrlpanel.service
+        state: stopped
+        enabled: false
+      when: corte
+
+    # La línea no tiene nombre de Ansible: se comenta tal cual
+    - name: Quitar schedule:run del cron de root (corte)
+      ansible.builtin.shell: |
+        set -o pipefail
+        crontab -l | sed -E 's|^([^#].*artisan schedule:run.*)$|#MIGRADO \1|' | crontab -
+        crontab -l | grep -c '^#MIGRADO' || true
+      args:
+        executable: /bin/bash
+      when: corte
+      changed_when: true
+
+    - name: Carpeta temporal
+      ansible.builtin.file:
+        path: "{{ tmp }}"
+        state: directory
+        mode: "0700"
+
+    - name: Volcado de la BD
+      ansible.builtin.shell: |
+        set -o pipefail
+        db=$(grep -oP '^DB_DATABASE=\K.*' {{ app }}/.env)
+        mariadb-dump --single-transaction --routines --triggers "$db" > {{ tmp }}/ctrlpanel.sql
+        tail -n 1 {{ tmp }}/ctrlpanel.sql | grep -q 'Dump completed'
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    # Sin el log (2 GB en debug) ni node_modules (solo hace falta para compilar).
+    # tar y no archive: archive es de community.general y no excluye por patrón
+    # dentro del árbol igual
+    - name: Empaquetar la app  # noqa: command-instead-of-module
+      ansible.builtin.command: >-
+        tar czf {{ tmp }}/app.tar.gz -C /var/www
+        --exclude=ctrlpanel/storage/logs/*.log
+        --exclude=ctrlpanel/storage/debugbar
+        --exclude=ctrlpanel/node_modules
+        ctrlpanel
+      changed_when: true
+
+    - name: Carpeta local de la copia
+      ansible.builtin.file:
+        path: "{{ copia }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
+    - name: Traer la copia
+      ansible.builtin.fetch:
+        src: "{{ tmp }}/{{ item }}"
+        dest: "{{ copia }}/{{ item }}"
+        flat: true
+      loop: [ctrlpanel.sql, app.tar.gz]
+
+    - name: Borrar la temporal
+      ansible.builtin.file:
+        path: "{{ tmp }}"
+        state: absent
+
+    - name: Qué se ha traído
+      ansible.builtin.command: ls -lh {{ copia }}
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+- name: Instalar en el servidor
+  hosts: homelab
+  become: true
+  tags: [never, instalar, corte]
+  vars:
+    tmp: /root/migracion-ctrlpanel
+    copia: "{{ ctrlpanel_copia | default(lookup('env', 'HOME') ~ '/copias/ctrlpanel') }}"
+    corte: "{{ 'corte' in ansible_run_tags }}"
+  tasks:
+    # public: el resto del play usa ctrlpanel_dir, ctrlpanel_user...
+    - name: Sistema (usuario, PHP-FPM, BD, vhost, unidades), todo parado
+      ansible.builtin.include_role:
+        name: ctrlpanel
+        public: true
+      vars:
+        ctrlpanel_enabled: false
+
+    - name: Parar cola y planificador si ya estaban (repetir instalar)
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+      loop: [ctrlpanel-cola.service, ctrlpanel-planificador.timer]
+
+    - name: Carpeta temporal
+      ansible.builtin.file:
+        path: "{{ tmp }}"
+        state: directory
+        mode: "0700"
+
+    - name: Subir la copia
+      ansible.builtin.copy:
+        src: "{{ copia }}/{{ item }}"
+        dest: "{{ tmp }}/{{ item }}"
+        mode: "0600"
+      loop: [ctrlpanel.sql, app.tar.gz]
+
+    - name: Desempaquetar la app
+      ansible.builtin.unarchive:
+        src: "{{ tmp }}/app.tar.gz"
+        dest: /var/www
+        remote_src: true
+        owner: "{{ ctrlpanel_user }}"
+        group: "{{ ctrlpanel_user }}"
+
+    # El volcado lleva DROP TABLE IF EXISTS: se puede repetir
+    - name: Importar la BD
+      ansible.builtin.shell: mariadb {{ ctrlpanel_db_name }} < {{ tmp }}/ctrlpanel.sql
+      changed_when: true
+
+    - name: Cachés de Laravel
+      ansible.builtin.command: runuser -u {{ ctrlpanel_user }} -- php artisan {{ item }}
+      args:
+        chdir: "{{ ctrlpanel_dir }}"
+      loop: [view:clear, route:clear]
+      changed_when: true
+
+    # La copia del corte se hizo con el origen ya en mantenimiento. Antes de
+    # que el rol compruebe que responde.
+    - name: Fuera de mantenimiento (corte)
+      ansible.builtin.command: runuser -u {{ ctrlpanel_user }} -- php artisan up
+      args:
+        chdir: "{{ ctrlpanel_dir }}"
+      when: corte
+      changed_when: true
+
+    # Otra vez: el .env que viene del origen trae su BD y nivel debug. En el
+    # corte, además, enciende cola y planificador.
+    - name: Ajustes del servidor sobre lo importado
+      ansible.builtin.include_role:
+        name: ctrlpanel
+      vars:
+        ctrlpanel_enabled: "{{ corte }}"
+
+    - name: Borrar la temporal
+      ansible.builtin.file:
+        path: "{{ tmp }}"
+        state: absent
+
+    - name: Datos importados
+      ansible.builtin.command: >-
+        mariadb -N {{ ctrlpanel_db_name }} -e "SELECT
+        (SELECT COUNT(*) FROM users), (SELECT COUNT(*) FROM servers),
+        (SELECT COUNT(*) FROM payments), (SELECT MAX(created_at) FROM payments)"
+      register: ctrlpanel_datos
+      changed_when: false
+
+    - name: Resumen
+      ansible.builtin.debug:
+        msg: "usuarios, servidores, pagos, último pago: {{ ctrlpanel_datos.stdout }}"
+
+# Primero se para aquí: nunca las dos copias cobrando a la vez
+- name: Parar en el servidor
+  hosts: homelab
+  become: true
+  tags: [never, volver]
+  tasks:
+    - name: Cola y planificador parados
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop: [ctrlpanel-cola.service, ctrlpanel-planificador.timer]
+
+- name: Volver al origen
+  hosts: "{{ ctrlpanel_origen | default('nodo2') }}"
+  become: true
+  tags: [never, volver]
+  vars:
+    app: /var/www/ctrlpanel
+  tasks:
+    - name: Cron de root como estaba
+      ansible.builtin.shell: |
+        set -o pipefail
+        crontab -l | sed -E 's|^#MIGRADO ||' | crontab -
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Cola
+      ansible.builtin.systemd_service:
+        name: ctrlpanel.service
+        state: started
+        enabled: true
+
+    - name: Fuera de mantenimiento
+      ansible.builtin.command: runuser -u www-data -- php artisan up
+      args:
+        chdir: "{{ app }}"
+      changed_when: true
+
+- name: Retirar del origen
+  hosts: "{{ ctrlpanel_origen | default('nodo2') }}"
+  become: true
+  tags: [never, retirar]
+  tasks:
+    - name: Sin vhost
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/ctrlpanel.conf
+        state: absent
+      notify: Recargar nginx
+
+    - name: Cola parada
+      ansible.builtin.systemd_service:
+        name: ctrlpanel.service
+        state: stopped
+        enabled: false
+
+    - name: Fuera la línea comentada del cron
+      ansible.builtin.shell: |
+        set -o pipefail
+        # grep -v da 1 si no queda ninguna línea (crontab vacío): no es un fallo
+        crontab -l | { grep -v '^#MIGRADO .*artisan schedule:run' || true; } | crontab -
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    # Ya no apunta aquí: cada renovación fallaría
+    - name: Certificado del nombre
+      ansible.builtin.command: certbot delete -n --cert-name {{ ctrlpanel_server_name | default('client.derkyu.lol') }}
+      args:
+        removes: /etc/letsencrypt/renewal/{{ ctrlpanel_server_name | default('client.derkyu.lol') }}.conf
+
+  handlers:
+    - name: Recargar nginx
+      ansible.builtin.shell: nginx -t && systemctl reload nginx
+      changed_when: true

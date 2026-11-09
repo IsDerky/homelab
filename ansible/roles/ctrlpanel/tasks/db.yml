@@ -1,0 +1,32 @@
+---
+# Con el cliente mariadb como root por socket: sin PyMySQL en el servidor. La
+# contraseña va por stdin, no en la línea de comandos (se vería en ps).
+- name: ¿Existe ya el usuario de la BD?
+  ansible.builtin.command: >-
+    mariadb -N -e "SELECT COUNT(*) FROM mysql.user
+    WHERE user = '{{ ctrlpanel_db_user }}' AND host = 'localhost'"
+  register: ctrlpanel_db_user_exists
+  changed_when: false
+  check_mode: false
+
+- name: Base de datos y usuario
+  ansible.builtin.command:
+    cmd: mariadb
+    stdin: |
+      CREATE DATABASE IF NOT EXISTS `{{ ctrlpanel_db_name }}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '{{ ctrlpanel_db_user }}'@'localhost' IDENTIFIED BY '{{ ctrlpanel_db_password }}';
+      GRANT ALL PRIVILEGES ON `{{ ctrlpanel_db_name }}`.* TO '{{ ctrlpanel_db_user }}'@'localhost';
+  no_log: true
+  when: ctrlpanel_db_user_exists.stdout | trim == '0'
+  changed_when: true
+
+# Si el usuario ya existe, que la contraseña siga siendo la del vault
+- name: La contraseña del vault entra
+  ansible.builtin.command:
+    cmd: mariadb -u {{ ctrlpanel_db_user }} -h 127.0.0.1 -e "SELECT 1" {{ ctrlpanel_db_name }}
+  environment:
+    MYSQL_PWD: "{{ ctrlpanel_db_password }}"
+  no_log: true
+  changed_when: false
+  check_mode: false
+  when: ctrlpanel_db_user_exists.stdout | trim != '0'
