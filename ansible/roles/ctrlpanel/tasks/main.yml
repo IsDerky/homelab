@@ -158,8 +158,8 @@
     url: http://127.0.0.1:{{ ctrlpanel_port }}/login
     headers:
       Host: "{{ ctrlpanel_server_name }}"
-  register: ctrlpanel_check
-  until: ctrlpanel_check.status == 200
+  register: ctrlpanel_respuesta
+  until: ctrlpanel_respuesta.status == 200
   retries: 6
   delay: 5
   changed_when: false
