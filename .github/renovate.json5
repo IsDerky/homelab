@@ -1,0 +1,30 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['github>IsDerky/ci'],
+  customManagers: [
+    {
+      // adguard_image: adguard/adguardhome:v0.107.79, prometheus: prom/prometheus:v3.15.1...
+      customType: 'regex',
+      description: 'Imágenes en los defaults de los roles',
+      managerFilePatterns: ['/^ansible/roles/[^/]+/defaults/main\\.yml$/'],
+      matchStrings: ['[a-z_]+: (?<depName>[a-z0-9.-]+(?:/[a-z0-9._-]+)+):(?<currentValue>v?\\d[\\w.-]*)'],
+      datasourceTemplate: 'docker',
+    },
+    {
+      // restic, rclone y Wings: las sumas las pone .github/workflows/renovate-sumas.yml
+      customType: 'regex',
+      description: 'Binarios con versión fija',
+      managerFilePatterns: ['/^ansible/roles/[^/]+/defaults/main\\.yml$/'],
+      matchStrings: ['# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[a-z_]+: (?<currentValue>\\S+)'],
+      extractVersionTemplate: '^v?(?<version>.*)$',
+    },
+  ],
+  packageRules: [
+    {
+      // Va a los nodos de los amigos y tiene que casar con el panel
+      description: 'Wings solo cuando se pida desde el dashboard',
+      matchDepNames: ['pterodactyl/wings'],
+      dependencyDashboardApproval: true,
+    },
+  ],
+}

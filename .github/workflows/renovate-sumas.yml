@@ -1,0 +1,32 @@
+name: Sumas de Renovate
+
+# Renovate sube la versión de restic/rclone/Wings pero no las sumas SHA-256:
+# se ponen aquí y se suben a la misma rama del PR.
+
+on:
+  pull_request:
+    paths:
+      - ansible/roles/backup/defaults/main.yml
+      - ansible/roles/pterodactyl/defaults/main.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sumas:
+    if: github.actor == 'renovate[bot]' && startsWith(github.head_ref, 'renovate/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref }}
+      - run: python3 .github/scripts/sumas.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Commit si ha cambiado algo
+        run: |
+          git diff --quiet && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "Sumas SHA-256 de la versión nueva"
+          git push
