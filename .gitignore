@@ -4,3 +4,5 @@ ansible/group_vars/
 __pycache__/
 # caché de ansible-lint
 .ansible/
+docs/ansible.md
+site/

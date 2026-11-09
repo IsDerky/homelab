@@ -1,0 +1,46 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "mkdocs.yml", "ansible/README.md", ".github/workflows/docs.yml"]
+  pull_request:
+    paths: ["docs/**", "mkdocs.yml", "ansible/README.md", ".github/workflows/docs.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install mkdocs-material==9.8.1
+      # La página de Ansible es su README, con los enlaces a docs/ corregidos
+      - name: Página de Ansible
+        run: sed 's#](\.\./docs/#](#g' ansible/README.md > docs/ansible.md
+      - run: mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
