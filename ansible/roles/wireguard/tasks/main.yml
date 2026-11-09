@@ -52,7 +52,7 @@
     mode: "0600"
   notify: Reiniciar wireguard
 
-# Imágenes de Oracle: iptables con REJECT al final de INPUT, guardado en
+# Algunas imágenes cloud traen iptables con REJECT al final de INPUT, guardado en
 # rules.v4. Sin esto no entra el UDP del túnel ni lo que llega por él.
 - name: Reglas de iptables de la imagen
   ansible.builtin.import_tasks: iptables.yml

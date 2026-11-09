@@ -5,7 +5,7 @@
   roles:
     - ssh
 
-# Nodos de Oracle: entran con el usuario de la imagen (ubuntu). Las claves de
+# Nodos externos: entran con el usuario de la imagen (ubuntu). Las claves de
 # admin van antes de quitar la contraseña, para no quedarse fuera.
 - name: SSH de los nodos de Wings remotos
   hosts: wings_remotos

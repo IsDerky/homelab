@@ -5,3 +5,12 @@
   roles:
     - ufw
     - fail2ban
+
+# Nodos externos: solo ufw. Los puertos de juego no van aquí: los publica
+# Docker (Wings) con sus propias reglas, que pasan antes que las de ufw.
+- name: Cortafuegos de los nodos de Wings remotos
+  hosts: wings_remotos
+  become: true
+  roles:
+    - role: ufw
+      when: ufw_rules | length > 0
