@@ -8,6 +8,7 @@ backup_packages:
 # restic y rclone con los binarios oficiales, no los de Ubuntu (noble trae
 # restic 0.16 y un rclone de 2022). Sumas SHA-256 de cada descarga por
 # arquitectura: restic de la API de GitHub de la release, rclone de su SHA256SUMS.
+# renovate: datasource=github-releases depName=restic/restic
 backup_restic_version: 0.19.1
 backup_restic_sha256:
   amd64: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
@@ -17,6 +18,7 @@ backup_restic_sha256:
 backup_restic_asset_id:
   amd64: 466999719
   arm64: 466999588
+# renovate: datasource=github-releases depName=rclone/rclone
 backup_rclone_version: 1.75.2
 backup_rclone_sha256:
   amd64: 349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702

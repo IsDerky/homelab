@@ -1,6 +1,7 @@
 ---
 # Wings con versión fija y el SHA-256 de cada binario (los da la API de GitHub
 # de la release). Si el que hay instalado ya coincide, no se descarga nada.
+# renovate: datasource=github-releases depName=pterodactyl/wings
 pterodactyl_wings_version: 1.13.4
 pterodactyl_wings_sha256:
   amd64: 7e763389bb5d386a7d32ccdd46cffcf1ab9ed697e5c2aca7fe44183b527cd4c0
