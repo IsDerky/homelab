@@ -1,0 +1,59 @@
+site_name: homelab
+site_description: Cómo está montado mi servidor casero
+site_author: Alex Miguel (Derkyu)
+site_url: https://isderky.github.io/homelab/
+repo_url: https://github.com/IsDerky/homelab
+edit_uri: ""
+copyright: MIT · Alex Miguel (Derkyu)
+
+theme:
+  name: material
+  language: es
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Modo oscuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Modo claro
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Inicio: index.md
+  - Arquitectura: arquitectura.md
+  - Red y seguridad: red-y-seguridad.md
+  - Backups: backups.md
+  - Vigilancia: vigilancia.md
+  - CI/CD: cicd.md
+  - Decisiones: decisiones.md
+  - Ansible: ansible.md
+  - Runbooks:
+      - Panel por el túnel: runbook-panel-por-tunel.md
+      - Migración del VPS: runbook-migracion-vps.md

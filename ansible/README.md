@@ -99,8 +99,6 @@ El modo `nas` copia la carpeta del NAS a Drive a diario. No a local: estaría en
 
 Cada ejecución deja su resultado en `/var/lib/server-backup/estado/<modo>-<destino>.json` (si fue bien, cuándo, la última vez que fue bien y la antigüedad máxima aceptable). `ops-exporter` lo publica y el rol `monitoring` avisa si una copia local falla o si alguna copia se queda atrás. Los fallos de Drive siguen avisando por DM desde el script, como antes.
 
-| Variable | Por defecto | |
-|---|---|---|
 ### Nodos de Wings de fuera
 
 Los volúmenes de los nodos remotos (`backup_remote_nodes`) entran en la copia de `clientes`. Antes de subir, el servidor los trae por rsync a `/var/lib/server-backup/nodos/<nodo>` y restic los sube con los de aquí, a Drive y al disco local, con la misma retención. Esa carpeta se queda entre copias, así que cada día solo viaja lo que ha cambiado.
