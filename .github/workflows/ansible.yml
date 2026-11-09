@@ -12,16 +12,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - run: pipx install ansible-lint && pipx inject ansible-lint ansible-core
-      - working-directory: ansible
-        run: |
-          # El ansible-galaxy del runner ya trae las colecciones, pero ansible-lint
-          # (pipx) no las ve: se instalan donde las busca
-          ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --force
-          ansible-lint playbooks roles
+    uses: IsDerky/ci/.github/workflows/ansible.yml@v1
 
   monitoring:
     name: Tests del rol monitoring
