@@ -163,4 +163,4 @@
   retries: 6
   delay: 5
   changed_when: false
-  when: ctrlpanel_artisan.stat.exists and ctrlpanel_env.stat.exists and not ansible_check_mode
+  when: ctrlpanel_check | bool and ctrlpanel_artisan.stat.exists and ctrlpanel_env.stat.exists and not ansible_check_mode

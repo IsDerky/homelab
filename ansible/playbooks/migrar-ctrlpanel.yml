@@ -158,15 +158,33 @@
       ansible.builtin.shell: mariadb {{ ctrlpanel_db_name }} < {{ tmp }}/ctrlpanel.sql
       changed_when: true
 
+    # Cachés del origen, a mano: cualquier comando de artisan arranca la app y
+    # se conecta a la BD, y config.php guarda la del origen
+    - name: Cachés del origen fuera
+      ansible.builtin.shell: >-
+        rm -f bootstrap/cache/config.php bootstrap/cache/routes-*.php bootstrap/cache/events.php
+        && find storage/framework/views storage/framework/cache/data -type f ! -name .gitignore -delete 2>/dev/null; true
+      args:
+        chdir: "{{ ctrlpanel_dir }}"
+      changed_when: true
+
+    # Antes de cualquier artisan: el .env que viene del origen trae su BD y
+    # nivel debug. Sin comprobar que responde (en el corte sigue en mantenimiento).
+    - name: Ajustes del servidor sobre lo importado
+      ansible.builtin.include_role:
+        name: ctrlpanel
+      vars:
+        ctrlpanel_enabled: false
+        ctrlpanel_check: false
+
     - name: Cachés de Laravel
       ansible.builtin.command: runuser -u {{ ctrlpanel_user }} -- php artisan {{ item }}
       args:
         chdir: "{{ ctrlpanel_dir }}"
-      loop: [view:clear, route:clear]
+      loop: [config:clear, view:clear, route:clear]
       changed_when: true
 
-    # La copia del corte se hizo con el origen ya en mantenimiento. Antes de
-    # que el rol compruebe que responde.
+    # La copia del corte se hizo con el origen ya en mantenimiento
     - name: Fuera de mantenimiento (corte)
       ansible.builtin.command: runuser -u {{ ctrlpanel_user }} -- php artisan up
       args:
@@ -174,9 +192,8 @@
       when: corte
       changed_when: true
 
-    # Otra vez: el .env que viene del origen trae su BD y nivel debug. En el
-    # corte, además, enciende cola y planificador.
-    - name: Ajustes del servidor sobre lo importado
+    # Ahora sí, que responda. En el corte, además, cola y planificador.
+    - name: Responde (y en el corte, encender)
       ansible.builtin.include_role:
         name: ctrlpanel
       vars:
