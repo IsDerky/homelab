@@ -10,3 +10,5 @@
   args:
     chdir: "{{ vaultwarden_dir }}"
   changed_when: true
+  # En --check la carpeta nueva no existe y command no hace nada de todas formas
+  when: not ansible_check_mode
