@@ -1,0 +1,166 @@
+---
+- name: Paquetes
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - tar
+    state: present
+
+# Los runners corren como deployer; webbuild compila las webs sin privilegios
+# (npm y pnpm ejecutan scripts de terceros)
+- name: Usuarios deployer y webbuild (sin shell ni contraseña)
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    system: true
+    create_home: true
+    home: "{{ item.home }}"
+    shell: /usr/sbin/nologin
+    password_lock: true
+  loop:
+    - { name: deployer, home: /home/deployer }
+    - { name: webbuild, home: /var/lib/webbuild }
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Script deploy-repo
+  ansible.builtin.copy:
+    src: deploy-repo
+    dest: /usr/local/sbin/deploy-repo
+    owner: root
+    group: root
+    mode: "0755"
+    validate: bash -n %s
+
+- name: Sudo de deployer (solo deploy-repo)
+  ansible.builtin.template:
+    src: sudoers-deployer.j2
+    dest: /etc/sudoers.d/deployer
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+
+- name: Carpeta de deploy-repo
+  ansible.builtin.file:
+    path: /etc/deploy-repo
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clave de host de GitHub fijada
+  ansible.builtin.copy:
+    content: "{{ ci_github_host_key }}\n"
+    dest: /etc/deploy-repo/known_hosts
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Carpeta .ssh de root
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Deploy keys (una por repo)
+  ansible.builtin.command: >-
+    ssh-keygen -q -t ed25519 -N "" -C "deploy-repo {{ item.nombre }}@{{ ansible_hostname }}"
+    -f /root/.ssh/deploy-{{ item.nombre }}
+  args:
+    creates: /root/.ssh/deploy-{{ item.nombre }}
+  loop: "{{ ci_repos }}"
+  loop_control:
+    label: "{{ item.nombre }}"
+
+- name: Leer las deploy keys públicas
+  ansible.builtin.slurp:
+    src: /root/.ssh/deploy-{{ item.nombre }}.pub
+  loop: "{{ ci_repos }}"
+  loop_control:
+    label: "{{ item.nombre }}"
+  register: ci_pub
+  when: ci_github | bool and not ansible_check_mode
+
+- name: Deploy keys en GitHub (solo lectura)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if gh api "repos/{{ ci_owner }}/{{ item.item.github }}/keys" --jq '.[].key' | grep -qxF "$CLAVE"; then
+      echo ya
+    else
+      gh api "repos/{{ ci_owner }}/{{ item.item.github }}/keys" \
+        -f title="deploy-repo (servidor)" -f key="$CLAVE" -F read_only=true >/dev/null
+      echo añadida
+    fi
+  args:
+    executable: /bin/bash
+  environment:
+    CLAVE: "{{ (item.content | b64decode).split()[:2] | join(' ') }}"
+  loop: "{{ ci_pub.results }}"
+  loop_control:
+    label: "{{ item.item.nombre }}"
+  register: ci_keys_github
+  changed_when: "'añadida' in ci_keys_github.stdout"
+  delegate_to: localhost
+  become: false
+  when: ci_github | bool and not ansible_check_mode
+
+- name: ¿Runners registrados?
+  ansible.builtin.stat:
+    path: "{{ ci_runners_dir }}/{{ item.nombre }}/.runner"
+  loop: "{{ ci_repos }}"
+  loop_control:
+    label: "{{ item.nombre }}"
+  register: ci_runner_stat
+
+- name: Runners por registrar
+  ansible.builtin.set_fact:
+    ci_runners_nuevos: "{{ ci_runner_stat.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
+
+- name: Sin gh no se registran
+  ansible.builtin.debug:
+    msg: "Sin runner (ci_github: false): {{ ci_runners_nuevos | map(attribute='nombre') | join(', ') }}"
+  when: ci_runners_nuevos | length > 0 and not ci_github | bool
+
+- name: Registrar runners nuevos
+  ansible.builtin.include_tasks: runner.yml
+  loop: "{{ ci_runners_nuevos }}"
+  loop_control:
+    loop_var: ci_repo
+    label: "{{ ci_repo.nombre }}"
+  when: ci_github | bool and not ansible_check_mode
+
+# svc.sh deja en .service el nombre de la unidad que ha creado
+- name: ¿Unidad de cada runner?
+  ansible.builtin.stat:
+    path: "{{ ci_runners_dir }}/{{ item.nombre }}/.service"
+  loop: "{{ ci_repos }}"
+  loop_control:
+    label: "{{ item.nombre }}"
+  register: ci_service_stat
+
+- name: Leer el nombre de las unidades
+  ansible.builtin.slurp:
+    src: "{{ item.stat.path }}"
+  loop: "{{ ci_service_stat.results | selectattr('stat.exists') | list }}"
+  loop_control:
+    label: "{{ item.item.nombre }}"
+  register: ci_service
+
+- name: Runners en marcha
+  ansible.builtin.systemd_service:
+    name: "{{ item.content | b64decode | trim }}"
+    enabled: true
+    state: started
+  loop: "{{ ci_service.results }}"
+  loop_control:
+    label: "{{ item.item.item.nombre }}"
+
+- name: Retirar runners que ya no se usan
+  ansible.builtin.include_tasks: retirar.yml
+  loop: "{{ ci_repos_retirados }}"
+  loop_control:
+    loop_var: ci_viejo
+    label: "{{ ci_viejo.nombre }}"

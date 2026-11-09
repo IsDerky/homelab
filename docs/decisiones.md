@@ -13,4 +13,4 @@
 ## Pendiente
 
 - Reconstruir el servidor en una VM vacía solo con `site.yml`, para probar que de verdad basta.
-- Pasar a Ansible lo que todavía va a mano: los runners de CI y el panel de Pterodactyl.
+- Pasar a Ansible lo que todavía va a mano: el panel de Pterodactyl.

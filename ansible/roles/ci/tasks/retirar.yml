@@ -1,0 +1,73 @@
+---
+# Quita del todo el runner de ci_viejo: unidad, carpeta, copia del repo, deploy
+# key y, con ci_github, su registro y su deploy key en GitHub. La baja en
+# GitHub va antes de borrar la clave, que hace falta para encontrarla.
+- name: ¿Sigue el runner de {{ ci_viejo.nombre }}?
+  ansible.builtin.stat:
+    path: "{{ ci_runners_dir }}/{{ ci_viejo.nombre }}/.service"
+  register: ci_viejo_service
+
+- name: Parar y quitar la unidad
+  when: ci_viejo_service.stat.exists
+  block:
+    - name: Nombre de la unidad
+      ansible.builtin.slurp:
+        src: "{{ ci_viejo_service.stat.path }}"
+      register: ci_viejo_unidad
+
+    - name: Parar el runner
+      ansible.builtin.systemd_service:
+        name: "{{ ci_viejo_unidad.content | b64decode | trim }}"
+        enabled: false
+        state: stopped
+
+    - name: Quitar la unidad
+      ansible.builtin.command: ./svc.sh uninstall
+      args:
+        chdir: "{{ ci_runners_dir }}/{{ ci_viejo.nombre }}"
+      changed_when: true
+      when: not ansible_check_mode
+
+- name: ¿Queda su deploy key?
+  ansible.builtin.stat:
+    path: /root/.ssh/deploy-{{ ci_viejo.nombre }}.pub
+  register: ci_viejo_pub
+
+- name: Leer su deploy key
+  ansible.builtin.slurp:
+    src: "{{ ci_viejo_pub.stat.path }}"
+  register: ci_viejo_clave
+  when: ci_viejo_pub.stat.exists
+
+- name: Baja en GitHub (runner y deploy key)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    R="repos/{{ ci_owner }}/{{ ci_viejo.github }}"
+    for id in $(gh api "$R/actions/runners" --jq ".runners[] | select(.name == \"$NOMBRE\") | .id"); do
+      gh api -X DELETE "$R/actions/runners/$id" && echo "baja runner $id"
+    done
+    if [ -n "$CLAVE" ]; then
+      for id in $(gh api "$R/keys" --jq ".[] | select(.key == \"$CLAVE\") | .id"); do
+        gh api -X DELETE "$R/keys/$id" && echo "baja clave $id"
+      done
+    fi
+  args:
+    executable: /bin/bash
+  environment:
+    NOMBRE: "{{ ansible_hostname }}-{{ ci_viejo.nombre }}"
+    CLAVE: "{{ (ci_viejo_clave.content | b64decode).split()[:2] | join(' ') if ci_viejo_pub.stat.exists else '' }}"
+  register: ci_viejo_baja
+  changed_when: "'baja' in ci_viejo_baja.stdout"
+  delegate_to: localhost
+  become: false
+  when: ci_github | bool and not ansible_check_mode
+
+- name: Borrar carpeta, copia del repo y deploy key
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ ci_runners_dir }}/{{ ci_viejo.nombre }}"
+    - /var/lib/deploy-repo/{{ ci_viejo.nombre }}
+    - /root/.ssh/deploy-{{ ci_viejo.nombre }}
+    - /root/.ssh/deploy-{{ ci_viejo.nombre }}.pub

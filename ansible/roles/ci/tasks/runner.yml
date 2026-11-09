@@ -1,0 +1,92 @@
+---
+# Un runner nuevo para ci_repo. La versión no se fija: el runner se actualiza
+# solo, así que solo importa al registrarlo. Se comprueba con la sha256 que
+# GitHub publica en las notas de la versión.
+- name: Última versión del runner ({{ ci_repo.nombre }})
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/actions/runner/releases/latest
+  register: ci_runner_release
+  delegate_to: localhost
+  become: false
+
+- name: Versión y sha256
+  ansible.builtin.set_fact:
+    ci_runner_version: "{{ ci_runner_release.json.tag_name | regex_replace('^v', '') }}"
+    ci_runner_sha256: >-
+      {{ ci_runner_release.json.body
+         | regex_search('<!-- BEGIN SHA linux-x64 -->([0-9a-f]{64})<!-- END SHA linux-x64 -->', '\1')
+         | first }}
+
+- name: Carpeta de descargas
+  ansible.builtin.file:
+    path: "{{ ci_runners_dir }}/_dist"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Descargar el runner {{ ci_runner_version }}
+  ansible.builtin.get_url:
+    url: https://github.com/actions/runner/releases/download/v{{ ci_runner_version }}/actions-runner-linux-x64-{{ ci_runner_version }}.tar.gz
+    dest: "{{ ci_runners_dir }}/_dist/actions-runner-linux-x64-{{ ci_runner_version }}.tar.gz"
+    checksum: sha256:{{ ci_runner_sha256 }}
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Carpeta del runner
+  ansible.builtin.file:
+    path: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}"
+    state: directory
+    owner: deployer
+    group: deployer
+    mode: "0750"
+
+- name: Desempaquetar
+  ansible.builtin.unarchive:
+    src: "{{ ci_runners_dir }}/_dist/actions-runner-linux-x64-{{ ci_runner_version }}.tar.gz"
+    dest: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}"
+    remote_src: true
+    owner: deployer
+    group: deployer
+
+# Caduca en 1 h y solo vale para registrar: no se guarda en ningún sitio
+- name: Token de registro
+  ansible.builtin.command: >-
+    gh api -X POST repos/{{ ci_owner }}/{{ ci_repo.github }}/actions/runners/registration-token --jq .token
+  register: ci_token
+  changed_when: false
+  no_log: true
+  delegate_to: localhost
+  become: false
+
+# Desde su carpeta: config.sh comprueba sus librerías con rutas ./bin/…
+- name: Registrar en GitHub
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - deployer
+      - --
+      - ./config.sh
+      - --unattended
+      - --replace
+      - --url
+      - https://github.com/{{ ci_owner }}/{{ ci_repo.github }}
+      - --token
+      - "{{ ci_token.stdout }}"
+      - --name
+      - "{{ ansible_hostname }}-{{ ci_repo.nombre }}"
+      - --labels
+      - "{{ ci_repo.nombre }}"
+      - --work
+      - _work
+    chdir: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}"
+    creates: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}/.runner"
+  no_log: true
+
+- name: Unidad del runner
+  ansible.builtin.command: ./svc.sh install deployer
+  args:
+    chdir: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}"
+    creates: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}/.service"

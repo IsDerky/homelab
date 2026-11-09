@@ -1,0 +1,27 @@
+---
+# CI/CD por runner: cada repo tiene su runner de GitHub Actions en el servidor
+# (usuario deployer) y lo único que puede hacer con sudo es
+# `deploy-repo <repo> <sha>`, que trae el commit con una deploy key de solo
+# lectura y solo si ya está en main.
+ci_owner: IsDerky
+
+# nombre: etiqueta del runner y argumento de deploy-repo; github: el repo.
+# Tienen que coincidir con los casos de files/deploy-repo.
+ci_repos:
+  - { nombre: oficina, github: oficina }
+  - { nombre: asistente, github: asistente }
+  - { nombre: hosting, github: hosting.derkyu.lol }
+  - { nombre: roninfc, github: roninfc }
+
+# Los que ya no despliegan por aquí: se para el runner, se borra todo y se da
+# de baja en GitHub (runner y deploy key). Mismo formato que ci_repos.
+ci_repos_retirados: []
+
+ci_runners_dir: /opt/actions-runner
+
+# Deploy keys y registro de runners nuevos, desde el controlador con `gh`
+# logueado. false = solo la parte del servidor.
+ci_github: true
+
+# Clave de host de GitHub (docs.github.com, "GitHub's SSH key fingerprints")
+ci_github_host_key: github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl

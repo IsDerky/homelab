@@ -1,0 +1,182 @@
+#!/bin/bash
+# Despliega un repo permitido (oficina | asistente | hosting | roninfc) en un commit de su rama main.
+# Es lo ÚNICO que el usuario deployer (el de los runners de GitHub) puede
+# ejecutar con sudo:   sudo /usr/local/sbin/deploy-repo <repo> <sha>
+#
+# No usa nada de la carpeta del runner: trae el repo él mismo a una copia de
+# root, con una deploy key de solo lectura, y solo instala commits que ya
+# estén en origin/main. Así, quien tome el runner solo puede desplegar lo que
+# ya está publicado, no colar código propio como root.
+#
+# Mientras trabaja deja /run/oficina-obras/<repo> (la oficina pinta las obras).
+# Si falla, avisa por DM (discord-dm); si va bien, no molesta.
+set -euo pipefail
+
+REPO="${1:-}"
+SHA="${2:-}"
+case "$REPO" in
+  oficina | asistente | roninfc) GH_REPO=$REPO ;;
+  hosting) GH_REPO=hosting.derkyu.lol ;;
+  *) echo "deploy-repo: repo no permitido: '$REPO'" >&2; exit 2 ;;
+esac
+[[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "deploy-repo: sha inválido: '$SHA'" >&2; exit 2; }
+[[ $EUID -eq 0 ]] || { echo "deploy-repo: necesita root (vía sudo)" >&2; exit 1; }
+
+OWNER=IsDerky
+DIR=/var/lib/deploy-repo/$REPO
+OBRAS=/run/oficina-obras
+KEY=/root/.ssh/deploy-$REPO
+KNOWN=/etc/deploy-repo/known_hosts
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$KNOWN -o StrictHostKeyChecking=yes -o BatchMode=yes"
+
+log() { echo "==> $*"; }
+
+# Un despliegue de cada repo a la vez.
+exec 9>"/run/lock/deploy-repo-$REPO.lock"
+flock 9
+
+# Obras en la oficina mientras dura (opsbot solo necesita leer la carpeta).
+install -d -m 755 "$OBRAS"
+touch "$OBRAS/$REPO"
+phase=preparar
+finish() {
+  local code=$?
+  rm -f "$OBRAS/$REPO"
+  if [[ $code -ne 0 ]]; then
+    /usr/local/bin/discord-dm "Falló el despliegue de $REPO ${SHA:0:7} (fase: $phase). Mira el run en GitHub Actions." || true
+  fi
+  exit "$code"
+}
+trap finish EXIT
+
+log "Trayendo $REPO"
+install -d -m 700 /var/lib/deploy-repo
+if [[ ! -d $DIR/.git ]]; then
+  git clone --quiet "git@github.com:$OWNER/$GH_REPO.git" "$DIR"
+fi
+git -C "$DIR" fetch --quiet origin main
+git -C "$DIR" merge-base --is-ancestor "$SHA" origin/main ||
+  { echo "deploy-repo: ${SHA:0:7} no está en origin/main" >&2; exit 3; }
+git -C "$DIR" checkout --quiet --force --detach "$SHA"
+git -C "$DIR" clean --quiet -fdx
+
+cd "$DIR"
+case "$REPO" in
+  oficina)
+    phase=compilar
+    log "Compilando ${SHA:0:7}"
+    bun run build
+    phase=instalar
+    log "Instalando"
+    bash deploy/install.sh
+    ;;
+  asistente)
+    # Bot, recolector y polkit. Usa el Bun ya instalado (/usr/local/bin/bun) y
+    # no pregunta nada: las claves ya están en /etc/asistente.env y sin
+    # terminal install.sh no las pide. El vigilante (Cloudflare) va aparte.
+    phase=instalar
+    log "Instalando ${SHA:0:7}"
+    bash deploy/install.sh </dev/null
+    ;;
+  hosting)
+    # Web estática (Vite) que viene de la VPS de Hostinger. Se compila con
+    # webbuild (sin privilegios: npm ci ejecuta scripts de terceros) sobre una
+    # copia del código, y se publica cambiando el enlace /var/www/hosting-derkyu
+    # de golpe. Guarda las 3 últimas versiones. nginx la sirve solo cuando
+    # el vhost está activo (nginx_sites del homelab, Ansible).
+    phase=compilar
+    log "Compilando ${SHA:0:7} como webbuild"
+    BUILD=/var/lib/webbuild/hosting
+    rm -rf "$BUILD"
+    install -d -o webbuild -g webbuild -m 755 "$BUILD"
+    git archive "$SHA" | runuser -u webbuild -- tar -x -C "$BUILD"
+    runuser -u webbuild -- env HOME=/var/lib/webbuild bash -c \
+      "cd '$BUILD' && npm ci --no-audit --no-fund --loglevel=error && npm run build"
+    phase=instalar
+    REL=/var/www/hosting-derkyu-releases
+    install -d -m 755 "$REL"
+    rm -rf "$REL/$SHA"
+    cp -r "$BUILD/dist" "$REL/$SHA"
+    chown -R root:root "$REL/$SHA"
+    chmod -R a+rX "$REL/$SHA"
+    ln -sfn "$REL/$SHA" /var/www/hosting-derkyu.tmp
+    mv -T /var/www/hosting-derkyu.tmp /var/www/hosting-derkyu
+    # shellcheck disable=SC2012
+    ls -1t "$REL" | tail -n +4 | while read -r old; do rm -rf "${REL:?}/$old"; done
+    rm -rf "$BUILD"
+    log "Publicado en /var/www/hosting-derkyu ($(du -sh "$REL/$SHA" | cut -f1))"
+    ;;
+  roninfc)
+    # Next 15 + puppeteer (venía de la VPS de Hostinger). Compila webbuild con
+    # pnpm (corepack, versión fijada en packageManager). Chrome va dentro del
+    # proyecto (.puppeteerrc.cjs) y se instala a mano: pnpm restaura puppeteer
+    # de su caché sin repetir el postinstall y la versión salía sin Chrome.
+    # Se parte del .cache de la versión actual para no bajarlo cada vez. La versión
+    # queda de root salvo .next, que es la caché de ISR y la escribe el servicio.
+    # Si roninfc.service está apagado (antes del corte) solo cambia el enlace;
+    # si está encendido, reinicia, comprueba y vuelve atrás si no responde.
+    id roninfc >/dev/null 2>&1 || { echo "Falta el usuario roninfc: aplica playbooks/webs.yml del homelab" >&2; exit 1; }
+    phase=compilar
+    log "Compilando ${SHA:0:7} como webbuild"
+    BUILD=/var/lib/webbuild/roninfc
+    rm -rf "$BUILD"
+    install -d -o webbuild -g webbuild -m 755 "$BUILD"
+    git archive "$SHA" | runuser -u webbuild -- tar -x -C "$BUILD"
+    if [ -d /srv/roninfc/current/.cache/puppeteer ]; then
+      runuser -u webbuild -- cp -r /srv/roninfc/current/.cache "$BUILD/"
+    fi
+    # Copiar en vez de enlazar desde el almacén de pnpm: la versión cambia de
+    # dueño y los enlaces duros arrastrarían el almacén de webbuild.
+    runuser -u webbuild -- env HOME=/var/lib/webbuild COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+      npm_config_package_import_method=copy NEXT_TELEMETRY_DISABLED=1 \
+      NEXT_PUBLIC_BASE_URL=https://roninfc.digital bash -c \
+      "cd '$BUILD' && corepack pnpm install --frozen-lockfile \
+        && corepack pnpm exec puppeteer browsers install chrome \
+        && corepack pnpm build"
+    ls -d "$BUILD"/.cache/puppeteer/chrome/linux-* >/dev/null 2>&1 \
+      || { echo "La versión no trae Chrome (.cache/puppeteer)" >&2; exit 1; }
+    phase=instalar
+    REL=/srv/roninfc/releases
+    install -d -m 755 /srv/roninfc "$REL"
+    rm -rf "${REL:?}/$SHA"
+    mv "$BUILD" "$REL/$SHA"
+    chown -R root:root "$REL/$SHA"
+    chmod -R a+rX,go-w "$REL/$SHA"
+    chown -R roninfc:roninfc "$REL/$SHA/.next"
+    PREV=$(readlink -f /srv/roninfc/current 2>/dev/null || true)
+    ln -sfn "$REL/$SHA" /srv/roninfc/current.tmp
+    mv -T /srv/roninfc/current.tmp /srv/roninfc/current
+    if systemctl is-enabled --quiet roninfc 2>/dev/null; then
+      phase=reiniciar
+      log "Reiniciando roninfc"
+      systemctl restart roninfc
+      ok=0
+      for _ in $(seq 30); do
+        sleep 2
+        # La misma prueba que el rol roninfc: /api/partidos tira de Chrome
+        if curl -fsS -o /dev/null --max-time 20 http://127.0.0.1:3051/api/partidos; then ok=1; break; fi
+      done
+      if [[ $ok != 1 ]]; then
+        if [[ -n $PREV && -d $PREV ]]; then
+          log "No responde: vuelvo a $(basename "$PREV" | cut -c1-7)"
+          ln -sfn "$PREV" /srv/roninfc/current.tmp
+          mv -T /srv/roninfc/current.tmp /srv/roninfc/current
+          systemctl restart roninfc
+        fi
+        exit 1
+      fi
+    else
+      log "roninfc.service está apagado (antes del corte): solo se publica"
+    fi
+    # Las 3 últimas versiones, sin borrar nunca la que está en uso.
+    CUR=$(readlink -f /srv/roninfc/current)
+    # shellcheck disable=SC2012
+    ls -1t "$REL" | tail -n +4 | while read -r old; do
+      [[ $REL/$old == "$CUR" ]] || rm -rf "${REL:?}/$old"
+    done
+    log "Publicado en /srv/roninfc/current ($(du -sh "$REL/$SHA" | cut -f1))"
+    ;;
+esac
+phase=ok
+log "Desplegado $REPO ${SHA:0:7}"

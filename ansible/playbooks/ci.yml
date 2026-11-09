@@ -1,0 +1,8 @@
+---
+# Runners de GitHub Actions y deploy-repo. Las tareas de GitHub corren en el
+# controlador con `gh` (deploy keys y registro de runners nuevos).
+- name: CI/CD por runner
+  hosts: homelab
+  become: true
+  roles:
+    - ci
