@@ -5,6 +5,8 @@
   ansible.builtin.import_playbook: base.yml
 - name: SSH
   ansible.builtin.import_playbook: ssh.yml
+- name: Endurecimiento
+  ansible.builtin.import_playbook: endurecimiento.yml
 - name: Actualizaciones automáticas
   ansible.builtin.import_playbook: actualizaciones.yml
 - name: Cortafuegos

@@ -1,0 +1,45 @@
+---
+# En /etc/sysctl.d/90-endurecimiento.conf. Ni reenvío ni rp_filter: Docker y
+# Wings los necesitan como están.
+endurecimiento_sysctl:
+  kernel.kptr_restrict: 2
+  kernel.sysrq: 0
+  kernel.unprivileged_bpf_disabled: 1
+  kernel.core_uses_pid: 1
+  net.core.bpf_jit_harden: 2
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv4.conf.default.log_martians: 1
+  fs.protected_fifos: 2
+  fs.suid_dumpable: 0
+  dev.tty.ldisc_autoload: 0
+
+# false = solo escribe el fichero (en un contenedor no se puede aplicar)
+endurecimiento_sysctl_aplicar: true
+
+# Protocolos de red que no se cargan nunca
+endurecimiento_modulos_fuera:
+  - dccp
+  - sctp
+  - rds
+  - tipc
+
+# Unidades paradas y enmascaradas, si están instaladas. El .socket antes que
+# su servicio, o lo vuelve a arrancar.
+endurecimiento_servicios_fuera:
+  - apport.service
+
+# Tope del journal (SystemMaxUse). Vacío = el de systemd.
+endurecimiento_journal_max: ""
+
+# /etc/issue y /etc/issue.net
+endurecimiento_banner: |
+  Authorized access only. All activity is logged and monitored.
+  Acceso solo autorizado. Todo queda registrado.

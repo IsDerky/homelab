@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: endurecimiento
+  namespace: isderky
+  description: Correcciones de la auditoría con Lynis (sysctl, protocolos, core dumps, banner, servicios y restos de paquetes)
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+dependencies: []
