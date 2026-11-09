@@ -7,6 +7,9 @@ AllowUsers {{ ssh_allow_users | join(' ') }}
 PasswordAuthentication {{ 'yes' if ssh_password_authentication | bool else 'no' }}
 PermitRootLogin {{ ssh_permit_root_login }}
 PermitEmptyPasswords no
+MaxAuthTries {{ ssh_max_auth_tries }}
+LogLevel {{ ssh_log_level }}
+ClientAliveCountMax {{ ssh_client_alive_count_max }}
 KbdInteractiveAuthentication no
 UsePAM yes
 X11Forwarding {{ 'yes' if ssh_x11_forwarding | bool else 'no' }}

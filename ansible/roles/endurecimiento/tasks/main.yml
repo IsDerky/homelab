@@ -1,0 +1,92 @@
+---
+- name: Sysctl
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-endurecimiento.conf
+    sysctl_set: "{{ endurecimiento_sysctl_aplicar }}"
+    reload: false
+  loop: "{{ endurecimiento_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+
+- name: Protocolos de red que no se usan
+  ansible.builtin.template:
+    src: protocolos-fuera.conf.j2
+    dest: /etc/modprobe.d/protocolos-fuera.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Sin core dumps
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol endurecimiento)
+      * hard core 0
+    dest: /etc/security/limits.d/90-sin-core.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Banner
+  ansible.builtin.copy:
+    content: "{{ endurecimiento_banner }}"
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /etc/issue
+    - /etc/issue.net
+
+# list-unit-files incluye los .socket y los ya enmascarados; service_facts no
+- name: Unidades instaladas
+  ansible.builtin.command: systemctl list-unit-files --no-legend --plain  # noqa: command-instead-of-module
+  register: endurecimiento_unidades
+  changed_when: false
+
+- name: Servicios que no se usan
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: "{{ endurecimiento_servicios_fuera | select('in', endurecimiento_unidades.stdout_lines | map('split') | map('first')) }}"
+
+- name: Carpeta de journald.conf.d
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: endurecimiento_journal_max | length > 0
+
+- name: Tope del journal
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol endurecimiento)
+      [Journal]
+      SystemMaxUse={{ endurecimiento_journal_max }}
+    dest: /etc/systemd/journald.conf.d/90-tope.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: endurecimiento_journal_max | length > 0
+  notify: Reiniciar journald
+
+# Paquetes desinstalados que dejaron su config (kernels viejos sobre todo)
+- name: Paquetes en estado rc
+  ansible.builtin.command:
+    argv: [dpkg-query, -W, "-f=${db:Status-Abbrev} ${binary:Package}\n"]
+  register: endurecimiento_dpkg
+  changed_when: false
+
+- name: Purgar sus restos
+  ansible.builtin.apt:
+    name: "{{ endurecimiento_rc }}"
+    state: absent
+    purge: true
+  vars:
+    endurecimiento_rc: "{{ endurecimiento_dpkg.stdout_lines | select('match', '^rc') | map('split') | map('last') | unique | list }}"
+  when: endurecimiento_rc | length > 0

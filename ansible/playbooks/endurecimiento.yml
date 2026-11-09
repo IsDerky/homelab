@@ -1,0 +1,8 @@
+---
+# Correcciones de la auditoría con Lynis que no rompen nada en uso. Lo de sshd
+# va en el rol ssh (playbooks/ssh.yml).
+- name: Endurecimiento
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - endurecimiento

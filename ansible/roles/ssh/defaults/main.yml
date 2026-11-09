@@ -6,6 +6,13 @@ ssh_password_authentication: false
 ssh_permit_root_login: prohibit-password
 ssh_x11_forwarding: false
 
+# Con más de 3 claves en el agente, ssh puede agotar los intentos antes de
+# llegar a la buena: IdentitiesOnly o -i en el cliente
+ssh_max_auth_tries: 3
+# VERBOSE apunta la huella de la clave con la que entra cada uno
+ssh_log_level: VERBOSE
+ssh_client_alive_count_max: 2
+
 # Bloques Match al final del fichero:
 #   - match: User backup Address 10.0.0.5
 #     options:

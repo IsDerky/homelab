@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+{% for modulo in endurecimiento_modulos_fuera %}
+install {{ modulo }} /bin/false
+blacklist {{ modulo }}
+{% endfor %}
