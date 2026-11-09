@@ -5,6 +5,8 @@
   ansible.builtin.import_playbook: base.yml
 - name: SSH
   ansible.builtin.import_playbook: ssh.yml
+- name: Actualizaciones automáticas
+  ansible.builtin.import_playbook: actualizaciones.yml
 - name: Cortafuegos
   ansible.builtin.import_playbook: firewall.yml
 - name: Avisos

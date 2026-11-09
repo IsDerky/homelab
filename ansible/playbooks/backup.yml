@@ -6,7 +6,8 @@
     - backup
 
 # En los nodos de backup_remote_nodes, root solo entra con la clave del servidor
-# de backups y solo para leer los volúmenes (rrsync -ro). El rol ssh tiene que
+# de backups y solo para leer /var/lib/pterodactyl (rrsync -ro): los volúmenes y
+# lo que deja ahí nodo-export (config de Wings y estado). El rol ssh tiene que
 # dejarlo: root en ssh_allow_users y ssh_permit_root_login: forced-commands-only.
 # Va en la misma pasada que la de arriba, que es la que lee la clave.
 - name: Backups de los nodos de Wings remotos
@@ -35,11 +36,16 @@
             fail_msg: No está /usr/bin/rrsync (viene con rsync >= 3.2.4).
             quiet: true
 
-        - name: Clave del servidor de backups, solo lectura de los volúmenes
+        - name: Config de Wings y estado del nodo
+          ansible.builtin.include_role:
+            name: backup
+            tasks_from: nodo
+
+        - name: Clave del servidor de backups, solo lectura
           ansible.posix.authorized_key:
             user: root
             key: "{{ hostvars[backup_server].backup_nodes_pubkey }}"
-            key_options: restrict,command="/usr/bin/rrsync -ro /var/lib/pterodactyl/volumes"
+            key_options: restrict,command="/usr/bin/rrsync -ro /var/lib/pterodactyl"
 
         - name: Leer la clave de host
           ansible.builtin.slurp:

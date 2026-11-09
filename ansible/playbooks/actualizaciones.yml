@@ -1,0 +1,8 @@
+---
+# Parches de seguridad automáticos en los nodos de Wings de fuera. Este
+# servidor de momento sigue como estaba.
+- name: Actualizaciones automáticas de los nodos
+  hosts: wings_remotos
+  become: true
+  roles:
+    - actualizaciones

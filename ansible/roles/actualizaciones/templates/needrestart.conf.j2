@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for servicio in actualizaciones_no_reiniciar %}
+$nrconf{override_rc}{qr(^{{ servicio | regex_escape }}$)} = 0;
+{% endfor %}

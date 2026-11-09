@@ -1,0 +1,32 @@
+#!/bin/bash
+# En los nodos de Wings de fuera. Deja en /var/lib/pterodactyl/nodo lo que el
+# servidor de backups se trae además de los volúmenes: la config de Wings y un
+# JSON con el estado del sistema (si pide reinicio y parches pendientes).
+set -euo pipefail
+
+DIR=/var/lib/pterodactyl/nodo
+install -d -m 700 "$DIR"
+
+if [ -f /etc/pterodactyl/config.yml ]; then
+  install -m 600 /etc/pterodactyl/config.yml "$DIR/config.yml"
+fi
+
+# Lo que instalaría apt ahora mismo desde los orígenes de seguridad
+seguridad=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst .*-security' || true)
+
+python3 - "$DIR/estado.json" "$seguridad" <<'PY'
+import json, os, sys, time
+path, seguridad = sys.argv[1], int(sys.argv[2])
+try:
+    with open("/var/run/reboot-required.pkgs") as f:
+        pkgs = sorted({l.strip() for l in f if l.strip()})
+except OSError:
+    pkgs = []
+out = {"at": int(time.time()), "reinicio": os.path.exists("/var/run/reboot-required"),
+       "paquetes_reinicio": pkgs, "seguridad_pendientes": seguridad}
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(out, f)
+os.chmod(tmp, 0o600)
+os.replace(tmp, path)
+PY

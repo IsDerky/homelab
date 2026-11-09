@@ -45,10 +45,12 @@ LOCAL_REPO=$LOCAL_MOUNT/restic
 ESTADO=/var/lib/server-backup/estado
 
 # Nodos de Wings de fuera: antes de clientes se traen sus volúmenes por rsync y
-# se suben con los de aquí. En el nodo, la clave solo puede leer esa carpeta
-# (rrsync -ro); los nodos no tienen nada de Drive ni la contraseña de restic.
+# se suben con los de aquí. En el nodo, la clave solo puede leer
+# /var/lib/pterodactyl (rrsync -ro); los nodos no tienen nada de Drive ni la
+# contraseña de restic.
 NODOS_CONF=/etc/server-backup/nodos # "nombre host" por línea; sin fichero = sin nodos
 NODOS_DIR=/var/lib/server-backup/nodos
+NODOS_SISTEMA=/var/lib/server-backup/nodos-sistema # config de Wings y estado.json (nodo-export)
 NODOS_KEY=/root/.ssh/nodos-backup
 NODOS_KNOWN=/root/.ssh/nodos_known_hosts
 
@@ -165,6 +167,7 @@ paths_clientes() {
   paths=(/var/lib/pterodactyl/volumes)
   if [ -d /var/lib/pterodactyl/backups ]; then paths+=(/var/lib/pterodactyl/backups); fi
   if [ -d "$NODOS_DIR" ]; then paths+=("$NODOS_DIR"); fi
+  if [ -d "$NODOS_SISTEMA" ]; then paths+=("$NODOS_SISTEMA"); fi
   excludes=()
   keep=(--keep-daily 7 --keep-weekly 4 --keep-monthly 3)
 }
@@ -185,22 +188,27 @@ copy() {
   r forget --tag "$tag" --group-by host,tags "${keep[@]}"
 }
 
-# Trae los volúmenes de cada nodo a NODOS_DIR/<nombre>. La carpeta se queda
-# entre copias, así que solo viaja lo que ha cambiado. Un nodo caído no para la
-# copia: se sube lo último que se trajo, avisa por DM y queda en ESTADO
-# (nodo-<nombre>-traida), que vigila Prometheus.
+# Trae los volúmenes de cada nodo a NODOS_DIR/<nombre> y lo de nodo-export a
+# NODOS_SISTEMA/<nombre>. Las carpetas se quedan entre copias, así que solo
+# viaja lo que ha cambiado. Un nodo caído no para la copia: se sube lo último
+# que se trajo, avisa por DM y queda en ESTADO (nodo-<nombre>-traida), que
+# vigila Prometheus.
 pull_nodes() {
   [ -f "$NODOS_CONF" ] || return 0
-  local nombre host rc started
+  local nombre host rc started ssh_cmd
+  ssh_cmd="ssh -i $NODOS_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$NODOS_KNOWN -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=30"
   while read -r nombre host; do
     if [ -z "$nombre" ] || [ "${nombre:0:1}" = "#" ]; then continue; fi
     started=$(date +%s)
-    install -d -m 700 "$NODOS_DIR/$nombre"
+    install -d -m 700 "$NODOS_DIR/$nombre" "$NODOS_SISTEMA/$nombre"
     rc=0
-    rsync -a --delete --numeric-ids --timeout=300 \
-      -e "ssh -i $NODOS_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$NODOS_KNOWN -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=30" \
-      "root@$host:./" "$NODOS_DIR/$nombre/" </dev/null || rc=$?
+    rsync -a --delete --numeric-ids --timeout=300 -e "$ssh_cmd" \
+      "root@$host:volumes/" "$NODOS_DIR/$nombre/" </dev/null || rc=$?
     # 24: algún archivo desapareció mientras se copiaba (normal con servidores en marcha)
+    if [ "$rc" -eq 0 ] || [ "$rc" -eq 24 ]; then
+      rsync -a --delete --timeout=60 -e "$ssh_cmd" \
+        "root@$host:nodo/" "$NODOS_SISTEMA/$nombre/" </dev/null || rc=$?
+    fi
     if [ "$rc" -eq 0 ] || [ "$rc" -eq 24 ]; then
       estado "nodo-$nombre" traida true "$(max_age nodo-)"
     else

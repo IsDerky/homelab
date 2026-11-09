@@ -1,0 +1,8 @@
+// {{ ansible_managed }}
+Unattended-Upgrade::Automatic-Reboot "{{ actualizaciones_reinicio_auto | lower }}";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Package-Blacklist {
+{% for paquete in actualizaciones_excluir %}
+    "^{{ paquete }}$";
+{% endfor %}
+};

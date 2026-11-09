@@ -16,6 +16,7 @@ Roles para montar piezas del homelab:
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 - `pterodactyl`: Wings (binario con versión fija, unidad y límites), live-restore de Docker y la cola y el planificador del panel (`playbooks/pterodactyl.yml`).
+- `actualizaciones`: parches de seguridad automáticos con unattended-upgrades en los nodos de fuera, sin reinicios y sin tocar Docker ni Wings (`playbooks/actualizaciones.yml`).
 
 ## Uso
 
@@ -104,7 +105,14 @@ Cada ejecución deja su resultado en `/var/lib/server-backup/estado/<modo>-<dest
 
 Los volúmenes de los nodos remotos (`backup_remote_nodes`) entran en la copia de `clientes`. Antes de subir, el servidor los trae por rsync a `/var/lib/server-backup/nodos/<nodo>` y restic los sube con los de aquí, a Drive y al disco local, con la misma retención. Esa carpeta se queda entre copias, así que cada día solo viaja lo que ha cambiado.
 
-Es el servidor el que tira de los nodos, y no al revés, para que los nodos no guarden ni la contraseña de restic ni el acceso a Drive. En cada nodo, root tiene la clave del servidor en `authorized_keys` con `restrict,command="rrsync -ro /var/lib/pterodactyl/volumes"`: con ella no hay shell ni reenvío de puertos, solo se puede leer esa carpeta y no se puede escribir. Para que sshd lo deje, el nodo necesita `ssh_permit_root_login: forced-commands-only` y `root` en `ssh_allow_users`.
+Es el servidor el que tira de los nodos, y no al revés, para que los nodos no guarden ni la contraseña de restic ni el acceso a Drive. En cada nodo, root tiene la clave del servidor en `authorized_keys` con `restrict,command="rrsync -ro /var/lib/pterodactyl"`: con ella no hay shell ni reenvío de puertos, solo se puede leer esa carpeta y no se puede escribir. Para que sshd lo deje, el nodo necesita `ssh_permit_root_login: forced-commands-only` y `root` en `ssh_allow_users`.
+
+Además de los volúmenes se trae `/var/lib/pterodactyl/nodo`, que deja ahí cada 6 h `nodo-export` (timer en el nodo) y acaba en `/var/lib/server-backup/nodos-sistema/<nodo>`:
+
+- `config.yml` de Wings. Se puede volver a sacar del panel, pero si alguien lo ha tocado a mano (redes de Docker, montajes, límites) eso solo está en el nodo.
+- `estado.json`: si el nodo pide reinicio y por qué paquetes, y cuántos parches de seguridad quedan pendientes. Con el rol `actualizaciones` los parches se instalan solos pero el reinicio no, así que esto es lo que dice cuándo toca.
+
+La config de Wings lleva el token del nodo: en el nodo la copia es `0600` de root y en restic va cifrada como todo lo demás.
 
 Si un nodo no responde, la copia sigue con los demás y se sube lo último que se trajo de él. Avisa por DM y deja `nodo-<nombre>-traida.json` en el estado, así que Prometheus avisa también si pasa más de 30 h sin traerlo.
 
@@ -408,3 +416,20 @@ Reiniciar Wings no para los servidores de juego (son contenedores y Wings se ree
 | `pterodactyl_docker_live_restore` | `true` | |
 | `pterodactyl_panel` | `false` | Cola y planificador del panel |
 | `pterodactyl_panel_dir` / `_user` | `/var/www/pterodactyl` / `www-data` | |
+
+## Rol `actualizaciones`
+
+Los nodos de Oracle tenían más de cien paquetes sin actualizar porque nadie entraba a hacerlo. El rol deja unattended-upgrades instalando solo los parches de seguridad (los orígenes que trae Ubuntu por defecto en `50unattended-upgrades`, que no se toca). Lo demás se sigue actualizando a mano.
+
+- **Nunca reinicia solo.** Un reinicio corta las partidas. Si un parche lo pide, queda en `/var/run/reboot-required` y el `estado.json` que se trae el servidor de backups lo dice (ver [Nodos de Wings de fuera](#nodos-de-wings-de-fuera)).
+- **Docker no se toca.** Viene de un repo de fuera y no entra en los orígenes de seguridad, pero va en la lista negra por si acaso.
+- **needrestart no reinicia Docker, containerd ni Wings** cuando se actualiza una librería que usan. Con live-restore los servidores seguirían, pero se hace a mano.
+
+Los ajustes van en `52homelab` y `20auto-upgrades`, y al final se comprueba con `apt-config` que apt los lee. Probado en 22.04 y 24.04.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `actualizaciones_reinicio_auto` | `false` | |
+| `actualizaciones_excluir` | paquetes de Docker | Lista negra de unattended-upgrades |
+| `actualizaciones_no_reiniciar` | docker, containerd, wings | Servicios que needrestart deja en paz |
+| `actualizaciones_limpieza_dias` | `7` | Cada cuánto se limpia la caché de apt |
