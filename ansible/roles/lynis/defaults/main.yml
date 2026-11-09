@@ -1,0 +1,14 @@
+---
+# Lynis se trae del tag de GitHub (no publica assets) con su SHA-256, se copia
+# a /tmp, audita y se borra: en las máquinas no se queda nada instalado.
+# renovate: datasource=github-tags depName=CISOfy/lynis
+lynis_version: 3.1.7
+lynis_sha256: 48d829d0dc2c583a3e838cc09a7190b69a3af844bcb913c7cf9c0226b04b95c5
+
+lynis_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/lynis-{{ lynis_version }}.tar.gz"
+lynis_dir: /tmp/lynis-auditoria
+
+# Los informes se quedan en el controlador. Llevan el detalle de lo que falla
+# en cada máquina: fuera del repo público.
+lynis_informes: "{{ lookup('ansible.builtin.env', 'HOME') }}/projects/homelab-config/auditorias"
+lynis_fecha: "{{ ansible_facts.date_time.date }}"

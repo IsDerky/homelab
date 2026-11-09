@@ -1,0 +1,63 @@
+---
+- name: Descargar en el controlador Lynis {{ lynis_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/CISOfy/lynis/archive/refs/tags/{{ lynis_version }}.tar.gz"
+    dest: "{{ lynis_cache }}"
+    checksum: "sha256:{{ lynis_sha256 }}"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Auditar
+  block:
+    - name: Carpeta de trabajo
+      ansible.builtin.file:
+        path: "{{ lynis_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    # Lynis no arranca como root si sus ficheros no son de root
+    - name: Copiar Lynis
+      ansible.builtin.unarchive:
+        src: "{{ lynis_cache }}"
+        dest: "{{ lynis_dir }}"
+        owner: root
+        group: root
+        extra_opts:
+          - --strip-components=1
+
+    - name: Lynis audit system
+      ansible.builtin.command:
+        cmd: >-
+          ./lynis audit system --quick --no-colors
+          --report-file {{ lynis_dir }}/informe.dat
+          --log-file {{ lynis_dir }}/lynis.log
+        chdir: "{{ lynis_dir }}"
+      changed_when: false
+
+    - name: Traer el informe
+      ansible.builtin.fetch:
+        src: "{{ lynis_dir }}/{{ item }}"
+        dest: "{{ lynis_informes }}/{{ lynis_fecha }}/{{ inventory_hostname }}/{{ item }}"
+        flat: true
+      loop:
+        - informe.dat
+        - lynis.log
+
+  always:
+    - name: Borrar Lynis de la máquina
+      ansible.builtin.file:
+        path: "{{ lynis_dir }}"
+        state: absent
+
+- name: Puntuación
+  vars:
+    informe: "{{ lookup('ansible.builtin.file', lynis_informes ~ '/' ~ lynis_fecha ~ '/' ~ inventory_hostname ~ '/informe.dat') }}"
+  ansible.builtin.debug:
+    msg: >-
+      índice {{ informe | regex_search('hardening_index=(\d+)', '\1') | first }},
+      {{ informe | regex_findall('(?m)^warning\[\]=') | length }} avisos,
+      {{ informe | regex_findall('(?m)^suggestion\[\]=') | length }} sugerencias

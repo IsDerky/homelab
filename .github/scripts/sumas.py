@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Pone los SHA-256 (y los asset id de restic) de las versiones de los defaults.
 
+restic, rclone, Wings y Lynis.
+
 Renovate sube la versión pero no sabe de sumas. Esto las saca del digest que da
 la API de GitHub para cada asset (si no lo hay, descarga y calcula) y del
 SHA256SUMS de rclone. Sin cambios de versión no toca nada.
@@ -82,10 +84,18 @@ def wings(texto):
     return texto
 
 
+def lynis(texto):
+    # Sin assets: el tarball del tag (GitHub mantiene estable su suma)
+    v = version(texto, "lynis_version")
+    suma = hashlib.sha256(get(f"https://github.com/CISOfy/lynis/archive/refs/tags/{v}.tar.gz")).hexdigest()
+    return re.sub(r"(?m)^lynis_sha256: \S+$", f"lynis_sha256: {suma}", texto)
+
+
 def main():
     for fichero, pasos in (
         (ROLES / "backup" / "defaults" / "main.yml", (restic, rclone)),
         (ROLES / "pterodactyl" / "defaults" / "main.yml", (wings,)),
+        (ROLES / "lynis" / "defaults" / "main.yml", (lynis,)),
     ):
         antes = fichero.read_text()
         despues = antes
