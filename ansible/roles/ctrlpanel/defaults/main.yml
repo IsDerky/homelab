@@ -20,5 +20,9 @@ ctrlpanel_db_password: ""
 # todo instalado pero parado (para preparar una migración).
 ctrlpanel_enabled: false
 
+# Comprobar al final que /login da 200. false durante la migración, mientras
+# la app sigue en mantenimiento.
+ctrlpanel_check: true
+
 ctrlpanel_fpm_max_children: 5
 ctrlpanel_log_level: error
