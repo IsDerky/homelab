@@ -1,0 +1,78 @@
+---
+- name: Falta la IP del túnel
+  ansible.builtin.assert:
+    that: wireguard_address | length > 0
+    fail_msg: Define wireguard_address.
+    quiet: true
+
+- name: Los peers están en esta pasada
+  ansible.builtin.assert:
+    that: wireguard_peer_hosts | difference(ansible_play_hosts_all) | length == 0
+    fail_msg: "Faltan peers en la pasada ({{ wireguard_peer_hosts | difference(ansible_play_hosts_all) | join(', ') }}): lanza el playbook sin --limit."
+    quiet: true
+
+- name: Paquete
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+
+- name: Carpeta
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# La privada se genera en la máquina y no sale de ella: la carga PostUp, no va
+# en la plantilla
+- name: Clave privada
+  ansible.builtin.shell: umask 077 && wg genkey > /etc/wireguard/{{ wireguard_interface }}.key
+  args:
+    creates: /etc/wireguard/{{ wireguard_interface }}.key
+
+- name: Clave pública
+  ansible.builtin.shell: wg pubkey < /etc/wireguard/{{ wireguard_interface }}.key
+  register: wireguard_pub
+  changed_when: false
+  # En --check en una máquina nueva todavía no hay clave
+  failed_when: false
+  check_mode: false
+
+- name: Clave pública para los peers
+  ansible.builtin.set_fact:
+    wireguard_public_key: "{{ wireguard_pub.stdout if wireguard_pub.rc == 0 else 'SIN-CLAVE-EN-CHECK' }}"
+
+- name: Configuración
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: /etc/wireguard/{{ wireguard_interface }}.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Reiniciar wireguard
+
+# Imágenes de Oracle: iptables con REJECT al final de INPUT, guardado en
+# rules.v4. Sin esto no entra el UDP del túnel ni lo que llega por él.
+- name: Reglas de iptables de la imagen
+  ansible.builtin.import_tasks: iptables.yml
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: wg-quick@{{ wireguard_interface }}.service
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Los peers responden por el túnel
+  ansible.builtin.command: ping -c 3 -W 2 {{ hostvars[item].wireguard_address }}
+  loop: "{{ wireguard_peer_hosts }}"
+  register: wireguard_ping
+  until: wireguard_ping.rc == 0
+  retries: 5
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode

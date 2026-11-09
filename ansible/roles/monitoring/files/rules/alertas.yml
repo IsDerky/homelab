@@ -43,7 +43,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Queda menos del 10 % del disco ({{ $value | humanizePercentage }} libre)."
+          # Con la etiqueta nodo (los de fuera) delante; el servidor no la lleva
+          summary: "{{ with $labels.nodo }}{{ . }}: {{ end }}Queda menos del 10 % del disco ({{ $value | humanizePercentage }} libre)."
 
       - alert: MemoriaAgotada
         expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.05
@@ -51,7 +52,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Queda menos del 5 % de RAM disponible ({{ $value | humanizePercentage }})."
+          summary: "{{ with $labels.nodo }}{{ . }}: {{ end }}Queda menos del 5 % de RAM disponible ({{ $value | humanizePercentage }})."
 
       # Si una pieza de la monitorización deja de responder, las alertas que
       # dependen de ella tampoco saltarían

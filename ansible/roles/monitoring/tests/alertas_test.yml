@@ -68,6 +68,26 @@ tests:
             exp_annotations:
               summary: "Queda menos del 10 % del disco (5% libre)."
 
+  # Un nodo de fuera: el aviso dice cuál
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="nodos", nodo="n1", mountpoint="/", fstype="ext4"}'
+        values: "50x30"
+      - series: 'node_filesystem_size_bytes{job="nodos", nodo="n1", mountpoint="/", fstype="ext4"}'
+        values: "1000x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DiscoCasiLleno
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: nodos
+              nodo: n1
+              mountpoint: /
+              fstype: ext4
+            exp_annotations:
+              summary: "n1: Queda menos del 10 % del disco (5% libre)."
+
   - interval: 1m
     input_series:
       - series: 'node_memory_MemAvailable_bytes'

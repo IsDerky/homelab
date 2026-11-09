@@ -23,6 +23,17 @@ scrape_configs:
   - job_name: node
     static_configs:
       - targets: ["127.0.0.1:{{ monitoring_ports.node_exporter }}"]
+{% if monitoring_remote_nodes %}
+
+  # node-exporter de los nodos de fuera, por el túnel
+  - job_name: nodos
+    static_configs:
+{% for nodo in monitoring_remote_nodes %}
+      - targets: ["{{ nodo.target }}"]
+        labels:
+          nodo: {{ nodo.nombre }}
+{% endfor %}
+{% endif %}
 {% if monitoring_ops_group %}
 
   - job_name: ops

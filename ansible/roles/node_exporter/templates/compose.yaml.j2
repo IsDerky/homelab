@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+services:
+  node-exporter:
+    image: {{ node_exporter_image }}
+    container_name: node-exporter
+    restart: unless-stopped
+    # Red del host, escuchando solo en {{ node_exporter_listen }}: Docker no
+    # publica ningún puerto
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address={{ node_exporter_listen }}
+      - --collector.textfile.directory=/host{{ node_exporter_textfile_dir }}
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: {{ node_exporter_mem }}

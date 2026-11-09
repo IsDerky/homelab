@@ -39,6 +39,12 @@ monitoring_retention_size: 2GB
 
 monitoring_scrape_interval: 30s
 
+# node-exporter de otras máquinas (job "nodos", etiqueta nodo). target = IP:puerto,
+# normalmente por un túnel: no tiene autenticación.
+#   - nombre: nodo1
+#     target: 10.0.0.2:9100
+monitoring_remote_nodes: []
+
 # Comprobaciones HTTP con blackbox. El cuerpo tiene que casar con body_regex.
 #   - servicio: web
 #     url: http://127.0.0.1:3000/api/health

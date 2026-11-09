@@ -869,7 +869,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"php8.3-fpm.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"php8.3-fpm.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -946,7 +946,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"pteroq.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"pteroq.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1023,7 +1023,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"mariadb.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"mariadb.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1100,7 +1100,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"redis-server.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"redis-server.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1177,7 +1177,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"docker.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"docker.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1267,7 +1267,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"nginx.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"nginx.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1344,7 +1344,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"cloudflared.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"cloudflared.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1421,7 +1421,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"bentonime.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"bentonime.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1498,7 +1498,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"roninfc.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"roninfc.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1575,7 +1575,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"code-server@derkyu.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"code-server@derkyu.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1652,7 +1652,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"code-2fa.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"code-2fa.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1729,7 +1729,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"smbd.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"smbd.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1806,7 +1806,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"ssh.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"ssh.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1883,7 +1883,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"fail2ban.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"fail2ban.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1960,7 +1960,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"smartmontools.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"smartmontools.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2037,7 +2037,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"asistente.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"asistente.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2114,7 +2114,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"ops-collect.timer\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"ops-collect.timer\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2191,7 +2191,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"ops-exporter.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"ops-exporter.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2268,7 +2268,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"alert-dm.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"alert-dm.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2345,7 +2345,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"certbot.timer\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"certbot.timer\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2422,7 +2422,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"unattended-upgrades.service\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"unattended-upgrades.service\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -3141,7 +3141,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"server-backup-sistema.timer\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"server-backup-sistema.timer\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -3219,7 +3219,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"server-backup-clientes.timer\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"server-backup-clientes.timer\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -3297,7 +3297,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"server-backup-nas.timer\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"server-backup-nas.timer\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -3375,7 +3375,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"server-backup-mantenimiento.timer\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"server-backup-mantenimiento.timer\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -3453,7 +3453,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(max(node_systemd_unit_state{name=\"server-backup-simulacro.timer\", state=\"active\"})) or vector(0)",
+          "expr": "(max(node_systemd_unit_state{job=\"node\", name=\"server-backup-simulacro.timer\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -3609,7 +3609,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(min(node_systemd_unit_state{name=~\"actions\\\\.runner\\\\..*\", state=\"active\"})) or vector(0)",
+          "expr": "(min(node_systemd_unit_state{job=\"node\", name=~\"actions\\\\.runner\\\\..*\", state=\"active\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
