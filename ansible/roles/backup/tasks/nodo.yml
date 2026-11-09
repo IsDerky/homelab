@@ -1,0 +1,36 @@
+---
+# En los nodos de fuera (playbooks/backup.yml). Lo que se trae el servidor
+# además de los volúmenes: config de Wings y estado del sistema.
+- name: Script nodo-export
+  ansible.builtin.copy:
+    src: nodo-export
+    dest: /usr/local/sbin/nodo-export
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Unidades de nodo-export
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - nodo-export.service
+    - nodo-export.timer
+  register: backup_nodo_units
+
+- name: Timer de nodo-export
+  ansible.builtin.systemd_service:
+    name: nodo-export.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ backup_nodo_units.changed }}"
+
+# Que la primera copia ya lo encuentre
+- name: Primera exportación
+  ansible.builtin.systemd_service:
+    name: nodo-export.service
+    state: started
+  when: backup_nodo_units.changed and not ansible_check_mode

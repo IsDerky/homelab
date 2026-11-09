@@ -1,0 +1,27 @@
+---
+# Solo los parches de seguridad de Ubuntu (lo que trae por defecto
+# 50unattended-upgrades). Lo demás se sigue actualizando a mano.
+
+# Nunca reiniciar solo: un reinicio corta las partidas. Si hace falta, queda
+# en /var/run/reboot-required y se reinicia a mano cuando venga bien.
+actualizaciones_reinicio_auto: false
+
+# Paquetes que no se tocan aunque traigan parche. Docker viene de un repo de
+# fuera (no entra en los orígenes de seguridad), pero si algún día se añadiera
+# no queremos que se actualice solo.
+actualizaciones_excluir:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# Servicios que needrestart no reinicia después de actualizar una librería.
+# Docker tiene live-restore y Wings se reengancha, pero mejor hacerlo a mano.
+actualizaciones_no_reiniciar:
+  - docker.service
+  - containerd.service
+  - wings.service
+
+# Días entre limpiezas de la caché de apt
+actualizaciones_limpieza_dias: 7

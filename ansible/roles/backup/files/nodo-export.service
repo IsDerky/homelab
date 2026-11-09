@@ -1,0 +1,8 @@
+[Unit]
+Description=Config de Wings y estado del nodo para el servidor de backups
+After=apt-daily-upgrade.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nodo-export
+Nice=10

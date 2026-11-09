@@ -1,0 +1,11 @@
+[Unit]
+Description=Exportar config y estado del nodo
+
+[Timer]
+# Cada 6 h: la copia de clientes se lleva la última, y si unattended-upgrades
+# deja algo pidiendo reinicio se ve el mismo día
+OnCalendar=*-*-* 00/6:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
