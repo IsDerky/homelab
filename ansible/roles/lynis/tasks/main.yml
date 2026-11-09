@@ -29,6 +29,14 @@
         extra_opts:
           - --strip-components=1
 
+    - name: Perfil propio
+      ansible.builtin.copy:
+        src: custom.prf
+        dest: "{{ lynis_dir }}/custom.prf"
+        owner: root
+        group: root
+        mode: "0640"
+
     - name: Lynis audit system
       ansible.builtin.command:
         cmd: >-
@@ -52,6 +60,22 @@
       ansible.builtin.file:
         path: "{{ lynis_dir }}"
         state: absent
+
+    # Temporales de mktemp que Lynis borra al salir, pero no si se le corta
+    - name: Buscar temporales de Lynis
+      ansible.builtin.find:
+        paths: /tmp
+        patterns: lynis.*
+        file_type: any
+      register: lynis_temporales
+
+    - name: Borrar temporales de Lynis
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ lynis_temporales.files }}"
+      loop_control:
+        label: "{{ item.path }}"
 
 - name: Puntuación
   vars:

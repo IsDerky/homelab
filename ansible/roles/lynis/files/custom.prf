@@ -1,0 +1,5 @@
+# Perfil propio (Lynis lo lee del directorio de trabajo, junto a default.prf)
+
+# journalctl --verify sobre todo el journal: en n1 y nodo2 se quedó colgado más
+# de 20 minutos y no suma al índice
+skip-test=PLGN-3814
