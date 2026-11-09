@@ -43,6 +43,7 @@
 - name: Unidades instaladas
   ansible.builtin.command: systemctl list-unit-files --no-legend --plain  # noqa: command-instead-of-module
   register: endurecimiento_unidades
+  check_mode: false
   changed_when: false
 
 - name: Servicios que no se usan
@@ -80,6 +81,7 @@
   ansible.builtin.command:
     argv: [dpkg-query, -W, "-f=${db:Status-Abbrev} ${binary:Package}\n"]
   register: endurecimiento_dpkg
+  check_mode: false
   changed_when: false
 
 - name: Purgar sus restos
