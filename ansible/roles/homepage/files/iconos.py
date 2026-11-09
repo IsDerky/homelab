@@ -243,6 +243,24 @@ ICONOS = {
         "..kk........kk..",
         "................",
     ],
+    "pagos": [
+        "................",
+        "................",
+        "................",
+        "..kkkkkkkkkkkk..",
+        ".kggggggggggggk.",
+        ".kddddddddddddk.",
+        ".kddddddddddddk.",
+        ".kmmmmmmmmmmmmk.",
+        ".kmYYYmmmmmmmmk.",
+        ".kmYkYmmmmmmmmk.",
+        ".kmmmmmmmmmmmmk.",
+        ".kmwwmwwmwwmggk.",
+        ".kmmmmmmmmmmmmk.",
+        "..kkkkkkkkkkkk..",
+        "................",
+        "................",
+    ],
 }
 
 
