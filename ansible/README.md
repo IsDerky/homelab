@@ -15,6 +15,7 @@ Roles para montar piezas del homelab:
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `ctrlpanel`: la parte de sistema de CtrlPanel (Laravel) con usuario y pool de PHP-FPM propios, y su migración desde otra máquina por fases (`playbooks/migrar-ctrlpanel.yml`).
+- `ci`: runners de GitHub Actions en el servidor que solo pueden desplegar con `deploy-repo`, más sus deploy keys y el registro en GitHub (`playbooks/ci.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 - `pterodactyl`: Wings (binario con versión fija, unidad y límites), live-restore de Docker y la cola y el planificador del panel (`playbooks/pterodactyl.yml`).
@@ -352,6 +353,23 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 | `ctrlpanel_port` | `8085` | |
 | `ctrlpanel_nginx_user` | `www-data` | Solo atraviesa la carpeta (ACL) para servir `public/` |
 | `ctrlpanel_log_level` | `error` | |
+
+## Rol `ci`
+
+Push a `main` → las comprobaciones corren en `ubuntu-latest` → el runner del servidor (uno por repo, con su nombre como etiqueta) ejecuta `sudo -n /usr/local/sbin/deploy-repo <repo> "$GITHUB_SHA"`. Los workflows comunes están en [IsDerky/ci](https://github.com/IsDerky/ci).
+
+- **Los runners corren como `deployer`**, sin contraseña ni shell, y su sudoers solo le deja `deploy-repo <repo> *` para los repos de `ci_repos`.
+- **`deploy-repo` no usa la carpeta del runner.** Trae el repo a `/var/lib/deploy-repo/<repo>` con una deploy key de solo lectura (clave de host de GitHub fijada) y solo instala commits que ya están en `origin/main`: quien tome el runner solo puede desplegar lo publicado. Un despliegue de cada repo a la vez, y si falla, DM con la fase.
+- **Las webs las compila `webbuild`**, sin privilegios, sobre una copia del código. Se publican cambiando un enlace (`releases/<sha>`) y, si el servicio está encendido, se reinicia, se prueba y se vuelve a la versión anterior si no responde.
+- **GitHub desde el controlador.** Con `gh` logueado, el rol sube las deploy keys que falten y registra los runners que falten (token de registro de 1 h que no se guarda). La versión del runner no se fija: se actualiza solo, así que solo cuenta al registrarlo, y se comprueba con la sha256 de sus notas de versión. Con `ci_github: false` solo hace la parte del servidor.
+- **`ci_repos_retirados`**: para el runner, quita su unidad y su carpeta, la copia del repo y la deploy key, y lo da de baja en GitHub (runner y deploy key).
+
+| Variable | Por defecto | |
+|---|---|---|
+| `ci_repos` | oficina, asistente, hosting, roninfc | `{nombre, github}`. Tienen que coincidir con los casos de `deploy-repo` |
+| `ci_repos_retirados` | `[]` | Mismo formato |
+| `ci_github` | `true` | Deploy keys y runners nuevos con `gh` |
+| `ci_runners_dir` | `/opt/actions-runner` | |
 
 ## Rol `monitoring`
 

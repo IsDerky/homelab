@@ -29,6 +29,8 @@
   ansible.builtin.import_playbook: vaultwarden.yml
 - name: Webs
   ansible.builtin.import_playbook: webs.yml
+- name: CI/CD
+  ansible.builtin.import_playbook: ci.yml
 - name: Pterodactyl
   ansible.builtin.import_playbook: pterodactyl.yml
 - name: Túnel con los nodos

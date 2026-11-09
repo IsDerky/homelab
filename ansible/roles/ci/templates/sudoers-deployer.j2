@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+# Los runners de GitHub ({{ ci_repos | map(attribute='nombre') | join(' ') }}) solo pueden desplegar con deploy-repo.
+Defaults:deployer !requiretty
+deployer ALL=(root) NOPASSWD: {{ ci_repos | map(attribute='nombre') | map('regex_replace', '^', '/usr/local/sbin/deploy-repo ') | map('regex_replace', '$', ' *') | join(', ') }}

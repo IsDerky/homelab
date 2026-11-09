@@ -44,7 +44,7 @@
 # nginx (www-data) tiene que llegar a public/ para servir CSS y JS; sin esto
 # todo cae en index.php y la web sale sin estilos. Solo atravesar, sin listar:
 # el PHP de Pterodactyl también es www-data.
-- name: nginx atraviesa la carpeta de la app
+- name: Acceso de nginx a la carpeta de la app
   ansible.posix.acl:
     path: "{{ ctrlpanel_dir }}"
     entity: "{{ ctrlpanel_nginx_user }}"
@@ -178,7 +178,7 @@
   when: ctrlpanel_check | bool and ctrlpanel_artisan.stat.exists and ctrlpanel_env.stat.exists and not ansible_check_mode
 
 # /login es PHP y da 200 aunque nginx no vea public/; los estáticos no
-- name: nginx lee public/
+- name: Comprobar que nginx lee public/
   ansible.builtin.command: runuser -u {{ ctrlpanel_nginx_user }} -- test -r {{ ctrlpanel_dir }}/public/index.php
   changed_when: false
   when: ctrlpanel_check | bool and ctrlpanel_artisan.stat.exists and not ansible_check_mode
