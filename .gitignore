@@ -2,3 +2,5 @@ ansible/inventory.ini
 ansible/group_vars/
 *.retry
 __pycache__/
+# caché de ansible-lint
+.ansible/
