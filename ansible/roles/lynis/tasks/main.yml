@@ -29,6 +29,14 @@
         extra_opts:
           - --strip-components=1
 
+    - name: Perfil propio
+      ansible.builtin.copy:
+        src: custom.prf
+        dest: "{{ lynis_dir }}/custom.prf"
+        owner: root
+        group: root
+        mode: "0640"
+
     - name: Lynis audit system
       ansible.builtin.command:
         cmd: >-
