@@ -1,0 +1,8 @@
+---
+# Corta el túnel un par de segundos. wg syncconf no vale: la configuración no
+# lleva la clave privada.
+- name: Reiniciar wireguard
+  ansible.builtin.systemd_service:
+    name: wg-quick@{{ wireguard_interface }}.service
+    state: restarted
+  when: not ansible_check_mode

@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+[Interface]
+Address = {{ wireguard_address }}/{{ wireguard_prefix }}
+{% if wireguard_listen_port | int > 0 %}
+ListenPort = {{ wireguard_listen_port }}
+{% endif %}
+PostUp = wg set %i private-key /etc/wireguard/%i.key
+{% for peer in wireguard_peer_hosts %}
+
+[Peer]
+# {{ peer }}
+PublicKey = {{ hostvars[peer].wireguard_public_key }}
+AllowedIPs = {{ hostvars[peer].wireguard_address }}/32
+{% if hostvars[peer].wireguard_endpoint | default('') %}
+Endpoint = {{ hostvars[peer].wireguard_endpoint }}
+PersistentKeepalive = {{ wireguard_keepalive }}
+{% endif %}
+{% endfor %}

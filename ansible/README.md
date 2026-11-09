@@ -17,6 +17,8 @@ Roles para montar piezas del homelab:
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
 - `pterodactyl`: Wings (binario con versión fija, unidad y límites), live-restore de Docker y la cola y el planificador del panel (`playbooks/pterodactyl.yml`).
 - `actualizaciones`: parches de seguridad automáticos con unattended-upgrades en los nodos de fuera, sin reinicios y sin tocar Docker ni Wings (`playbooks/actualizaciones.yml`).
+- `wireguard`: túnel entre el servidor y los nodos de fuera, con las claves generadas en cada máquina (`playbooks/wireguard.yml`).
+- `node_exporter`: node-exporter suelto escuchando solo en la IP del túnel, para los nodos (también en `playbooks/wireguard.yml`).
 
 ## Uso
 
@@ -360,6 +362,7 @@ Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): 
 | `monitoring_http_probes` | `[]` | `servicio`, `url` y opcionalmente `body_regex` y `slo` |
 | `monitoring_slo_target` | `0.995` | Objetivo por defecto de las comprobaciones |
 | `monitoring_tls_probes` | `[]` | `nombre` y `url`. No cuentan para el SLO |
+| `monitoring_remote_nodes` | `[]` | node-exporter de otras máquinas (`nombre`, `target`): job `nodos` |
 | `monitoring_systemd_units` | `[]` | Unidades cuyo estado exporta node_exporter (expresiones regulares) |
 | `monitoring_cadvisor` | `true` | Métricas por contenedor |
 | `monitoring_wings_local_node` | `local` | Nombre del nodo de Wings local en las métricas de servidores de juego |
@@ -433,3 +436,32 @@ Los ajustes van en `52homelab` y `20auto-upgrades`, y al final se comprueba con 
 | `actualizaciones_excluir` | paquetes de Docker | Lista negra de unattended-upgrades |
 | `actualizaciones_no_reiniciar` | docker, containerd, wings | Servicios que needrestart deja en paz |
 | `actualizaciones_limpieza_dias` | `7` | Cada cuánto se limpia la caché de apt |
+
+## Rol `wireguard`
+
+Túnel WireGuard entre máquinas del inventario (`playbooks/wireguard.yml`). Lo uso entre el servidor de casa y los nodos de Oracle: por ahí van las métricas de los nodos, que así no se exponen a Internet.
+
+- **Quién conecta con quién.** Los nodos tienen IP pública fija y escuchan en UDP 51820 (`wireguard_listen_port` y `wireguard_endpoint`). El servidor de casa no escucha: abre él la conexión y `PersistentKeepalive` mantiene abierto el NAT del router. Así no hace falta reenviar ningún puerto en el router, y si cambia la IP de casa el túnel sigue.
+- **Claves.** Cada máquina genera su clave privada (`/etc/wireguard/wg0.key`, `0600`), que no sale de ella ni pasa por la plantilla: la carga `PostUp`. Las públicas se leen en la misma pasada, así que el playbook va sin `--limit` (si falta algún peer, se niega).
+- **iptables de Oracle.** Las imágenes de Ubuntu de Oracle traen un `REJECT` al final de `INPUT` guardado en `/etc/iptables/rules.v4`. Si está, el rol mete el UDP del túnel y lo que entra por `wg0` antes del `REJECT`, en el fichero y en caliente. No usa `netfilter-persistent save`, que guardaría también las reglas de Docker. En la Security List de Oracle hay que abrir el UDP a mano.
+- Al final hace ping a cada peer por el túnel.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `wireguard_address` | `""` | Obligatoria. IP dentro del túnel |
+| `wireguard_peer_hosts` | `[]` | Máquinas del inventario con las que hace túnel |
+| `wireguard_listen_port` | `0` | `0` = no escucha, conecta él |
+| `wireguard_endpoint` | `""` | Cómo la alcanzan los demás (`host:puerto`) |
+| `wireguard_keepalive` | `25` | Hacia los peers con endpoint |
+
+## Rol `node_exporter`
+
+node-exporter suelto para las máquinas sin el rol `monitoring`: Docker Compose como servicio systemd, con la red del host y escuchando solo en `node_exporter_listen`. En los nodos es la IP del túnel, y la unidad arranca detrás de `wg-quick@wg0`. El Prometheus del servidor los lee con `monitoring_remote_nodes` (job `nodos`, etiqueta `nodo`) y salen en el dashboard "Nodos de fuera".
+
+Tiene el colector textfile en `/var/lib/node-exporter/textfile`. Ahí deja `nodo-export` (rol `backup`) `nodo.prom` con lo mismo que `estado.json`: `nodo_reinicio_pendiente` y `nodo_parches_seguridad_pendientes`. Se ven en el dashboard; no avisan.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `node_exporter_listen` | `""` | Obligatoria. `IP:puerto` |
+| `node_exporter_after` | `""` | Unidad sin la que no arranca (p. ej. `wg-quick@wg0.service`) |
+| `node_exporter_image` | `prom/node-exporter:v1.12.1` | |

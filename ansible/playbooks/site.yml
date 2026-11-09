@@ -29,6 +29,8 @@
   ansible.builtin.import_playbook: webs.yml
 - name: Pterodactyl
   ansible.builtin.import_playbook: pterodactyl.yml
+- name: Túnel con los nodos
+  ansible.builtin.import_playbook: wireguard.yml
 - name: Monitorización
   ansible.builtin.import_playbook: monitoring.yml
 - name: Honeypot

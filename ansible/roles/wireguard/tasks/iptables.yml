@@ -1,0 +1,37 @@
+---
+- name: Comprobar rules.v4
+  ansible.builtin.command: grep -qx -- '-A INPUT -j REJECT --reject-with icmp-host-prohibited' /etc/iptables/rules.v4
+  register: wireguard_oracle_iptables
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Reglas del túnel
+  when: wireguard_oracle_iptables.rc == 0
+  vars:
+    wireguard_rules: >-
+      {{ ([{'proto': 'udp', 'port': wireguard_listen_port | string}] if wireguard_listen_port | int > 0 else [])
+         + [{'iface': wireguard_interface}] }}
+  block:
+    # Para el próximo arranque: antes del REJECT del fichero
+    - name: En rules.v4
+      ansible.builtin.lineinfile:
+        path: /etc/iptables/rules.v4
+        line: >-
+          {{ ('-A INPUT -p ' ~ item.proto ~ ' -m ' ~ item.proto ~ ' --dport ' ~ item.port ~ ' -j ACCEPT')
+             if item.port is defined else ('-A INPUT -i ' ~ item.iface ~ ' -j ACCEPT') }}
+        insertbefore: '^-A INPUT -j REJECT'
+      loop: "{{ wireguard_rules }}"
+
+    # Ahora mismo, al principio de INPUT. No con netfilter-persistent save,
+    # que guardaría también las reglas de Docker.
+    - name: En caliente
+      ansible.builtin.iptables:
+        chain: INPUT
+        action: insert
+        protocol: "{{ item.proto | default(omit) }}"
+        destination_port: "{{ item.port | default(omit) }}"
+        in_interface: "{{ item.iface | default(omit) }}"
+        jump: ACCEPT
+        comment: wireguard
+      loop: "{{ wireguard_rules }}"

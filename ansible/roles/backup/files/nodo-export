@@ -12,11 +12,12 @@ if [ -f /etc/pterodactyl/config.yml ]; then
 fi
 
 # Lo que instalaría apt ahora mismo desde los orígenes de seguridad
+TEXTFILE=/var/lib/node-exporter/textfile
 seguridad=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst .*-security' || true)
 
-python3 - "$DIR/estado.json" "$seguridad" <<'PY'
+python3 - "$DIR/estado.json" "$seguridad" "$TEXTFILE" <<'PY'
 import json, os, sys, time
-path, seguridad = sys.argv[1], int(sys.argv[2])
+path, seguridad, textfile = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
     with open("/var/run/reboot-required.pkgs") as f:
         pkgs = sorted({l.strip() for l in f if l.strip()})
@@ -29,4 +30,20 @@ with open(tmp, "w") as f:
     json.dump(out, f)
 os.chmod(tmp, 0o600)
 os.replace(tmp, path)
+
+# Lo mismo para node-exporter (rol node_exporter), si está
+if os.path.isdir(textfile):
+    prom = os.path.join(textfile, "nodo.prom")
+    with open(prom + ".tmp", "w") as f:
+        f.write("# HELP nodo_reinicio_pendiente 1 si el sistema pide reinicio.\n"
+                "# TYPE nodo_reinicio_pendiente gauge\n"
+                f"nodo_reinicio_pendiente {int(out['reinicio'])}\n"
+                "# HELP nodo_parches_seguridad_pendientes Parches de seguridad sin instalar.\n"
+                "# TYPE nodo_parches_seguridad_pendientes gauge\n"
+                f"nodo_parches_seguridad_pendientes {seguridad}\n"
+                "# HELP nodo_estado_timestamp_seconds Cuándo se miró.\n"
+                "# TYPE nodo_estado_timestamp_seconds gauge\n"
+                f"nodo_estado_timestamp_seconds {out['at']}\n")
+    os.chmod(prom + ".tmp", 0o644)
+    os.replace(prom + ".tmp", prom)
 PY

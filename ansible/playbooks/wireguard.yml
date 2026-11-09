@@ -1,0 +1,25 @@
+---
+# Túnel entre el servidor y los nodos de fuera. Las claves públicas se leen de
+# todas las máquinas en la misma pasada: sin --limit.
+- name: Túnel WireGuard
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - role: wireguard
+      when: wireguard_address is defined
+
+# node-exporter de los nodos, solo en la IP del túnel (el servidor lo lee por ahí)
+- name: Métricas de los nodos de fuera
+  hosts: wings_remotos
+  become: true
+  roles:
+    - role: node_exporter
+      when: node_exporter_listen is defined
+  post_tasks:
+    # Que nodo.prom (reinicio y parches) esté ya, sin esperar al timer
+    - name: Exportar el estado del nodo
+      ansible.builtin.systemd_service:
+        name: nodo-export.service
+        state: started
+      when: node_exporter_listen is defined and not ansible_check_mode
+      failed_when: false

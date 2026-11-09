@@ -48,7 +48,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "time() - node_boot_time_seconds",
+          "expr": "time() - node_boot_time_seconds{job=\"node\"}",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -100,7 +100,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))",
+          "expr": "1 - avg(rate(node_cpu_seconds_total{job=\"node\", mode=\"idle\"}[5m]))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -160,7 +160,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+          "expr": "1 - node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"}",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -220,7 +220,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}",
+          "expr": "1 - node_filesystem_avail_bytes{job=\"node\", mountpoint=\"/\"} / node_filesystem_size_bytes{job=\"node\", mountpoint=\"/\"}",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -421,7 +421,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (mode) (rate(node_cpu_seconds_total{mode!=\"idle\"}[5m])) / scalar(count(node_cpu_seconds_total{mode=\"idle\"}))",
+          "expr": "sum by (mode) (rate(node_cpu_seconds_total{job=\"node\", mode!=\"idle\"}[5m])) / scalar(count(node_cpu_seconds_total{job=\"node\", mode=\"idle\"}))",
           "legendFormat": "{{mode}}",
           "refId": "A"
         }
@@ -461,7 +461,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_load1",
+          "expr": "node_load1{job=\"node\"}",
           "legendFormat": "1 min",
           "refId": "A"
         },
@@ -470,7 +470,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_load5",
+          "expr": "node_load5{job=\"node\"}",
           "legendFormat": "5 min",
           "refId": "B"
         },
@@ -479,7 +479,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_load15",
+          "expr": "node_load15{job=\"node\"}",
           "legendFormat": "15 min",
           "refId": "C"
         },
@@ -488,7 +488,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(node_cpu_seconds_total{mode=\"idle\"})",
+          "expr": "count(node_cpu_seconds_total{job=\"node\", mode=\"idle\"})",
           "legendFormat": "núcleos",
           "refId": "D"
         }
@@ -520,7 +520,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "expr": "node_memory_MemTotal_bytes{job=\"node\"} - node_memory_MemAvailable_bytes{job=\"node\"}",
           "legendFormat": "usada",
           "refId": "A"
         },
@@ -529,7 +529,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_memory_Cached_bytes + node_memory_Buffers_bytes",
+          "expr": "node_memory_Cached_bytes{job=\"node\"} + node_memory_Buffers_bytes{job=\"node\"}",
           "legendFormat": "caché",
           "refId": "B"
         },
@@ -538,7 +538,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_memory_MemTotal_bytes",
+          "expr": "node_memory_MemTotal_bytes{job=\"node\"}",
           "legendFormat": "total",
           "refId": "C"
         }
@@ -571,7 +571,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(node_network_receive_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\"}[5m]))",
+          "expr": "sum(rate(node_network_receive_bytes_total{job=\"node\", device!~\"lo|docker.*|veth.*|br-.*\"}[5m]))",
           "legendFormat": "entrada",
           "refId": "A"
         },
@@ -580,7 +580,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "-sum(rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\"}[5m]))",
+          "expr": "-sum(rate(node_network_transmit_bytes_total{job=\"node\", device!~\"lo|docker.*|veth.*|br-.*\"}[5m]))",
           "legendFormat": "salida",
           "refId": "B"
         }
@@ -612,7 +612,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(node_disk_read_bytes_total{device=\"sda\"}[5m])",
+          "expr": "rate(node_disk_read_bytes_total{job=\"node\", device=\"sda\"}[5m])",
           "legendFormat": "lectura",
           "refId": "A"
         },
@@ -621,7 +621,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "-rate(node_disk_written_bytes_total{device=\"sda\"}[5m])",
+          "expr": "-rate(node_disk_written_bytes_total{job=\"node\", device=\"sda\"}[5m])",
           "legendFormat": "escritura",
           "refId": "B"
         }
@@ -653,7 +653,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"}",
+          "expr": "node_filesystem_avail_bytes{job=\"node\", mountpoint=\"/\"}",
           "legendFormat": "libre en /",
           "refId": "A"
         }

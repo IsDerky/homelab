@@ -1,0 +1,21 @@
+---
+wireguard_interface: wg0
+
+# IP de esta máquina dentro del túnel. Obligatoria.
+wireguard_address: ""
+wireguard_prefix: 24
+
+# Puerto UDP en el que escucha. 0 = no escucha: es la que abre la conexión
+# (p. ej. detrás de un router sin reenvío de puertos).
+wireguard_listen_port: 0
+
+# Cómo la alcanzan los demás (host:puerto). Vacío = nadie conecta con ella, es
+# ella la que conecta con los que tienen endpoint.
+wireguard_endpoint: ""
+
+# Con qué máquinas del inventario hace túnel. Las claves públicas se leen de
+# esas máquinas en la misma pasada.
+wireguard_peer_hosts: []
+
+# Mantiene abierta la entrada del NAT hacia los peers con endpoint
+wireguard_keepalive: 25
