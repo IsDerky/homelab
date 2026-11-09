@@ -1,0 +1,30 @@
+# {{ ansible_managed }}
+# data/ son los datos de Vaultwarden: no los gestiona Ansible, van en el backup
+# (server-backup copia la base de datos con sqlite3 .backup).
+services:
+  vaultwarden:
+    image: {{ vaultwarden_image }}
+    container_name: vaultwarden
+    restart: unless-stopped
+    # Red del host escuchando en 127.0.0.1: Docker no publica ningún puerto
+    network_mode: host
+    user: "{{ vaultwarden_account.uid | default(0) }}:{{ vaultwarden_account.group | default(0) }}"
+    environment:
+      DOMAIN: {{ vaultwarden_domain }}
+      ROCKET_ADDRESS: 127.0.0.1
+      ROCKET_PORT: "{{ vaultwarden_port }}"
+      SIGNUPS_ALLOWED: "{{ vaultwarden_signups_allowed | lower }}"
+      INVITATIONS_ALLOWED: "true"
+      SHOW_PASSWORD_HINT: "false"
+      # nginx pone la IP real; sin esto los intentos fallidos salen como 127.0.0.1
+      IP_HEADER: X-Real-IP
+      LOG_LEVEL: warn
+{% if vaultwarden_admin_token %}
+      ADMIN_TOKEN_FILE: /run/secrets/admin_token
+{% endif %}
+    volumes:
+      - ./data:/data
+{% if vaultwarden_admin_token %}
+      - ./admin-token:/run/secrets/admin_token:ro
+{% endif %}
+    mem_limit: {{ vaultwarden_mem }}

@@ -34,6 +34,7 @@ export RESTIC_PACK_SIZE=64
 
 STAGE=/var/backups/server-backup # volcados que se suben junto al resto
 BENTO=/home/bentonime/apps/bentonime
+VAULT=/opt/vaultwarden/data # si existe, su BD se vuelca como la de Bentonime
 
 SIMULACRO_RESULT=/var/lib/server-backup/simulacro.json # lo lee ops-collect
 
@@ -158,7 +159,9 @@ paths_sistema() {
     --exclude /var/www/pterodactyl/storage/logs
     --exclude /var/www/pterodactyl/storage/framework/cache
     --exclude /opt/honeypot/var
-    --exclude /opt/monitoring/data/prometheus)
+    --exclude /opt/monitoring/data/prometheus
+    # La BD de Vaultwarden en uso: va el volcado de STAGE
+    --exclude "$VAULT/db.sqlite3*")
   # Todas las de los últimos 7 días, luego 4 semanales y 12 mensuales (1 año)
   keep=(--keep-within 7d --keep-weekly 4 --keep-monthly 12)
 }
@@ -231,6 +234,10 @@ case "$mode" in
     install -d -m 700 "$STAGE"
     step="BD de Bentonime"
     sqlite3 "$BENTO/data/anime.db" ".backup '$STAGE/anime.db'"
+    if [ -f "$VAULT/db.sqlite3" ]; then
+      step="BD de Vaultwarden"
+      sqlite3 "$VAULT/db.sqlite3" ".backup '$STAGE/vaultwarden.db'"
+    fi
     step="BD del panel"
     mariadb-dump --single-transaction --routines --triggers --databases panel >"$STAGE/panel.sql"
     step="lista de paquetes"
@@ -322,6 +329,13 @@ case "$mode" in
     # Una comprobación por línea: con set -e, un fallo dentro de "a && b" no corta.
     [ "$animes" -gt 0 ]
     [ "$usuarios" -gt 0 ]
+
+    if [ -f "$dumps/vaultwarden.db" ]; then
+      step="integridad de vaultwarden.db"
+      [ "$(sqlite3 "$dumps/vaultwarden.db" 'PRAGMA integrity_check')" = ok ]
+      cuentas_vault=$(sqlite3 "$dumps/vaultwarden.db" 'SELECT COUNT(*) FROM users')
+      [ "$cuentas_vault" -gt 0 ]
+    fi
 
     step="volcado del panel"
     tail -n 1 "$dumps/panel.sql" | grep -q 'Dump completed'

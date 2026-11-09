@@ -1,0 +1,18 @@
+---
+vaultwarden_dir: /opt/vaultwarden
+vaultwarden_image: vaultwarden/server:1.37.5
+
+# Solo en loopback, para nginx
+vaultwarden_port: 8086
+vaultwarden_mem: 256m
+vaultwarden_user: vaultwarden
+
+# URL completa con la que se entra (la usan los enlaces y WebAuthn)
+vaultwarden_domain: ""
+
+# Sin registro libre: las cuentas se invitan desde /admin. Sin SMTP, el
+# invitado se registra con ese correo directamente.
+vaultwarden_signups_allowed: false
+
+# Hash argon2 del token de /admin (vaultwarden hash). Vacío = sin /admin.
+vaultwarden_admin_token: ""

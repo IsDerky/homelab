@@ -12,6 +12,7 @@ Roles para montar piezas del homelab:
 - `bentonime`: la parte de sistema de la app principal (usuario, unidad systemd, sudo mínimo para el deploy). El código lo despliega su CI.
 - `adguard`: AdGuard Home en Docker Compose como servicio systemd, con Unbound opcional (`playbooks/apps.yml`, junto con `bentonime`).
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
+- `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
@@ -297,6 +298,23 @@ Una página de inicio con [Homepage](https://gethomepage.dev): una tarjeta por s
 | `homepage_layout` | `{}` | Columnas por grupo |
 | `homepage_title` | `Inicio` | |
 | `homepage_image` | `ghcr.io/gethomepage/homepage:v2.7.0` | |
+
+## Rol `vaultwarden`
+
+[Vaultwarden](https://github.com/dani-garcia/vaultwarden) (servidor compatible con las apps de Bitwarden) en Docker Compose como servicio systemd, en `127.0.0.1:8086` y detrás de nginx. En mi caso solo se entra desde la LAN; fuera de casa las apps siguen funcionando con su copia local y sincronizan al volver.
+
+- Corre con un usuario de sistema propio, no como root dentro del contenedor.
+- Sin registro libre. Las cuentas se invitan desde `/admin`; sin SMTP configurado, el invitado se registra directamente con ese correo.
+- El token de `/admin` es un hash argon2 (`docker run --rm -it vaultwarden/server /vaultwarden hash`) y va en un fichero aparte (`ADMIN_TOKEN_FILE`): en el compose habría que escapar sus `$`.
+- La copia la hace `server-backup sistema`: vuelca la BD con `sqlite3 .backup` (la que está en uso se excluye) y se lleva el resto de `data/` (adjuntos y la clave RSA de las sesiones). El simulacro comprueba la integridad del volcado.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `vaultwarden_domain` | `""` | Obligatoria. URL completa (`https://…`) |
+| `vaultwarden_admin_token` | `""` | Hash argon2, en el vault. Vacío = sin `/admin` |
+| `vaultwarden_signups_allowed` | `false` | |
+| `vaultwarden_port` | `8086` | |
+| `vaultwarden_image` | `vaultwarden/server:1.37.5` | |
 
 ## Rol `roninfc`
 

@@ -1,0 +1,8 @@
+---
+# Aparte de apps.yml: aplicarlo no toca AdGuard (el DNS de la casa)
+- name: Vaultwarden
+  hosts: homelab
+  become: true
+  roles:
+    - role: vaultwarden
+      when: vaultwarden_domain is defined
