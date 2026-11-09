@@ -350,6 +350,7 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 | `ctrlpanel_db_password` | `""` | Obligatoria. En el vault |
 | `ctrlpanel_enabled` | `false` | Cola y planificador |
 | `ctrlpanel_port` | `8085` | |
+| `ctrlpanel_nginx_user` | `www-data` | Solo atraviesa la carpeta (ACL) para servir `public/` |
 | `ctrlpanel_log_level` | `error` | |
 
 ## Rol `monitoring`
