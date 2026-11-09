@@ -25,6 +25,8 @@
   ansible.builtin.import_playbook: cloudflared.yml
 - name: Aplicaciones
   ansible.builtin.import_playbook: apps.yml
+- name: Vaultwarden
+  ansible.builtin.import_playbook: vaultwarden.yml
 - name: Webs
   ansible.builtin.import_playbook: webs.yml
 - name: Pterodactyl

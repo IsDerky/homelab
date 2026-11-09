@@ -225,6 +225,24 @@ ICONOS = {
         "................",
         "................",
     ],
+    "vault": [
+        "................",
+        ".kkkkkkkkkkkkkk.",
+        ".kmmmmmmmmmmmmk.",
+        ".kmddddddddddmk.",
+        ".kmdggggggggdmk.",
+        ".kmdggkkkkggdmk.",
+        ".kmdgkYYYYkgdmk.",
+        ".kmmgkYkkYkgdmk.",
+        ".kmmgkYkkYkgdmk.",
+        ".kmdgkYYYYkgdmk.",
+        ".kmdggkkkkggdmk.",
+        ".kmddddddddddmk.",
+        ".kmmmmmmmmmmmmk.",
+        ".kkkkkkkkkkkkkk.",
+        "..kk........kk..",
+        "................",
+    ],
 }
 
 

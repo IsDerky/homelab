@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: vaultwarden
+  namespace: isderky
+  description: Vaultwarden en Docker Compose, solo en loopback, con usuario propio y token de admin en fichero
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

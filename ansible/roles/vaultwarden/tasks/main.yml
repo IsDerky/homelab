@@ -1,0 +1,86 @@
+---
+- name: Falta el dominio
+  ansible.builtin.assert:
+    that: vaultwarden_domain is match('^https://')
+    fail_msg: Define vaultwarden_domain (https://...).
+    quiet: true
+
+- name: Usuario de vaultwarden
+  ansible.builtin.user:
+    name: "{{ vaultwarden_user }}"
+    system: true
+    create_home: false
+    home: /nonexistent
+    shell: /usr/sbin/nologin
+    password_lock: true
+  register: vaultwarden_account
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ vaultwarden_dir }}", owner: root, mode: "0755" }
+    # Base de datos, adjuntos y la clave RSA de las sesiones: van en el backup
+    - { path: "{{ vaultwarden_dir }}/data", owner: "{{ vaultwarden_user }}", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+# Fichero aparte (ADMIN_TOKEN_FILE): el hash lleva $ y en el compose habría
+# que escaparlos
+- name: Token de /admin
+  ansible.builtin.copy:
+    content: "{{ vaultwarden_admin_token }}"
+    dest: "{{ vaultwarden_dir }}/admin-token"
+    owner: "{{ vaultwarden_user }}"
+    group: "{{ vaultwarden_user }}"
+    mode: "0400"
+  no_log: true
+  when: vaultwarden_admin_token | length > 0
+  notify: Aplicar compose de vaultwarden
+
+- name: Sin token de /admin
+  ansible.builtin.file:
+    path: "{{ vaultwarden_dir }}/admin-token"
+    state: absent
+  when: vaultwarden_admin_token | length == 0
+  notify: Aplicar compose de vaultwarden
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ vaultwarden_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de vaultwarden
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: vaultwarden.service.j2
+    dest: /etc/systemd/system/vaultwarden.service
+    mode: "0644"
+  register: vaultwarden_unit
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: vaultwarden.service
+    enabled: true
+    state: started
+  # En --check la unidad nueva no se ha copiado de verdad
+  when: not (ansible_check_mode and vaultwarden_unit.changed)
+
+- name: Responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ vaultwarden_port }}/alive
+  register: vaultwarden_check
+  until: vaultwarden_check.status == 200
+  retries: 12
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode
