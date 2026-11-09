@@ -27,6 +27,8 @@
     enabled: true
     state: started
     daemon_reload: "{{ backup_nodo_units.changed }}"
+  # En --check la unidad nueva no se ha copiado de verdad
+  when: not (ansible_check_mode and backup_nodo_units.changed)
 
 # Que la primera copia ya lo encuentre
 - name: Primera exportación
