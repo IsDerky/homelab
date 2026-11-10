@@ -26,6 +26,7 @@
   register: usb_storage_part_type
   changed_when: false
   failed_when: false
+  check_mode: false
 
 # Lo único destructivo del rol: solo con usb_storage_init y si aún no hay LVM
 - name: Preparar el disco (BORRA lo que tenga)
@@ -91,6 +92,8 @@
     label: "{{ item.name }}"
   register: usb_storage_uuids
   changed_when: false
+  # Solo lee; sin esto, en --check el montaje de abajo no tiene UUID y falla
+  check_mode: false
 
 - name: Montar por UUID
   ansible.posix.mount:
