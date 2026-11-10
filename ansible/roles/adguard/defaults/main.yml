@@ -18,6 +18,10 @@ adguard_network_subnet: 172.31.53.0/24
 adguard_unbound_ip: 172.31.53.53
 # Por si Unbound no responde. Vacío = los upstream que tuviera AdGuard antes.
 adguard_fallback_dns: []
+# Upstream por dominio que no pasan por Unbound, con la sintaxis de AdGuard
+# ("[/dominio/]upstream"). Útil para CDNs que eligen nodo según la IP de quien
+# pregunta y a veces dan uno caído.
+adguard_upstream_extra: []
 # Dominios propios que pueden responder con IP de la LAN. Unbound descarta esas
 # respuestas (protección contra DNS rebinding) y sin esto no resuelven.
 adguard_unbound_private_domains: []
