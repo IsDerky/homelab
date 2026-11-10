@@ -1,6 +1,8 @@
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: ['github>IsDerky/ci'],
+  // Versiones de los hooks de .pre-commit-config.yaml (viene apagado)
+  'pre-commit': { enabled: true },
   customManagers: [
     {
       // adguard_image: adguard/adguardhome:v0.107.79, prometheus: prom/prometheus:v3.15.1...
@@ -25,6 +27,7 @@
       description: 'Wings solo cuando se pida desde el dashboard',
       matchDepNames: ['pterodactyl/wings'],
       dependencyDashboardApproval: true,
+      automerge: false,
     },
   ],
 }

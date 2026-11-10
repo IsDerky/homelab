@@ -1,0 +1,22 @@
+# Compatible con lo que exige ansible-lint (lo lee también)
+extends: default
+
+ignore: |
+  site/
+  .ansible/
+
+rules:
+  line-length: disable
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: false
+  braces:
+    max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+  # "on:" de los workflows
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
