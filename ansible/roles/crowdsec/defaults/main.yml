@@ -1,0 +1,24 @@
+---
+# CrowdSec: lee logs, detecta ataques y bloquea esas IPs con el bouncer de
+# iptables. Además comparte lo que ve y recibe la lista de la comunidad.
+
+# Colecciones del hub (parsers + escenarios). Las de autor que no es
+# crowdsecurity son YAML declarativo: se revisan antes de añadirlas.
+crowdsec_collections:
+  - crowdsecurity/linux
+
+# Ficheros de /etc/crowdsec/acquis.d/<nombre>.yaml: de dónde lee.
+#   - nombre: wings
+#     config:
+#       source: journalctl
+#       journalctl_filter: ["_SYSTEMD_UNIT=wings.service"]
+#       labels: {type: pterodactyl}
+crowdsec_acquis: []
+
+# Cadenas donde bloquea el bouncer. Solo INPUT = lo que escucha la propia
+# máquina. Lo publicado por Docker va por DOCKER-USER (aquí no, para que un
+# honeypot en la misma máquina siga viendo a quien llega).
+crowdsec_bouncer_chains: [INPUT]
+
+# Métricas de Prometheus de CrowdSec (solo loopback)
+crowdsec_prometheus_port: 6060
