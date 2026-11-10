@@ -209,6 +209,7 @@ fail2ban banea a quien ya te está atacando. CrowdSec además comparte lo que ve
 - **Colecciones** (`crowdsec_collections`): `crowdsecurity/linux`, y de la comunidad `lourys/pterodactyl` (fuerza bruta contra el SFTP de Wings) y `PumbaLP/cowrie` (todo el que hace login o mete comandos en el honeypot). Revisadas antes de añadirlas; son YAML declarativo, sin código.
 - **Dónde bloquea** (`crowdsec_bouncer_chains`): solo en `INPUT`, lo que escucha la propia máquina (API y SFTP de Wings). Lo publicado por Docker va por `DOCKER-USER` y aquí no se toca: el honeypot está en la misma máquina, y bloquear ahí le quitaría justo lo que tiene que registrar. Así lo que ve el honeypot sirve para cerrarle Wings a esa IP.
 - El repositorio es el de CrowdSec, con preferencia sobre el de Ubuntu (que trae una versión muy vieja). Al final comprueba que el bouncer ha metido su regla en iptables.
+- **Puerto de la API local** (`crowdsec_lapi_port`): la de serie es el 8080, el mismo que Wings. Va en `config.yaml.local` antes de instalar el paquete, que arranca CrowdSec al instalarse; después se ajusta la URL de cscli y la del bouncer.
 - Métricas en `127.0.0.1:6060` (`monitoring_crowdsec_port` en el rol `monitoring`): fila "CrowdSec" en el dashboard de operación. No avisa por DM; si deja de responder, salta `ObjetivoCaido`.
 - Se activa con `crowdsec_activo: true` en el inventario.
 
@@ -219,6 +220,7 @@ Probado en un contenedor 24.04 con systemd: en seco sobre limpio, dos pasadas (l
 | `crowdsec_collections` | `[crowdsecurity/linux]` | Colecciones del hub |
 | `crowdsec_acquis` | `[]` | `nombre` y `config` (lo que va en el YAML de `acquis.d`) |
 | `crowdsec_bouncer_chains` | `[INPUT]` | Cadenas de iptables donde bloquea |
+| `crowdsec_lapi_port` | `8080` | API local (cscli y bouncer). Cambiarlo si hay Wings |
 
 ## Rol `avisos`
 
