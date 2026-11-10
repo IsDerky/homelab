@@ -16,3 +16,10 @@ Endpoint = {{ hostvars[peer].wireguard_endpoint }}
 PersistentKeepalive = {{ wireguard_keepalive }}
 {% endif %}
 {% endfor %}
+{% for client in wireguard_clients %}
+
+[Peer]
+# {{ client.nombre }} (fuera del inventario)
+PublicKey = {{ client.public_key }}
+AllowedIPs = {{ client.address }}/32
+{% endfor %}

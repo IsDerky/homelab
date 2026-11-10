@@ -19,3 +19,10 @@ wireguard_peer_hosts: []
 
 # Mantiene abierta la entrada del NAT hacia los peers con endpoint
 wireguard_keepalive: 25
+
+# Dispositivos de fuera del inventario (el móvil) que conectan con esta
+# máquina. Necesita wireguard_listen_port. La privada la tiene el dispositivo.
+#   - nombre: movil
+#     address: 10.0.0.10
+#     public_key: "base64..."
+wireguard_clients: []
