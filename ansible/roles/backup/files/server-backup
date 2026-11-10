@@ -36,6 +36,7 @@ STAGE=/var/backups/server-backup # volcados que se suben junto al resto
 BENTO=/home/bentonime/apps/bentonime
 VAULT=/opt/vaultwarden/data # si existe, su BD se vuelca como la de Bentonime
 CTRLPANEL=/var/www/ctrlpanel # si existe, va la app y se vuelca su BD
+BDSERV=bd-servidores # contenedor con las bases de los servidores (rol bd_servidores)
 
 SIMULACRO_RESULT=/var/lib/server-backup/simulacro.json # lo lee ops-collect
 
@@ -249,6 +250,13 @@ case "$mode" in
       step="BD de CtrlPanel"
       mariadb-dump --single-transaction --routines --triggers --databases ctrlpanel >"$STAGE/ctrlpanel.sql"
     fi
+    if [ "$(docker inspect -f '{{.State.Running}}' "$BDSERV" 2>/dev/null)" = true ]; then
+      step="BD de los servidores"
+      # La contraseña por entorno, no en la línea de comandos (se vería en ps)
+      docker exec "$BDSERV" sh -c 'MYSQL_PWD="$(cat /run/secrets/root)" exec mariadb-dump -uroot --all-databases --single-transaction --routines --triggers --events' >"$STAGE/bd-servidores.sql"
+    else
+      rm -f "$STAGE/bd-servidores.sql"
+    fi
     step="lista de paquetes"
     dpkg --get-selections >"$STAGE/paquetes.txt"
 
@@ -356,6 +364,11 @@ case "$mode" in
       tail -n 1 "$dumps/ctrlpanel.sql" | grep -q 'Dump completed'
       tablas_ctrlpanel=$(grep -c '^CREATE TABLE' "$dumps/ctrlpanel.sql")
       [ "$tablas_ctrlpanel" -gt 20 ]
+    fi
+
+    if [ -f "$dumps/bd-servidores.sql" ]; then
+      step="volcado de las BD de los servidores"
+      tail -n 1 "$dumps/bd-servidores.sql" | grep -q 'Dump completed'
     fi
 
     step="lista de paquetes"

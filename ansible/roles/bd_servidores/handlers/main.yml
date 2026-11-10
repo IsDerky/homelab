@@ -1,0 +1,11 @@
+---
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Aplicar compose de bd-servidores
+  ansible.builtin.command: docker compose up -d --remove-orphans
+  args:
+    chdir: "{{ bd_servidores_dir }}"
+  changed_when: true
+  when: not ansible_check_mode

@@ -13,6 +13,7 @@ Roles para montar piezas del homelab:
 - `adguard`: AdGuard Home en Docker Compose como servicio systemd, con Unbound opcional (`playbooks/apps.yml`, junto con `bentonime`).
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
+- `bd_servidores`: MariaDB aparte para las bases de datos de los servidores de Pterodactyl, solo en la red de Wings (`playbooks/bd-servidores.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `ctrlpanel`: la parte de sistema de CtrlPanel (Laravel) con usuario y pool de PHP-FPM propios, y su migración desde otra máquina por fases (`playbooks/migrar-ctrlpanel.yml`).
 - `ci`: runners de GitHub Actions en el servidor que solo pueden desplegar con `deploy-repo`, más sus deploy keys y el registro en GitHub (`playbooks/ci.yml`).
@@ -349,6 +350,26 @@ Una página de inicio con [Homepage](https://gethomepage.dev): una tarjeta por s
 | `vaultwarden_signups_allowed` | `false` | |
 | `vaultwarden_port` | `8086` | |
 | `vaultwarden_image` | `vaultwarden/server:1.37.5` | |
+
+## Rol `bd_servidores`
+
+El "Database Host" de Pterodactyl: un MariaDB en Docker donde el panel crea una base y un usuario por servidor. Va aparte del MariaDB del sistema (el del panel), para que lo que hagan los servidores no toque al panel y tenga su propio tope de memoria.
+
+- Red del host escuchando solo en la IP del host en la red de Wings (`pterodactyl0`, por defecto `172.18.0.1`): los contenedores de los servidores llegan, el resto de la red no. Al no publicar puertos con Docker, pasa por ufw; hace falta una regla que abra el puerto solo desde esa red y esa interfaz.
+- Usuario de sistema propio, `root` solo desde dentro del contenedor y contraseñas en ficheros. El usuario del panel (`ALL PRIVILEGES ... WITH GRANT OPTION`, lo que pide Pterodactyl) se crea al inicializar la base; cambiar su contraseña después es a mano.
+- La copia la hace `server-backup sistema` con `mariadb-dump --all-databases` dentro del contenedor, y el simulacro comprueba que el volcado está completo.
+- En el panel: Admin → Databases, con la IP de arriba, el puerto y el usuario del panel, ligado al nodo.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `bd_servidores_ip` | `""` | Obligatoria. IP del host en la red de Wings |
+| `bd_servidores_root_password` | `""` | En el vault, 20+ caracteres |
+| `bd_servidores_panel_password` | `""` | En el vault, 20+ caracteres |
+| `bd_servidores_panel_user` | `pterodactyl` | |
+| `bd_servidores_port` | `3306` | |
+| `bd_servidores_mem` | `768m` | Tope de memoria del contenedor |
+| `bd_servidores_buffer_pool` | `256M` | `innodb_buffer_pool_size` |
+| `bd_servidores_image` | `mariadb:11.4.13` | |
 
 ## Rol `roninfc`
 
