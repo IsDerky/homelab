@@ -25,6 +25,14 @@
     - "{{ deriva_dir }}"
     - "{{ deriva_dir }}/home"
 
+- name: Carpeta del resumen (solo nombres de tareas)
+  ansible.builtin.file:
+    path: /var/lib/deriva
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Venv propio con ansible-core
   ansible.builtin.pip:
     name: ansible-core=={{ deriva_ansible_core }}

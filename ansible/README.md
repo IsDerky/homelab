@@ -543,7 +543,7 @@ Tiene el colector textfile en `/var/lib/node-exporter/textfile`. Ahí deja `nodo
 
 ## Rol `deriva`
 
-Que `site.yml` dé `changed=0` el día que se aplica no dice nada de una semana después: alguien toca un fichero a mano, o se fusiona algo y no se aplica. Cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en el colector textfile cuántas tareas cambiarían (`homelab_deriva_cambios`), si falló algo y cuándo fue. En Grafana, fila "Deriva de Ansible" del dashboard de operación; qué tareas, en `/opt/deriva/cambios.txt`.
+Que `site.yml` dé `changed=0` el día que se aplica no dice nada de una semana después: alguien toca un fichero a mano, o se fusiona algo y no se aplica. Cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en el colector textfile cuántas tareas cambiarían (`homelab_deriva_cambios`), si falló algo y cuándo fue. En Grafana, fila "Deriva de Ansible" del dashboard de operación; qué tareas, en `/var/lib/deriva/cambios.txt`.
 
 - **En el propio servidor, no en el PC**: la clave de Ansible tiene frase y el PC no está siempre encendido. Trae el código (público, por https) y el inventario (privado, con una deploy key de solo lectura que genera él y que el rol da de alta en GitHub con `gh` desde el controlador). La frase del vault queda en `/etc/deriva` (root, `0600`): casi todo lo que descifra ya está desplegado en esa máquina.
 - **Solo contra sí mismo** (`--limit` y `ansible_connection=local`). Lo que necesita a otras máquinas en la misma pasada lleva la etiqueta `nodos` en `site.yml` y se salta (`deriva_skip_tags`).

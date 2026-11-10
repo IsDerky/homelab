@@ -1033,7 +1033,7 @@
         "w": 8,
         "h": 4
       },
-      "description": "site.yml en --check cada noche contra el servidor. Más de 0: algo tocado a mano o algo en main sin aplicar. Cuáles: /opt/deriva/cambios.txt",
+      "description": "site.yml en --check cada noche contra el servidor. Más de 0: algo tocado a mano o algo en main sin aplicar. Cuáles: /var/lib/deriva/cambios.txt",
       "targets": [
         {
           "datasource": {

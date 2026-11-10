@@ -1,14 +1,40 @@
 ---
+# El último en orden alfabético: /usr/lib/sysctl.d/99-protect-links.conf (del
+# sistema) iba detrás del 90 de antes y volvía a poner fs.protected_fifos=1 en
+# cada arranque. Lo destapó la deriva.
 - name: Sysctl
   ansible.posix.sysctl:
     name: "{{ item.key }}"
     value: "{{ item.value }}"
-    sysctl_file: /etc/sysctl.d/90-endurecimiento.conf
+    sysctl_file: /etc/sysctl.d/99-zz-endurecimiento.conf
     sysctl_set: "{{ endurecimiento_sysctl_aplicar }}"
     reload: false
   loop: "{{ endurecimiento_sysctl | dict2items }}"
   loop_control:
     label: "{{ item.key }}={{ item.value }}"
+
+- name: Sin el fichero de sysctl de antes
+  ansible.builtin.file:
+    path: /etc/sysctl.d/90-endurecimiento.conf
+    state: absent
+
+# ufw aplica su propio sysctl al arrancar, después de systemd-sysctl, y trae
+# log_martians=0. Solo se cambian las claves que ya están en su fichero.
+- name: ¿Tiene ufw su sysctl?
+  ansible.builtin.stat:
+    path: /etc/ufw/sysctl.conf
+  register: endurecimiento_ufw_sysctl
+
+- name: Mismos valores en el sysctl de ufw
+  ansible.builtin.lineinfile:
+    path: /etc/ufw/sysctl.conf
+    regexp: "^{{ item.key | replace('.', '/') }}="
+    line: "{{ item.key | replace('.', '/') }}={{ item.value }}"
+    backrefs: true
+  loop: "{{ endurecimiento_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: endurecimiento_ufw_sysctl.stat.exists
 
 - name: Protocolos de red que no se usan
   ansible.builtin.template:
