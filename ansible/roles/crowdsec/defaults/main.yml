@@ -20,5 +20,9 @@ crowdsec_acquis: []
 # honeypot en la misma máquina siga viendo a quien llega).
 crowdsec_bouncer_chains: [INPUT]
 
+# API local (loopback): la usan cscli y el bouncer. La de serie, 8080, es la
+# de Wings.
+crowdsec_lapi_port: 8080
+
 # Métricas de Prometheus de CrowdSec (solo loopback)
 crowdsec_prometheus_port: 6060

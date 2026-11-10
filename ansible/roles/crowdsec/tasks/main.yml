@@ -28,6 +28,29 @@
     group: root
     mode: "0644"
 
+# Antes del paquete: al instalarse arranca CrowdSec, y con el puerto de serie
+# ocupado (Wings) dpkg lo deja a medio configurar. .local: CrowdSec lo mezcla
+# con config.yaml y las actualizaciones no lo pisan.
+- name: Carpeta de configuración
+  ansible.builtin.file:
+    path: /etc/crowdsec
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Puerto de la API local
+  ansible.builtin.copy:
+    content: |
+      api:
+        server:
+          listen_uri: 127.0.0.1:{{ crowdsec_lapi_port }}
+    dest: /etc/crowdsec/config.yaml.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reiniciar crowdsec
+
 # Primero el motor: el paquete del bouncer se da de alta solo contra la API local
 - name: CrowdSec
   ansible.builtin.apt:
@@ -74,6 +97,22 @@
   loop_control:
     label: "{{ item.nombre }}"
   notify: Recargar crowdsec
+
+- name: Puerto de la API local para cscli
+  ansible.builtin.replace:
+    path: /etc/crowdsec/local_api_credentials.yaml
+    regexp: '^url: .*$'
+    replace: "url: http://127.0.0.1:{{ crowdsec_lapi_port }}"
+  notify: Reiniciar crowdsec
+  when: not (ansible_check_mode and crowdsec_nuevo)
+
+- name: Puerto de la API local para el bouncer
+  ansible.builtin.replace:
+    path: /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+    regexp: '^api_url: .*$'
+    replace: "api_url: http://127.0.0.1:{{ crowdsec_lapi_port }}/"
+  notify: Reiniciar el bouncer
+  when: not (ansible_check_mode and crowdsec_nuevo)
 
 - name: Cadenas del bouncer
   ansible.builtin.replace:
