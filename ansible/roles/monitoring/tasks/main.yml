@@ -231,7 +231,9 @@
        + ([monitoring_ports.ops_exporter] if monitoring_ops_group | length > 0 else [])
        + ([monitoring_ports.alert_dm] if monitoring_alert_dm else []) }}
 
-# Que estén arrancados no basta: Prometheus tiene que poder leerlos a todos
+# Que estén arrancados no basta: Prometheus tiene que poder leerlos a todos.
+# Los de contenido van cada 15 min: tras recargar pueden seguir sin leer
+# (unknown), pero caídos no.
 - name: Todos los objetivos de Prometheus responden
   ansible.builtin.uri:
     url: http://127.0.0.1:{{ monitoring_ports.prometheus }}/api/v1/targets?state=active
@@ -239,7 +241,11 @@
   register: monitoring_targets
   until: >-
     monitoring_targets.json.data.activeTargets | length > 0
-    and monitoring_targets.json.data.activeTargets | rejectattr('health', 'equalto', 'up') | list | length == 0
+    and monitoring_targets.json.data.activeTargets
+        | rejectattr('health', 'equalto', 'up')
+        | rejectattr('scrapePool', 'equalto', 'contenido')
+        | list | length == 0
+    and monitoring_targets.json.data.activeTargets | selectattr('health', 'equalto', 'down') | list | length == 0
   retries: 12
   delay: 10
   changed_when: false
