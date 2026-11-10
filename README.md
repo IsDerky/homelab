@@ -55,7 +55,7 @@ flowchart LR
 - **Vigilancia en dos partes**: un Worker de Cloudflare que espera latidos (si el servidor muere entero, avisa igual) y Prometheus + Grafana con reglas probadas en el CI. Solo avisa de lo que importa. → [Vigilancia](https://isderky.github.io/homelab/vigilancia/)
 - **Despliegue sin dar poder al runner**: el runner solo puede pedir que se instale un commit que ya está en `main`; el código lo trae otro proceso con una clave de solo lectura. Workflows comunes en [IsDerky/ci](https://github.com/IsDerky/ci) y Renovate con las sumas SHA-256 ya puestas. → [CI/CD](https://isderky.github.io/homelab/cicd/)
 - **Endurecimiento medido**: auditoría con Lynis antes y después (67/69/69 → 72/76/75), túnel WireGuard para las métricas de los nodos, SSH solo con clave y aviso de cada inicio de sesión. → [Red y seguridad](https://isderky.github.io/homelab/red-y-seguridad/)
-- **Todo en Ansible**: `site.yml` aplica el servidor entero y una segunda pasada da `changed=0`. Cada rol nuevo se prueba antes en contenedores con systemd. → [Roles](ansible/README.md)
+- **Todo en Ansible**: `site.yml` aplica el servidor entero y una segunda pasada da `changed=0`. Cada rol nuevo se prueba antes en contenedores con systemd, y pre-commit pasa ansible-lint, yamllint y actionlint antes de cada commit. → [Roles](ansible/README.md)
 
 ## Licencia
 

@@ -76,7 +76,7 @@
       - --token
       - "{{ ci_token.stdout }}"
       - --name
-      - "{{ ansible_hostname }}-{{ ci_repo.nombre }}"
+      - "{{ ansible_facts['hostname'] }}-{{ ci_repo.nombre }}"
       - --labels
       - "{{ ci_repo.nombre }}"
       - --work

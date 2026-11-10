@@ -54,7 +54,7 @@
   args:
     executable: /bin/bash
   environment:
-    NOMBRE: "{{ ansible_hostname }}-{{ ci_viejo.nombre }}"
+    NOMBRE: "{{ ansible_facts['hostname'] }}-{{ ci_viejo.nombre }}"
     CLAVE: "{{ (ci_viejo_clave.content | b64decode).split()[:2] | join(' ') if ci_viejo_pub.stat.exists else '' }}"
   register: ci_viejo_baja
   changed_when: "'baja' in ci_viejo_baja.stdout"

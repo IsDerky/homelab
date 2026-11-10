@@ -67,7 +67,7 @@
 
 - name: Deploy keys (una por repo)
   ansible.builtin.command: >-
-    ssh-keygen -q -t ed25519 -N "" -C "deploy-repo {{ item.nombre }}@{{ ansible_hostname }}"
+    ssh-keygen -q -t ed25519 -N "" -C "deploy-repo {{ item.nombre }}@{{ ansible_facts['hostname'] }}"
     -f /root/.ssh/deploy-{{ item.nombre }}
   args:
     creates: /root/.ssh/deploy-{{ item.nombre }}
