@@ -29,14 +29,14 @@
 - name: Upstream y respaldo
   ansible.builtin.set_fact:
     adguard_conf: "{{ adguard_conf_raw.content | b64decode | from_yaml }}"
-    adguard_upstream: ["{{ adguard_unbound_ip }}"]
+    adguard_upstream: "{{ [adguard_unbound_ip] + adguard_upstream_extra }}"
 
 - name: Respaldo = lo de antes si no se define otro
   ansible.builtin.set_fact:
     adguard_fallback: >-
       {{ adguard_fallback_dns
          or adguard_conf.dns.fallback_dns | default([], true)
-         or adguard_conf.dns.upstream_dns | reject('equalto', adguard_unbound_ip) | list }}
+         or adguard_conf.dns.upstream_dns | difference(adguard_upstream) }}
 
 - name: AdGuard pregunta a Unbound
   ansible.builtin.copy:
