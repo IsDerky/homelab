@@ -33,8 +33,10 @@
   ansible.builtin.import_playbook: ci.yml
 - name: Pterodactyl
   ansible.builtin.import_playbook: pterodactyl.yml
+# nodos: necesita a todas las máquinas en la misma pasada (la deriva lo salta)
 - name: Túnel con los nodos
   ansible.builtin.import_playbook: wireguard.yml
+  tags: [nodos]
 - name: Monitorización
   ansible.builtin.import_playbook: monitoring.yml
 - name: Honeypot

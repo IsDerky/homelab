@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: deriva
+  namespace: isderky
+  description: site.yml en --check cada noche contra la propia máquina, con el número de cambios para node-exporter
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

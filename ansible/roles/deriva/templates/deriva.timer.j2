@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Deriva cada noche
+
+[Timer]
+OnCalendar={{ deriva_calendario }}
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
