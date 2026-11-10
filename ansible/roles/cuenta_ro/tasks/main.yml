@@ -30,7 +30,7 @@
     group: root
     mode: "0644"
 
-- name: sudo
+- name: Reglas de sudo
   ansible.builtin.template:
     src: sudoers.j2
     dest: /etc/sudoers.d/{{ cuenta_ro_user }}
