@@ -20,6 +20,14 @@
     state: reloaded
   when: not ansible_check_mode
 
+# El worker tiene el código viejo en memoria
+- name: Reiniciar la cola de CtrlPanel
+  ansible.builtin.command: runuser -u {{ ctrlpanel_user }} -- php artisan queue:restart
+  args:
+    chdir: "{{ ctrlpanel_dir }}"
+  changed_when: true
+  when: not ansible_check_mode
+
 - name: Limpiar caché de config
   ansible.builtin.command: runuser -u {{ ctrlpanel_user }} -- php artisan config:clear
   args:
