@@ -155,6 +155,17 @@
     quiet: true
   when: ctrlpanel_enabled | bool
 
+# 1.2.0 no genera facturas: dentro de la cola getDiscount() sin usuario lee
+# Auth::user(), que es null. Arreglado en development; cuando salga la
+# siguiente versión esto deja de encontrar la línea y no hace nada.
+- name: Parche de facturas
+  ansible.builtin.replace:
+    path: "{{ ctrlpanel_dir }}/app/Traits/Invoiceable.php"
+    regexp: 'PartnerDiscount::getDiscount\(\)\)'
+    replace: 'PartnerDiscount::getDiscount($user->id))'
+  when: ctrlpanel_artisan.stat.exists
+  notify: Reiniciar la cola de CtrlPanel
+
 - name: Cola y planificador
   ansible.builtin.systemd_service:
     name: "{{ item }}"
