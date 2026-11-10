@@ -1,0 +1,8 @@
+---
+# Comprobación nocturna de deriva (fuera de site.yml: necesita la frase del
+# vault y gh del controlador, y la propia comprobación corre site.yml).
+- name: Deriva
+  hosts: homelab
+  become: true
+  roles:
+    - deriva

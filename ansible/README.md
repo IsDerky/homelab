@@ -23,6 +23,7 @@ Roles para montar piezas del homelab:
 - `wireguard`: túnel entre el servidor y los nodos de fuera, con las claves generadas en cada máquina (`playbooks/wireguard.yml`).
 - `node_exporter`: node-exporter suelto escuchando solo en la IP del túnel, para los nodos (también en `playbooks/wireguard.yml`).
 - `cuenta_ro`: cuenta SSH de solo lectura con la clave restringida y sudo solo para comandos de consulta con argumentos fijos (`playbooks/ssh.yml`).
+- `deriva`: cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en Grafana cuántas tareas cambiarían (`playbooks/deriva.yml`).
 
 ## Uso
 
@@ -539,3 +540,20 @@ Tiene el colector textfile en `/var/lib/node-exporter/textfile`. Ahí deja `nodo
 | `node_exporter_listen` | `""` | Obligatoria. `IP:puerto` |
 | `node_exporter_after` | `""` | Unidad sin la que no arranca (p. ej. `wg-quick@wg0.service`) |
 | `node_exporter_image` | `prom/node-exporter:v1.12.1` | |
+
+## Rol `deriva`
+
+Que `site.yml` dé `changed=0` el día que se aplica no dice nada de una semana después: alguien toca un fichero a mano, o se fusiona algo y no se aplica. Cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en el colector textfile cuántas tareas cambiarían (`homelab_deriva_cambios`), si falló algo y cuándo fue. En Grafana, fila "Deriva de Ansible" del dashboard de operación; qué tareas, en `/opt/deriva/cambios.txt`.
+
+- **En el propio servidor, no en el PC**: la clave de Ansible tiene frase y el PC no está siempre encendido. Trae el código (público, por https) y el inventario (privado, con una deploy key de solo lectura que genera él y que el rol da de alta en GitHub con `gh` desde el controlador). La frase del vault queda en `/etc/deriva` (root, `0600`): casi todo lo que descifra ya está desplegado en esa máquina.
+- **Solo contra sí mismo** (`--limit` y `ansible_connection=local`). Lo que necesita a otras máquinas en la misma pasada lleva la etiqueta `nodos` en `site.yml` y se salta (`deriva_skip_tags`).
+- `--check` no cambia nada. Las tareas que corren igualmente (`check_mode: false`) son todas de consulta.
+- ansible-core con versión fija en un venv propio (Renovate la sube). Con prioridad baja, tope de CPU y memoria, a las 03:15.
+- Va en `playbooks/deriva.yml`, fuera de `site.yml`: necesita cosas del controlador y la propia comprobación corre `site.yml`.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `deriva_repo_codigo` / `deriva_repo_config` | `""` | Obligatorias. URL del código (https) y del inventario (SSH) |
+| `deriva_github_config` | `""` | `owner/repo` del inventario para dar de alta la deploy key. Vacío = a mano |
+| `deriva_skip_tags` | `[nodos]` | Lo que no se puede comprobar desde la propia máquina |
+| `deriva_calendario` | `*-*-* 03:15` | `OnCalendar` del timer |

@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Deriva: site.yml en --check contra esta máquina
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/deriva
+Environment=HOME={{ deriva_dir }}/home
+# Que no moleste a los servidores de juego
+Nice=15
+IOSchedulingClass=idle
+CPUQuota=100%
+MemoryMax=1G
+TimeoutStartSec=30min
+PrivateTmp=yes

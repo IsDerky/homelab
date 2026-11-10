@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# site.yml en --check contra esta máquina. Deja en el colector textfile cuántas
+# tareas cambiarían y en $DIR/cambios.txt cuáles. Configuración en /etc/deriva.
+set -uo pipefail
+. "${DERIVA_ENV:-/etc/deriva/deriva.env}"
+
+LOG=$DIR/ultimo.log
+export GIT_SSH_COMMAND="ssh -i /etc/deriva/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/etc/deriva/known_hosts"
+export ANSIBLE_COLLECTIONS_PATH=$DIR/colecciones
+export ANSIBLE_VAULT_PASSWORD_FILE=/etc/deriva/vault-pass
+export ANSIBLE_NOCOLOR=1
+
+metricas() {  # cambios fallos ok
+  local tmp
+  tmp=$(mktemp "$TEXTFILE/.deriva-XXXXXX")
+  cat > "$tmp" <<EOF
+# HELP homelab_deriva_cambios Tareas que cambiarían en site.yml --check
+# TYPE homelab_deriva_cambios gauge
+homelab_deriva_cambios $1
+# HELP homelab_deriva_fallos Tareas fallidas o máquinas inalcanzables en la comprobación
+# TYPE homelab_deriva_fallos gauge
+homelab_deriva_fallos $2
+# HELP homelab_deriva_ok La comprobación terminó y se pudo leer el resultado
+# TYPE homelab_deriva_ok gauge
+homelab_deriva_ok $3
+# HELP homelab_deriva_timestamp_seconds Última comprobación
+# TYPE homelab_deriva_timestamp_seconds gauge
+homelab_deriva_timestamp_seconds $(date +%s)
+EOF
+  chmod 644 "$tmp"
+  mv "$tmp" "$TEXTFILE/deriva.prom"
+}
+
+fallo() {
+  echo "deriva: $1" >&2
+  metricas 0 0 0
+  exit 1
+}
+
+traer() {  # url carpeta
+  if [ -d "$2/.git" ]; then
+    git -C "$2" fetch -q origin && git -C "$2" reset -q --hard origin/HEAD
+  else
+    git clone -q "$1" "$2"
+  fi
+}
+
+traer "$REPO_CODIGO" "$DIR/codigo" || fallo "no se pudo traer el código"
+traer "$REPO_CONFIG" "$DIR/config" || fallo "no se pudo traer el inventario"
+"$DIR/venv/bin/ansible-galaxy" collection install -r "$DIR/codigo/ansible/requirements.yml" \
+  -p "$DIR/colecciones" >/dev/null || fallo "colecciones"
+
+cd "$DIR/codigo/ansible" || fallo "sin carpeta ansible"
+"$DIR/venv/bin/ansible-playbook" -i "$DIR/config/inventory.ini" playbooks/site.yml \
+  --check --limit "$LIMITE" --skip-tags "$SALTAR" -e ansible_connection=local > "$LOG" 2>&1
+
+recap=$(grep -E "^$LIMITE +:" "$LOG" | tail -1)
+cambios=$(sed -n 's/.* changed=\([0-9]*\).*/\1/p' <<<"$recap")
+fallidas=$(sed -n 's/.* failed=\([0-9]*\).*/\1/p' <<<"$recap")
+inalcanzable=$(sed -n 's/.* unreachable=\([0-9]*\).*/\1/p' <<<"$recap")
+[ -n "$cambios" ] || fallo "no hay resumen en $LOG"
+
+# Qué tareas, para mirarlo sin tener que leer el log entero
+awk '/^TASK \[/{t=$0} /^changed: /{print t}' "$LOG" | sort -u > "$DIR/cambios.txt"
+
+fallos=$((fallidas + inalcanzable))
+metricas "$cambios" "$fallos" $((fallos == 0 ? 1 : 0))

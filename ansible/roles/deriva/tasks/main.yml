@@ -1,0 +1,115 @@
+---
+- name: Faltan datos
+  ansible.builtin.assert:
+    that:
+      - deriva_repo_codigo | length > 0
+      - deriva_repo_config | length > 0
+      - deriva_vault_password_file | length > 0
+    fail_msg: Define deriva_repo_codigo y deriva_repo_config, y lanza con ANSIBLE_VAULT_PASSWORD_FILE.
+    quiet: true
+
+- name: Paquetes
+  ansible.builtin.apt:
+    name: [git, python3-venv]
+    state: present
+
+- name: Carpetas solo de root
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /etc/deriva
+    - "{{ deriva_dir }}"
+    - "{{ deriva_dir }}/home"
+
+- name: Venv propio con ansible-core
+  ansible.builtin.pip:
+    name: ansible-core=={{ deriva_ansible_core }}
+    virtualenv: "{{ deriva_dir }}/venv"
+    virtualenv_command: python3 -m venv
+
+# Tiene el vault entero; casi todo lo que descifra ya está desplegado aquí
+- name: Frase del vault
+  ansible.builtin.copy:
+    content: "{{ lookup('ansible.builtin.file', deriva_vault_password_file) }}\n"
+    dest: /etc/deriva/vault-pass
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: GitHub conocido
+  ansible.builtin.copy:
+    content: "{{ deriva_github_host_key }}\n"
+    dest: /etc/deriva/known_hosts
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy key del inventario
+  ansible.builtin.command: ssh-keygen -q -t ed25519 -N "" -C "deriva@{{ inventory_hostname }}" -f /etc/deriva/deploy_key
+  args:
+    creates: /etc/deriva/deploy_key
+
+- name: Leer la deploy key pública
+  ansible.builtin.slurp:
+    src: /etc/deriva/deploy_key.pub
+  register: deriva_pub
+  when: deriva_github_config | length > 0 and not ansible_check_mode
+
+- name: Deploy key en GitHub (solo lectura)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if gh api "repos/{{ deriva_github_config }}/keys" --jq '.[].key' | grep -qxF "$CLAVE"; then
+      echo ya
+    else
+      gh api "repos/{{ deriva_github_config }}/keys" \
+        -f title="deriva ({{ inventory_hostname }})" -f key="$CLAVE" -F read_only=true >/dev/null
+      echo añadida
+    fi
+  args:
+    executable: /bin/bash
+  environment:
+    CLAVE: "{{ (deriva_pub.content | b64decode).split()[:2] | join(' ') }}"
+  register: deriva_key_github
+  changed_when: "'añadida' in deriva_key_github.stdout"
+  delegate_to: localhost
+  become: false
+  when: deriva_github_config | length > 0 and not ansible_check_mode
+
+- name: Script
+  ansible.builtin.copy:
+    src: deriva
+    dest: /usr/local/sbin/deriva
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configuración
+  ansible.builtin.template:
+    src: deriva.env.j2
+    dest: /etc/deriva/deriva.env
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Unidades
+  ansible.builtin.template:
+    src: deriva.{{ item }}.j2
+    dest: /etc/systemd/system/deriva.{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: deriva_units
+
+- name: Timer
+  ansible.builtin.systemd_service:
+    name: deriva.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ deriva_units.changed }}"
+  when: not (ansible_check_mode and deriva_units.changed)

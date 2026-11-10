@@ -1,0 +1,27 @@
+---
+# Deriva: cada noche la máquina se pasa site.yml en --check contra sí misma y
+# deja cuántas tareas cambiarían para node-exporter. Así se ve si alguien ha
+# tocado algo a mano o si main tiene algo sin aplicar.
+deriva_dir: /opt/deriva
+
+# Repo del código (público, por https) y del inventario (privado, por SSH con
+# una deploy key de solo lectura que se genera aquí). Obligatorios.
+deriva_repo_codigo: ""
+deriva_repo_config: ""
+# owner/repo del inventario en GitHub, para dar de alta la deploy key con gh
+# desde el controlador. Vacío = la das de alta tú.
+deriva_github_config: ""
+deriva_github_host_key: github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+
+# La frase del vault se copia del controlador (0600, root)
+deriva_vault_password_file: "{{ lookup('env', 'ANSIBLE_VAULT_PASSWORD_FILE') }}"
+
+# renovate: datasource=pypi depName=ansible-core
+deriva_ansible_core: 2.21.6
+
+# Solo contra esta máquina. Lo que necesita a otras en la misma pasada (el
+# túnel con los nodos) va con esta etiqueta en site.yml y se salta.
+deriva_skip_tags: [nodos]
+
+deriva_calendario: "*-*-* 03:15"
+deriva_textfile_dir: /var/lib/node-exporter/textfile
