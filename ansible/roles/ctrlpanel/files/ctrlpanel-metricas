@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Trabajos fallidos de la cola de CtrlPanel para el colector textfile de
+# node-exporter. Como root por el socket de MariaDB: sin contraseña en ningún sitio.
+# Uso: ctrlpanel-metricas BD FICHERO
+set -euo pipefail
+db=$1
+out=$2
+
+n=$(mariadb -N -B -e "SELECT COUNT(*) FROM failed_jobs" "$db")
+
+# Escritura atómica: node-exporter nunca ve el fichero a medias
+tmp=$(mktemp "$(dirname "$out")/.ctrlpanel-XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+cat > "$tmp" <<EOF
+# HELP ctrlpanel_failed_jobs Trabajos de la cola de CtrlPanel en failed_jobs
+# TYPE ctrlpanel_failed_jobs gauge
+ctrlpanel_failed_jobs $n
+EOF
+chmod 644 "$tmp"
+mv "$tmp" "$out"

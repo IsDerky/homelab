@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+[Unit]
+Description=CtrlPanel: trabajos fallidos para node-exporter (textfile)
+After=mariadb.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ctrlpanel-metricas {{ ctrlpanel_db_name }} {{ ctrlpanel_textfile_dir }}/ctrlpanel.prom
+LogLevelMax=warning
+
+ProtectSystem=strict
+ReadWritePaths={{ ctrlpanel_textfile_dir }}
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=64M

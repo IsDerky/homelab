@@ -222,6 +222,15 @@ class SystemdTextfileTest(unittest.TestCase):
         # "nginx" no coge nginx.service
         self.assertNotIn("node_systemd_unit_state{", textfile.render(self.units, ["nginx"]))
 
+    def test_ultima_ejecucion_de_los_timers(self):
+        show = ("LastTriggerUSec=Tue 2026-11-10 10:48:00 UTC\nId=certbot.timer\n\n"
+                "LastTriggerUSec=\nId=nunca.timer\n")
+        triggers = textfile.parse_triggers(show)
+        # Sin disparar desde el arranque: sin serie, mejor que un 0 que parezca muy viejo
+        self.assertEqual(triggers, {"certbot.timer": 1794307680})
+        s = samples(textfile.render(self.units, ["certbot.timer"], triggers))
+        self.assertEqual(s['node_systemd_timer_last_trigger_seconds{name="certbot.timer"}'], 1794307680)
+
     def test_escritura_atomica(self):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "systemd.prom")

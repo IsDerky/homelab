@@ -107,6 +107,42 @@ groups:
         annotations:
           summary: "El certificado de {{ $labels.nombre }} caduca en {{ $value | humanizeDuration }}."
 
+      # Comprobaciones de contenido: van cada 15 min, más que la ventana con la
+      # que Prometheus busca el último valor (5 min), así que se mira con
+      # last_over_time. Dos fallos seguidos.
+      - alert: ContenidoRoto
+        expr: last_over_time(probe_success{job="contenido"}[20m]) == 0
+        for: 20m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.nombre }} no devuelve lo esperado ({{ $labels.instance }})."
+
+      # El planificador de CtrlPanel cobra y suspende: si se para, nadie lo nota
+      - alert: PlanificadorParado
+        expr: time() - node_systemd_timer_last_trigger_seconds{name="ctrlpanel-planificador.timer"} > 3600
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "El planificador de CtrlPanel no se ejecuta desde hace {{ $value | humanizeDuration }}."
+
+      # Corre cada minuto: si lleva 15 seguidos en failed, no es un fallo suelto
+      - alert: PlanificadorFallando
+        expr: node_systemd_unit_state{name="ctrlpanel-planificador.service", state="failed"} == 1
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "El planificador de CtrlPanel falla en cada ejecución desde hace 15 min (journalctl -u ctrlpanel-planificador)."
+
+      - alert: TrabajosFallidosCtrlPanel
+        expr: ctrlpanel_failed_jobs - ctrlpanel_failed_jobs offset 1h > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "CtrlPanel tiene trabajos de la cola fallidos nuevos ({{ $value }} en la última hora; php artisan queue:failed)."
+
       - alert: RecolectorParado
         expr: time() - ops_snapshot_timestamp_seconds > 1800
         for: 5m

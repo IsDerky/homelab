@@ -14,6 +14,16 @@ modules:
         - '{{ probe.body_regex }}'
 {% endif %}
 {% endfor %}
+{% for probe in monitoring_content_probes %}
+  contenido_{{ probe.nombre }}:
+    prober: http
+    timeout: {{ probe.timeout | default('30s') }}
+    http:
+      valid_status_codes: [200]
+      preferred_ip_protocol: ip4
+      fail_if_body_not_matches_regexp:
+        - '{{ probe.body_regex }}'
+{% endfor %}
 {% if monitoring_tls_probes %}
   # Basta con que conteste por HTTPS con un certificado válido. Wings sin token
   # da 401; un 5xx sí cuenta como caído.
@@ -25,6 +35,6 @@ modules:
       fail_if_not_ssl: true
       preferred_ip_protocol: ip4
 {% endif %}
-{% if not monitoring_http_probes and not monitoring_tls_probes %}
+{% if not monitoring_http_probes and not monitoring_tls_probes and not monitoring_content_probes %}
   {}
 {% endif %}

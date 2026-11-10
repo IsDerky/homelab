@@ -342,6 +342,7 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 - **Apagado por defecto** (`ctrlpanel_enabled: false`). El planificador cobra créditos y suspende servidores en Pterodactyl: con dos copias encendidas lo haría dos veces.
 - La BD se crea con el cliente `mariadb` por el socket de root, sin PyMySQL, y la contraseña va por stdin. En el `.env` solo toca la conexión a la BD y el nivel de log. Logs con logrotate (en el sitio anterior el log en debug llegó a 2 GB).
 - `server-backup sistema` vuelca su BD y se lleva la app (sin logs ni `node_modules`). El simulacro comprueba el volcado.
+- **Vigilado.** Con `ctrlpanel_textfile_dir`, un timer deja cada 5 min `ctrlpanel_failed_jobs` para node-exporter. Las alertas (rol `monitoring`) avisan si el planificador lleva más de 1 h sin ejecutarse, si falla 15 min seguidos o si aparecen trabajos fallidos nuevos.
 
 `playbooks/migrar-ctrlpanel.yml` hace el traslado por fases con tags: `copia` (BD y app del origen al controlador), `instalar` (la monta con todo parado; se puede repetir), `corte` (mantenimiento en el origen, copia final, importar y encender), `volver` (deshace el corte) y `retirar` (apaga CtrlPanel en el origen). Sin tags no hace nada.
 
@@ -353,6 +354,7 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 | `ctrlpanel_port` | `8085` | |
 | `ctrlpanel_nginx_user` | `www-data` | Solo atraviesa la carpeta (ACL) para servir `public/` |
 | `ctrlpanel_log_level` | `error` | |
+| `ctrlpanel_textfile_dir` | `""` | Colector textfile de node-exporter. Vacío = sin métricas |
 
 ## Rol `ci`
 
@@ -382,9 +384,9 @@ alertmanager ──┘                         └─ Alertmanager ─→ alert-
 ```
 
 - **Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor** en Docker Compose, como un servicio systemd (`monitoring.service`). Todos con la red del host y escuchando solo en `127.0.0.1`: lo que publica Docker se salta ufw, así que no se publica ningún puerto. Cada contenedor tiene tope de memoria.
-- **node_exporter** da además el estado de las unidades systemd de `monitoring_systemd_units` (por D-Bus, con el socket montado de solo lectura). Solo las de la lista: todas serían cientos de series.
+- **node_exporter** da además el estado de las unidades systemd de `monitoring_systemd_units` y, de los timers de la lista, la última vez que se dispararon. Lo escribe `systemd-textfile` desde el host cada 30 s (el contenedor no puede hablar con D-Bus por AppArmor). Solo las de la lista: todas serían cientos de series.
 - **cAdvisor**: CPU, memoria, swap, red, E/S y OOM de cada contenedor, incluidos los servidores de juego de Wings. Es lo que faltaba para ver si un servidor va justo de memoria o tiene la CPU limitada. Va en el 9338 (su 8080 de siempre es el de Wings) y con las métricas caras desactivadas (uso de disco por capa, procesos, TCP...).
-- **blackbox** hace dos tipos de comprobación: las HTTP de `monitoring_http_probes`, que exigen un 200 y un cuerpo concreto y cuentan para el SLO, y las TLS de `monitoring_tls_probes`, que solo piden que el servicio conteste por HTTPS con un certificado válido (Wings sin token da 401 y vale). Las TLS sirven para los nodos de Wings de fuera, que no vigila nadie más, y para avisar si un certificado no se renueva.
+- **blackbox** hace tres tipos de comprobación: las HTTP de `monitoring_http_probes`, que exigen un 200 y un cuerpo concreto y cuentan para el SLO; las TLS de `monitoring_tls_probes`, que solo piden que el servicio conteste por HTTPS con un certificado válido (Wings sin token da 401 y vale), para los nodos de Wings de fuera y para avisar si un certificado no se renueva; y las de contenido de `monitoring_content_probes`, cada 15 min, para lo que puede romperse aunque la portada dé 200: una API que necesita Chrome o un CSS que nginx no puede leer. Salieron de dos caídas que nadie vio: la API de partidos de Rōnin FC 8 h dando 500 tras un deploy sin Chrome, y CtrlPanel sin estilos tras la migración.
 - **`ops-exporter`** (Python, solo la librería estándar): lee el JSON que deja `ops-collect` cada 5 minutos (backups, simulacro, SMART, certificados, servicios, fail2ban, deploys y servidores de juego de los tres nodos de Wings) y lo sirve en el formato de texto de Prometheus. No repite nada de lo que da node_exporter. Corre con un usuario efímero de systemd (`DynamicUser`) que solo puede leer ese fichero, por el grupo.
 - **`alert-dm`**: Alertmanager solo sabe escribir en canales de Discord, y los avisos del servidor van por DM. Este pequeño receptor traduce su webhook a una llamada a `discord-dm`. El token de Discord es de root (0600): systemd se lo pasa como credencial (`LoadCredential`) a un usuario efímero, sin cambiarle los permisos. Si no consigue mandar el DM, responde 500 y Alertmanager lo reintenta.
 - **Dashboards y fuente de datos como código** (provisioning de Grafana). Lo que se cambie desde la web no se guarda. Hay cuatro: *Servidor* (node_exporter), *Bentonime y operación*, *Pterodactyl y contenedores* (nodos, servidores de juego y cAdvisor) y *Todos los servicios*, una tesela verde o roja por cada web, unidad systemd y contenedor, con enlace a la web cuando la tiene.
@@ -404,6 +406,9 @@ Pocas y solo de cosas graves. Lo demás (backups, certificados de este servidor,
 | `RecolectorParado` | El snapshot de `ops-collect` lleva más de 30 min sin actualizarse |
 | `SinRespuestaHTTPS` | Una comprobación TLS falla durante 10 min (un reinicio de Wings tarda segundos y no cuenta) |
 | `CertificadoPorCaducar` | Un certificado de las comprobaciones TLS caduca en menos de 14 días. Certbot renueva a 30, así que a 14 algo ha fallado; el caso típico es Wings, que solo lee el certificado al arrancar |
+| `ContenidoRoto` | Una comprobación de contenido falla dos veces seguidas |
+| `PlanificadorParado` / `PlanificadorFallando` | El planificador de CtrlPanel (cobros y suspensiones) lleva más de 1 h sin ejecutarse, o falla 15 min seguidos |
+| `TrabajosFallidosCtrlPanel` | Hay trabajos fallidos nuevos en la cola de CtrlPanel en la última hora |
 
 **El SLO.** Cada comprobación HTTP tiene un objetivo de disponibilidad en 30 días (`monitoring_slo_target`, 99,5 % por defecto: unas 3,6 h de fallo al mes). Avisar en cuanto falla una comprobación sería ruido. Esperar a incumplir el objetivo sería avisar tarde. La alerta mira **a qué ritmo se gasta el margen**, en dos ventanas a la vez, como propone el libro de SRE de Google: a 14,4 veces el ritmo permitido, el margen del mes se acaba en unos 2 días. La ventana larga (1 h) evita que salte por un fallo suelto. La corta (5 min) hace que se apague en cuanto se arregla.
 
@@ -419,6 +424,7 @@ Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): 
 | `monitoring_http_probes` | `[]` | `servicio`, `url` y opcionalmente `body_regex` y `slo` |
 | `monitoring_slo_target` | `0.995` | Objetivo por defecto de las comprobaciones |
 | `monitoring_tls_probes` | `[]` | `nombre` y `url`. No cuentan para el SLO |
+| `monitoring_content_probes` | `[]` | `nombre`, `url`, `body_regex` y opcionalmente `timeout` (máx. 85s). Cada `monitoring_content_interval` (`15m`) |
 | `monitoring_remote_nodes` | `[]` | node-exporter de otras máquinas (`nombre`, `target`): job `nodos` |
 | `monitoring_systemd_units` | `[]` | Unidades cuyo estado exporta node_exporter (expresiones regulares) |
 | `monitoring_cadvisor` | `true` | Métricas por contenedor |

@@ -66,6 +66,28 @@ scrape_configs:
       - target_label: __address__
         replacement: 127.0.0.1:{{ monitoring_ports.blackbox }}
 {% endif %}
+{% if monitoring_content_probes %}
+
+  # Más despacio que el resto: la alerta mira el último valor, no el instante
+  - job_name: contenido
+    metrics_path: /probe
+    scrape_interval: {{ monitoring_content_interval }}
+    scrape_timeout: 90s
+    static_configs:
+{% for probe in monitoring_content_probes %}
+      - targets: ["{{ probe.url }}"]
+        labels:
+          nombre: {{ probe.nombre }}
+          __param_module: contenido_{{ probe.nombre }}
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:{{ monitoring_ports.blackbox }}
+{% endif %}
 {% if monitoring_http_probes %}
 
   # blackbox hace la petición; aquí cada destino pasa a ser un parámetro
