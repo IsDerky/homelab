@@ -27,6 +27,7 @@
       description: 'Wings solo cuando se pida desde el dashboard',
       matchDepNames: ['pterodactyl/wings'],
       dependencyDashboardApproval: true,
+      automerge: false,
     },
   ],
 }
