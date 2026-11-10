@@ -87,6 +87,14 @@
     group: "{{ honeypot_data_group }}"
   notify: Reiniciar honeypot
 
+# Cowrie crea ficheros nuevos cada día (log rotado, descargas) con su grupo
+# propio. Con setgid en las carpetas heredan el de arriba; sin él, cada pasada
+# volvía a cambiarlos y a reiniciar el honeypot (lo vio la deriva).
+- name: Lo nuevo hereda el grupo de los datos
+  ansible.builtin.command: find {{ honeypot_dir }}/var -type d ! -perm -g+s -print -exec chmod g+s {} +
+  register: honeypot_setgid
+  changed_when: honeypot_setgid.stdout | length > 0
+
 - name: Compose y configuración
   ansible.builtin.template:
     src: "{{ item.src }}"
