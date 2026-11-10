@@ -35,6 +35,8 @@
   ansible.builtin.import_playbook: ci.yml
 - name: Pterodactyl
   ansible.builtin.import_playbook: pterodactyl.yml
+- name: Bases de datos de los servidores
+  ansible.builtin.import_playbook: bd-servidores.yml
 # nodos: necesita a todas las máquinas en la misma pasada (la deriva lo salta)
 - name: Túnel con los nodos
   ansible.builtin.import_playbook: wireguard.yml

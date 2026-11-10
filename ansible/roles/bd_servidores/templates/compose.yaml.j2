@@ -1,0 +1,27 @@
+# {{ ansible_managed }}
+# data/ son las bases de los servidores: no las gestiona Ansible, van en el
+# backup (server-backup las vuelca con mariadb-dump).
+services:
+  mariadb:
+    image: {{ bd_servidores_image }}
+    container_name: bd-servidores
+    restart: unless-stopped
+    # Red del host escuchando solo en la IP de la red de Wings: así pasa por ufw
+    # (lo que publica Docker no) y no choca con el MariaDB del sistema (127.0.0.1)
+    network_mode: host
+    user: "{{ bd_servidores_account.uid | default(0) }}:{{ bd_servidores_account.group | default(0) }}"
+    command:
+      - --bind-address={{ bd_servidores_ip }}
+      - --port={{ bd_servidores_port }}
+      - --skip-name-resolve
+      - --innodb-buffer-pool-size={{ bd_servidores_buffer_pool }}
+    environment:
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/root
+      # root solo desde dentro del contenedor; el panel usa su propio usuario
+      MARIADB_ROOT_HOST: localhost
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - ./data:/var/lib/mysql
+      - ./root-password:/run/secrets/root:ro
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    mem_limit: {{ bd_servidores_mem }}

@@ -1,0 +1,8 @@
+---
+# Aparte: aplicarlo no toca nada más
+- name: Bases de datos de los servidores
+  hosts: homelab
+  become: true
+  roles:
+    - role: bd_servidores
+      when: bd_servidores_ip | default('') | length > 0

@@ -1,0 +1,17 @@
+---
+bd_servidores_dir: /opt/bd-servidores
+bd_servidores_image: mariadb:11.4.13
+bd_servidores_user: bdservidores
+
+# IP del host en la red de Wings (pterodactyl0): los contenedores de los
+# servidores llegan ahí y el panel también (es una IP local). Nada más la ve.
+bd_servidores_ip: ""
+bd_servidores_port: 3306
+bd_servidores_mem: 768m
+bd_servidores_buffer_pool: 256M
+
+# Contraseñas (vault). La del usuario del panel solo se usa al crear la base
+# por primera vez: cambiarla después es a mano (ALTER USER) y en el panel.
+bd_servidores_root_password: ""
+bd_servidores_panel_user: pterodactyl
+bd_servidores_panel_password: ""

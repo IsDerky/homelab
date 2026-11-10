@@ -1,0 +1,5 @@
+-- {{ ansible_managed }}
+-- Usuario con el que el panel crea las bases y los usuarios de cada servidor
+-- (lo que pide Pterodactyl para un "Database Host").
+CREATE USER '{{ bd_servidores_panel_user }}'@'%' IDENTIFIED BY '{{ bd_servidores_panel_password }}';
+GRANT ALL PRIVILEGES ON *.* TO '{{ bd_servidores_panel_user }}'@'%' WITH GRANT OPTION;

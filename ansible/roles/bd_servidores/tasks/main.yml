@@ -1,0 +1,91 @@
+---
+- name: Faltan variables
+  ansible.builtin.assert:
+    that:
+      - bd_servidores_ip is match('^\d+\.\d+\.\d+\.\d+$')
+      - bd_servidores_root_password | length >= 20
+      - bd_servidores_panel_password | length >= 20
+    fail_msg: Define bd_servidores_ip y las dos contraseñas (vault, 20+ caracteres).
+    quiet: true
+
+- name: La IP existe en el host
+  ansible.builtin.assert:
+    that: bd_servidores_ip in ansible_facts['all_ipv4_addresses']
+    fail_msg: "{{ bd_servidores_ip }} no está en ninguna interfaz (¿Wings sin arrancar?)"
+    quiet: true
+
+- name: Usuario de la base de datos
+  ansible.builtin.user:
+    name: "{{ bd_servidores_user }}"
+    system: true
+    create_home: false
+    home: /nonexistent
+    shell: /usr/sbin/nologin
+    password_lock: true
+  register: bd_servidores_account
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ bd_servidores_dir }}", owner: root, mode: "0755" }
+    # Las bases de los servidores: van en el backup como volcado
+    - { path: "{{ bd_servidores_dir }}/data", owner: "{{ bd_servidores_user }}", mode: "0700" }
+    - { path: "{{ bd_servidores_dir }}/initdb", owner: "{{ bd_servidores_user }}", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Contraseña de root
+  ansible.builtin.copy:
+    content: "{{ bd_servidores_root_password }}"
+    dest: "{{ bd_servidores_dir }}/root-password"
+    owner: "{{ bd_servidores_user }}"
+    group: "{{ bd_servidores_user }}"
+    mode: "0400"
+  no_log: true
+
+# Solo se ejecuta al crear la base (data/ vacía)
+- name: Usuario del panel
+  ansible.builtin.template:
+    src: panel.sql.j2
+    dest: "{{ bd_servidores_dir }}/initdb/panel.sql"
+    owner: "{{ bd_servidores_user }}"
+    group: "{{ bd_servidores_user }}"
+    mode: "0400"
+  no_log: true
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ bd_servidores_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de bd-servidores
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: bd-servidores.service.j2
+    dest: /etc/systemd/system/bd-servidores.service
+    mode: "0644"
+  register: bd_servidores_unit
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: bd-servidores.service
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and bd_servidores_unit.changed)
+
+- name: Escucha
+  ansible.builtin.wait_for:
+    host: "{{ bd_servidores_ip }}"
+    port: "{{ bd_servidores_port }}"
+    timeout: 120
+  when: not ansible_check_mode
