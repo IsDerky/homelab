@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+{% set alias = cuenta_ro_user | upper | regex_replace('[^A-Z0-9]', '_') %}
+Defaults:{{ cuenta_ro_user }} !lecture, env_reset
+{% if cuenta_ro_sudo_noexec %}
+Cmnd_Alias {{ alias }} = \
+{% for cmd in cuenta_ro_sudo_noexec %}
+  {{ cmd | replace('=', '\\=') }}{{ ', \\' if not loop.last else '' }}
+{% endfor %}
+{{ cuenta_ro_user }} ALL=(root) NOPASSWD:NOEXEC: {{ alias }}
+{% endif %}
+{% if cuenta_ro_sudo_exec %}
+Cmnd_Alias {{ alias }}_EXEC = {{ cuenta_ro_sudo_exec | map('replace', '=', '\\=') | join(', ') }}
+{{ cuenta_ro_user }} ALL=(root) NOPASSWD: {{ alias }}_EXEC
+{% endif %}

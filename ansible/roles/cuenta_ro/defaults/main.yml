@@ -1,0 +1,21 @@
+---
+# Cuenta de solo lectura para consultar las máquinas sin entrar como admin.
+# Lo de sshd (AllowUsers, bloque Match) va en las variables del rol ssh.
+cuenta_ro_user: lectura
+cuenta_ro_comment: Solo lectura
+
+# Obligatoria. La clave va en /etc/ssh/authorized_keys/<usuario>, de root: la
+# cuenta no puede añadirse otras (el Match del rol ssh apunta ahí).
+cuenta_ro_public_key: ""
+# Opciones delante de la clave: from="IP", restrict...
+cuenta_ro_key_options:
+  - restrict
+
+# journalctl y /var/log sin sudo
+cuenta_ro_groups: [adm, systemd-journal]
+
+# sudo sin contraseña solo para estos comandos, con los argumentos tal cual
+# (vale * de sudoers). NOEXEC: no pueden lanzar otros programas.
+cuenta_ro_sudo_noexec: []
+# Los que sí necesitan lanzar otros (ufw llama a iptables)
+cuenta_ro_sudo_exec: []

@@ -1,0 +1,47 @@
+---
+- name: Falta la clave
+  ansible.builtin.assert:
+    that: cuenta_ro_public_key | length > 0
+    fail_msg: Define cuenta_ro_public_key.
+    quiet: true
+
+- name: Usuario
+  ansible.builtin.user:
+    name: "{{ cuenta_ro_user }}"
+    comment: "{{ cuenta_ro_comment }}"
+    shell: /bin/bash
+    groups: "{{ cuenta_ro_groups }}"
+    append: true
+    password_lock: true
+
+- name: Carpeta de claves de root
+  ansible.builtin.file:
+    path: /etc/ssh/authorized_keys
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clave
+  ansible.builtin.copy:
+    content: "{{ (cuenta_ro_key_options | join(',') ~ ' ') if cuenta_ro_key_options else '' }}{{ cuenta_ro_public_key }}\n"
+    dest: /etc/ssh/authorized_keys/{{ cuenta_ro_user }}
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: sudo
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/{{ cuenta_ro_user }}
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+  when: (cuenta_ro_sudo_noexec + cuenta_ro_sudo_exec) | length > 0
+
+- name: Sin sudo
+  ansible.builtin.file:
+    path: /etc/sudoers.d/{{ cuenta_ro_user }}
+    state: absent
+  when: (cuenta_ro_sudo_noexec + cuenta_ro_sudo_exec) | length == 0

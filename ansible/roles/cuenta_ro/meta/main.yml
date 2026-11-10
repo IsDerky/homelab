@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: cuenta_ro
+  namespace: isderky
+  description: Cuenta SSH de solo lectura con clave restringida y sudo solo para comandos de consulta con argumentos fijos
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+dependencies: []

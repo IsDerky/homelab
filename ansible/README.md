@@ -22,6 +22,7 @@ Roles para montar piezas del homelab:
 - `actualizaciones`: parches de seguridad automáticos con unattended-upgrades en los nodos de fuera, sin reinicios y sin tocar Docker ni Wings (`playbooks/actualizaciones.yml`).
 - `wireguard`: túnel entre el servidor y los nodos de fuera, con las claves generadas en cada máquina (`playbooks/wireguard.yml`).
 - `node_exporter`: node-exporter suelto escuchando solo en la IP del túnel, para los nodos (también en `playbooks/wireguard.yml`).
+- `cuenta_ro`: cuenta SSH de solo lectura con la clave restringida y sudo solo para comandos de consulta con argumentos fijos (`playbooks/ssh.yml`).
 
 ## Uso
 
@@ -69,6 +70,14 @@ Los valores por defecto son los seguros. Si hace falta relajar algo mientras se 
 Antes de aplicarlo la primera vez: deja una sesión abierta como root y comprueba que el usuario nuevo entra con su clave y puede usar sudo.
 
 `playbooks/ssh.yml` también lo aplica a los nodos de `wings_remotos`, si los hay. Ahí no corre el rol `base`, así que antes mete las claves de `base_admin_keys` al usuario con el que entra Ansible (el `ubuntu` de la imagen del proveedor). En esas imágenes la contraseña la suele activar el propio `sshd_config`; al reescribirlo se va.
+
+### Rol `cuenta_ro`
+
+Una cuenta de solo lectura para consultar las máquinas sin entrar como admin. Va en `playbooks/ssh.yml`, antes del rol `ssh`.
+
+- La clave está en `/etc/ssh/authorized_keys/<usuario>`, de root: la cuenta no puede añadirse otras. Delante lleva `cuenta_ro_key_options` (`from="IP"`, `restrict`…). El bloque `Match` de `ssh_match_blocks` apunta `AuthorizedKeysFile` ahí y quita reenvíos y TTY.
+- `adm` y `systemd-journal` para leer logs sin sudo. sudo solo para comandos de consulta con los argumentos escritos (`cuenta_ro_sudo_noexec`, con `NOEXEC` para que no lancen otros programas; `cuenta_ro_sudo_exec` para los que tienen que hacerlo, como `ufw status`, que llama a iptables). Se valida con `visudo -cf` antes de instalarlo.
+- Los nodos no se exponen para esto: su clave solo vale desde la IP del servidor en el túnel, y la cuenta del servidor solo puede reenviar al 22 de los nodos por el túnel (`permitopen` en la clave y `PermitOpen` en sshd). Se entra con `ssh -J`.
 
 ## Rol `ufw`
 

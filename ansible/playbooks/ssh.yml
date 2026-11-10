@@ -3,6 +3,9 @@
   hosts: homelab
   become: true
   roles:
+    # Antes que ssh: AllowUsers puede nombrarla
+    - role: cuenta_ro
+      when: cuenta_ro_public_key is defined
     - ssh
 
 # Nodos externos: entran con el usuario de la imagen (ubuntu). Las claves de
@@ -19,4 +22,6 @@
       loop_control:
         label: "{{ item.split() | last }}"
   roles:
+    - role: cuenta_ro
+      when: cuenta_ro_public_key is defined
     - ssh
