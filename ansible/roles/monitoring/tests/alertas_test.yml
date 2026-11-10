@@ -184,3 +184,78 @@ tests:
               nombre: n1
             exp_annotations:
               summary: "El certificado de n1 caduca en 9d 22h 50m 0s."
+
+  # Contenido: dos fallos seguidos (cada 15 min) avisan; uno suelto no
+  - interval: 15m
+    input_series:
+      - series: 'probe_success{job="contenido", nombre="api", instance="https://a.invalid/api"}'
+        values: "1 1 0 0 0 0"
+      - series: 'probe_success{job="contenido", nombre="css", instance="https://b.invalid/x.css"}'
+        values: "1 1 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: ContenidoRoto
+        exp_alerts: []
+      - eval_time: 55m
+        alertname: ContenidoRoto
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: contenido
+              nombre: api
+              instance: https://a.invalid/api
+            exp_annotations:
+              summary: "api no devuelve lo esperado (https://a.invalid/api)."
+
+  # Planificador: corre cada minuto hasta el 30 y se para
+  - interval: 1m
+    input_series:
+      - series: 'node_systemd_timer_last_trigger_seconds{name="ctrlpanel-planificador.timer"}'
+        values: "0+60x30 1800x80"
+    alert_rule_test:
+      - eval_time: 85m
+        alertname: PlanificadorParado
+        exp_alerts: []
+      - eval_time: 100m
+        alertname: PlanificadorParado
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              name: ctrlpanel-planificador.timer
+            exp_annotations:
+              summary: "El planificador de CtrlPanel no se ejecuta desde hace 1h 10m 0s."
+
+  - interval: 1m
+    input_series:
+      - series: 'node_systemd_unit_state{name="ctrlpanel-planificador.service", state="failed"}'
+        values: "0x5 1x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PlanificadorFallando
+        exp_alerts: []
+      - eval_time: 22m
+        alertname: PlanificadorFallando
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              name: ctrlpanel-planificador.service
+              state: failed
+            exp_annotations:
+              summary: "El planificador de CtrlPanel falla en cada ejecución desde hace 15 min (journalctl -u ctrlpanel-planificador)."
+
+  # Los 9 viejos no avisan; uno nuevo sí
+  - interval: 5m
+    input_series:
+      - series: 'ctrlpanel_failed_jobs'
+        values: "9x20 10x20"
+    alert_rule_test:
+      - eval_time: 95m
+        alertname: TrabajosFallidosCtrlPanel
+        exp_alerts: []
+      - eval_time: 105m
+        alertname: TrabajosFallidosCtrlPanel
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "CtrlPanel tiene trabajos de la cola fallidos nuevos (1 en la última hora; php artisan queue:failed)."

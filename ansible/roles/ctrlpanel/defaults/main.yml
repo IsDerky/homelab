@@ -26,5 +26,9 @@ ctrlpanel_enabled: false
 # la app sigue en mantenimiento.
 ctrlpanel_check: true
 
+# Carpeta del colector textfile de node-exporter: deja ahí cada 5 min los
+# trabajos fallidos de la cola (ctrlpanel_failed_jobs). Vacío = sin métricas.
+ctrlpanel_textfile_dir: ""
+
 ctrlpanel_fpm_max_children: 5
 ctrlpanel_log_level: error

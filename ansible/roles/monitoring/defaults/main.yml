@@ -54,6 +54,17 @@ monitoring_http_probes: []
 # Objetivo de disponibilidad (SLO) de las comprobaciones HTTP, en 30 días
 monitoring_slo_target: 0.995
 
+# Comprobaciones de contenido: una ruta concreta tiene que dar 200 y un cuerpo
+# que case con body_regex (una API que depende de algo más que la app, un
+# estático que nginx tiene que poder leer). No cuentan en el SLO y van más
+# despacio que el resto: pueden ser caras. timeout como mucho 85s.
+#   - nombre: api
+#     url: https://ejemplo.com/api/datos
+#     body_regex: '"ok":true'
+#     timeout: 60s
+monitoring_content_probes: []
+monitoring_content_interval: 15m
+
 # Comprobaciones TLS: que el servicio responda por HTTPS con un certificado
 # válido, sin mirar el cuerpo (Wings da 401 sin token). Avisan si cae o si el
 # certificado caduca en menos de 14 días. No cuentan en el SLO.

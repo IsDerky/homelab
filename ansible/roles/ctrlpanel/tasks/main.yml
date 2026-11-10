@@ -165,6 +165,35 @@
     - ctrlpanel-planificador.timer
   when: not (ansible_check_mode and ctrlpanel_units.changed)
 
+- name: Métricas de la cola
+  when: ctrlpanel_textfile_dir | length > 0
+  block:
+    - name: Script ctrlpanel-metricas
+      ansible.builtin.copy:
+        src: ctrlpanel-metricas
+        dest: /usr/local/bin/ctrlpanel-metricas
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Unidades ctrlpanel-metricas
+      ansible.builtin.template:
+        src: ctrlpanel-metricas.{{ item }}.j2
+        dest: /etc/systemd/system/ctrlpanel-metricas.{{ item }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [service, timer]
+      register: ctrlpanel_metricas_units
+
+    - name: Timer de ctrlpanel-metricas
+      ansible.builtin.systemd_service:
+        name: ctrlpanel-metricas.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ ctrlpanel_metricas_units.changed }}"
+      when: not (ansible_check_mode and ctrlpanel_metricas_units.changed)
+
 - name: Responde
   ansible.builtin.uri:
     url: http://127.0.0.1:{{ ctrlpanel_port }}/login
