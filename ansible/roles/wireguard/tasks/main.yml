@@ -11,6 +11,12 @@
     fail_msg: "Faltan peers en la pasada ({{ wireguard_peer_hosts | difference(ansible_play_hosts_all) | join(', ') }}): lanza el playbook sin --limit."
     quiet: true
 
+- name: Los clientes necesitan que escuche
+  ansible.builtin.assert:
+    that: wireguard_clients | length == 0 or wireguard_listen_port | int > 0
+    fail_msg: wireguard_clients sin wireguard_listen_port no puede funcionar.
+    quiet: true
+
 - name: Paquete
   ansible.builtin.apt:
     name: wireguard-tools

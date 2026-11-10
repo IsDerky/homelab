@@ -2,7 +2,7 @@
 
 ## Qué está abierto
 
-- **En el router**: la API y el SFTP de Wings, un rango para los juegos y el honeypot (22 y 23). Nada más: ni web ni el SSH real.
+- **En el router**: la API y el SFTP de Wings, un rango para los juegos, el honeypot (22 y 23) y el UDP de WireGuard para el móvil. Nada más: ni web ni el SSH real.
 - **En los nodos**: SSH (solo con clave), Wings, los juegos y el UDP de WireGuard.
 - **ufw** deniega por defecto lo entrante y lo enrutado. SSH, web y NAS solo desde la red de casa. Ojo: lo que publica Docker no pasa por ufw. Por eso los contenedores propios usan la red del host escuchando en `127.0.0.1` (no se publica ningún puerto) y el honeypot se aísla con reglas en `DOCKER-USER`.
 
@@ -11,6 +11,12 @@
 WireGuard entre el servidor de casa y cada nodo. Los nodos tienen IP fija y escuchan. El servidor de casa no escucha: abre él la conexión y la mantiene viva con keepalive. Así en el router no se abre nada, y si cambia la IP de casa el túnel se rehace solo.
 
 Por el túnel van las métricas: node-exporter en cada nodo escucha solo en su IP del túnel, y desde Internet ese puerto ni existe. Cada máquina genera su clave privada y no la saca de ahí: no pasa por Ansible ni por la plantilla.
+
+## VPN para el móvil
+
+Para usar desde fuera lo que solo está en la LAN (Vaultwarden, Grafana, la oficina…) sin publicarlo. El móvil es un peer más del mismo WireGuard, pero aquí sí escucha el servidor de casa, con el UDP reenviado en el router. Túnel partido: el móvil solo manda por él lo que va a la IP del servidor. Los nombres de la LAN tienen registro A público a esa IP privada, así que ni siquiera hace falta cambiarle el DNS.
+
+ufw y los `allow` de nginx dejan pasar la IP del móvil, no toda la red del túnel: los nodos también están en ella y no tienen por qué ver la LAN. La clave privada se genera en el PC, pasa al móvil con un QR y se borra.
 
 Algunas imágenes de Ubuntu de proveedores cloud traen un iptables propio con un `REJECT` al final, guardado en `rules.v4`. El rol mete sus reglas antes, en el fichero y en caliente, sin `netfilter-persistent save`, que guardaría también las reglas de Docker.
 

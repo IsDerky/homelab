@@ -504,7 +504,8 @@ Los ajustes van en `52homelab` y `20auto-upgrades`, y al final se comprueba con 
 
 Túnel WireGuard entre máquinas del inventario (`playbooks/wireguard.yml`). Lo uso entre el servidor de casa y los nodos externos: por ahí van las métricas de los nodos, que así no se exponen a Internet.
 
-- **Quién conecta con quién.** Los nodos tienen IP pública fija y escuchan en UDP 51820 (`wireguard_listen_port` y `wireguard_endpoint`). El servidor de casa no escucha: abre él la conexión y `PersistentKeepalive` mantiene abierto el NAT del router. Así no hace falta reenviar ningún puerto en el router, y si cambia la IP de casa el túnel sigue.
+- **Quién conecta con quién.** Los nodos tienen IP pública fija y escuchan en UDP 51820 (`wireguard_listen_port` y `wireguard_endpoint`). Con ellos el servidor de casa abre la conexión y `PersistentKeepalive` mantiene abierto el NAT del router, así que ese túnel no depende del router ni de la IP de casa.
+- **El móvil** (`wireguard_clients`): para entrar a los servicios de la LAN desde fuera. Aquí sí escucha el servidor de casa, con el UDP reenviado en el router. Túnel partido: el móvil solo manda por él lo que va a la IP del servidor, y los nombres de la LAN ya resuelven a esa IP en el DNS público. ufw y los `allow` de los vhosts dejan pasar solo la IP del móvil, no la red del túnel (los nodos están en ella y no tienen por qué ver la LAN). La clave privada se genera en el PC, va al móvil por QR y se borra.
 - **Claves.** Cada máquina genera su clave privada (`/etc/wireguard/wg0.key`, `0600`), que no sale de ella ni pasa por la plantilla: la carga `PostUp`. Las públicas se leen en la misma pasada, así que el playbook va sin `--limit` (si falta algún peer, se niega).
 - **iptables de la imagen.** Algunas imágenes de Ubuntu de proveedores cloud traen un `REJECT` al final de `INPUT` guardado en `/etc/iptables/rules.v4`. Si está, el rol mete el UDP del túnel y lo que entra por `wg0` antes del `REJECT`, en el fichero y en caliente. No usa `netfilter-persistent save`, que guardaría también las reglas de Docker. En el cortafuegos del proveedor, si lo hay, hay que abrir el UDP a mano.
 - Al final hace ping a cada peer por el túnel.
@@ -516,6 +517,7 @@ Túnel WireGuard entre máquinas del inventario (`playbooks/wireguard.yml`). Lo 
 | `wireguard_listen_port` | `0` | `0` = no escucha, conecta él |
 | `wireguard_endpoint` | `""` | Cómo la alcanzan los demás (`host:puerto`) |
 | `wireguard_keepalive` | `25` | Hacia los peers con endpoint |
+| `wireguard_clients` | `[]` | Dispositivos fuera del inventario (`nombre`, `address`, `public_key`). Necesita `wireguard_listen_port` |
 
 ## Rol `node_exporter`
 
