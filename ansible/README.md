@@ -22,6 +22,7 @@ Roles para montar piezas del homelab:
 - `actualizaciones`: parches de seguridad automáticos con unattended-upgrades en los nodos de fuera, sin reinicios y sin tocar Docker ni Wings (`playbooks/actualizaciones.yml`).
 - `wireguard`: túnel entre el servidor y los nodos de fuera, con las claves generadas en cada máquina (`playbooks/wireguard.yml`).
 - `node_exporter`: node-exporter suelto escuchando solo en la IP del túnel, para los nodos (también en `playbooks/wireguard.yml`).
+- `crowdsec`: CrowdSec con el bouncer de iptables y la lista de la comunidad, alimentado también por el honeypot (`playbooks/crowdsec.yml`).
 - `cuenta_ro`: cuenta SSH de solo lectura con la clave restringida y sudo solo para comandos de consulta con argumentos fijos (`playbooks/ssh.yml`).
 - `deriva`: cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en Grafana cuántas tareas cambiarían (`playbooks/deriva.yml`).
 
@@ -199,6 +200,25 @@ fail2ban_jails:
       bantime.increment: true
       action: iptables[name=wings-sftp-bots, port=2022, protocol=tcp]
 ```
+
+## Rol `crowdsec`
+
+fail2ban banea a quien ya te está atacando. CrowdSec además comparte lo que ve y recibe la lista de la comunidad: una IP que ha atacado a otros llega ya bloqueada. Convive con fail2ban; cada uno tiene su regla.
+
+- **De dónde lee** (`crowdsec_acquis`, un fichero en `acquis.d` por fuente): el log de Wings y el JSON de Cowrie, además de lo que el paquete detecta solo (auth.log, syslog). Wings por su fichero y no por el journal: por el journal las líneas llegan con prefijo de syslog y el parser de la colección no las reconoce.
+- **Colecciones** (`crowdsec_collections`): `crowdsecurity/linux`, y de la comunidad `lourys/pterodactyl` (fuerza bruta contra el SFTP de Wings) y `PumbaLP/cowrie` (todo el que hace login o mete comandos en el honeypot). Revisadas antes de añadirlas; son YAML declarativo, sin código.
+- **Dónde bloquea** (`crowdsec_bouncer_chains`): solo en `INPUT`, lo que escucha la propia máquina (API y SFTP de Wings). Lo publicado por Docker va por `DOCKER-USER` y aquí no se toca: el honeypot está en la misma máquina, y bloquear ahí le quitaría justo lo que tiene que registrar. Así lo que ve el honeypot sirve para cerrarle Wings a esa IP.
+- El repositorio es el de CrowdSec, con preferencia sobre el de Ubuntu (que trae una versión muy vieja). Al final comprueba que el bouncer ha metido su regla en iptables.
+- Métricas en `127.0.0.1:6060` (`monitoring_crowdsec_port` en el rol `monitoring`): fila "CrowdSec" en el dashboard de operación. No avisa por DM; si deja de responder, salta `ObjetivoCaido`.
+- Se activa con `crowdsec_activo: true` en el inventario.
+
+Probado en un contenedor 24.04 con systemd: en seco sobre limpio, dos pasadas (la segunda `changed=0`) y logs de mentira de Wings y Cowrie que acaban en un baneo dentro del ipset.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `crowdsec_collections` | `[crowdsecurity/linux]` | Colecciones del hub |
+| `crowdsec_acquis` | `[]` | `nombre` y `config` (lo que va en el YAML de `acquis.d`) |
+| `crowdsec_bouncer_chains` | `[INPUT]` | Cadenas de iptables donde bloquea |
 
 ## Rol `avisos`
 

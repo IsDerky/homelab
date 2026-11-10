@@ -1,0 +1,12 @@
+---
+- name: Recargar crowdsec
+  ansible.builtin.systemd_service:
+    name: crowdsec
+    state: reloaded
+  when: not ansible_check_mode
+
+- name: Reiniciar el bouncer
+  ansible.builtin.systemd_service:
+    name: crowdsec-firewall-bouncer
+    state: restarted
+  when: not ansible_check_mode

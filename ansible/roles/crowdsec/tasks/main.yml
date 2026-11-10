@@ -1,0 +1,107 @@
+---
+# force: false: solo se descarga si falta, para no marcar cambios cada vez
+- name: Clave del repositorio de CrowdSec
+  ansible.builtin.get_url:
+    url: https://packagecloud.io/crowdsec/crowdsec/gpgkey
+    dest: /etc/apt/keyrings/crowdsec.asc
+    mode: "0644"
+    force: false
+
+- name: Repositorio de CrowdSec
+  ansible.builtin.copy:
+    content: "deb [signed-by=/etc/apt/keyrings/crowdsec.asc] https://packagecloud.io/crowdsec/crowdsec/any any main\n"
+    dest: /etc/apt/sources.list.d/crowdsec.list
+    owner: root
+    group: root
+    mode: "0644"
+  register: crowdsec_repo
+
+# Ubuntu trae una versión muy vieja en universe
+- name: Preferir el repositorio de CrowdSec
+  ansible.builtin.copy:
+    content: |
+      Package: crowdsec*
+      Pin: origin packagecloud.io
+      Pin-Priority: 900
+    dest: /etc/apt/preferences.d/crowdsec
+    owner: root
+    group: root
+    mode: "0644"
+
+# Primero el motor: el paquete del bouncer se da de alta solo contra la API local
+- name: CrowdSec
+  ansible.builtin.apt:
+    name: crowdsec
+    state: present
+    update_cache: "{{ crowdsec_repo is changed }}"
+  register: crowdsec_pkg
+
+- name: Bouncer de iptables
+  ansible.builtin.apt:
+    name: crowdsec-firewall-bouncer-iptables
+    state: present
+  register: crowdsec_bouncer_pkg
+  # En --check sobre una máquina sin el repo, el paquete aún no existe
+  when: not (ansible_check_mode and crowdsec_repo.changed)
+
+# En --check sobre una máquina nueva no hay cscli ni ficheros que tocar
+- name: ¿Instalación nueva?
+  ansible.builtin.set_fact:
+    crowdsec_nuevo: "{{ crowdsec_repo.changed or crowdsec_pkg.changed or (crowdsec_bouncer_pkg.changed | default(false)) }}"
+
+- name: Colecciones instaladas
+  ansible.builtin.command: cscli collections list -o json
+  register: crowdsec_installed
+  changed_when: false
+  check_mode: false
+  when: not (ansible_check_mode and crowdsec_nuevo)
+
+- name: Colecciones del hub
+  ansible.builtin.command: cscli collections install {{ item }}
+  loop: "{{ crowdsec_collections | difference((crowdsec_installed.stdout | from_json).collections | default([]) | map(attribute='name') | list) }}"
+  changed_when: true
+  notify: Recargar crowdsec
+  when: not (ansible_check_mode and crowdsec_nuevo)
+
+- name: Fuentes de logs
+  ansible.builtin.copy:
+    content: "{{ item.config | to_nice_yaml(indent=2) }}"
+    dest: /etc/crowdsec/acquis.d/{{ item.nombre }}.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ crowdsec_acquis }}"
+  loop_control:
+    label: "{{ item.nombre }}"
+  notify: Recargar crowdsec
+
+- name: Cadenas del bouncer
+  ansible.builtin.replace:
+    path: /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+    regexp: '^iptables_chains:\n(?:[ \t]*#?[ \t]*- .*\n)*'
+    replace: "iptables_chains:\n{% for c in crowdsec_bouncer_chains %}  - {{ c }}\n{% endfor %}"
+  notify: Reiniciar el bouncer
+  when: not (ansible_check_mode and crowdsec_nuevo)
+
+- name: Servicios
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [crowdsec, crowdsec-firewall-bouncer]
+  when: not (ansible_check_mode and crowdsec_nuevo)
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+# Que el bouncer haya metido su regla: si no, no bloquea nada aunque CrowdSec decida
+- name: El bouncer está en iptables
+  ansible.builtin.shell: set -o pipefail && iptables-save | grep -c -i crowdsec
+  args:
+    executable: /bin/bash
+  register: crowdsec_iptables
+  until: crowdsec_iptables.rc == 0
+  retries: 6
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode

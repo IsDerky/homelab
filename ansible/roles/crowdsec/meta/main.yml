@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: crowdsec
+  namespace: isderky
+  description: CrowdSec con el bouncer de iptables, colecciones del hub y fuentes de logs desde variables
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

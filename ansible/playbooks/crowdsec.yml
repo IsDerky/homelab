@@ -1,0 +1,8 @@
+---
+# Solo donde se pida (crowdsec_activo: true en el inventario)
+- name: CrowdSec
+  hosts: homelab
+  become: true
+  roles:
+    - role: crowdsec
+      when: crowdsec_activo | default(false) | bool

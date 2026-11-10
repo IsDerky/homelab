@@ -11,6 +11,8 @@
   ansible.builtin.import_playbook: actualizaciones.yml
 - name: Cortafuegos
   ansible.builtin.import_playbook: firewall.yml
+- name: CrowdSec
+  ansible.builtin.import_playbook: crowdsec.yml
 - name: Avisos
   ansible.builtin.import_playbook: avisos.yml
 - name: Disco USB
