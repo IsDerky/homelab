@@ -64,7 +64,8 @@ groups:
         annotations:
           summary: "Prometheus no puede leer {{ $labels.job }} ({{ $labels.instance }}) desde hace 15 min."
 
-      # Copia local (disco USB): un fallo, o el disco desconectado. Los fallos de
+      # Copia local (disco USB): disco desconectado o un error de restic (el 11-11 fue
+      # un hash mismatch en memoria con el disco bien), así que se manda al journal. Los fallos de
       # Drive ya avisan por DM desde el propio script.
       - alert: BackupLocalFallido
         expr: ops_backup_run_success{destino="local"} == 0
@@ -72,7 +73,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "La copia local de {{ $labels.modo }} ha fallado (¿disco USB desconectado?)."
+          summary: "La copia local de {{ $labels.modo }} ha fallado (journalctl -u server-backup@{{ $labels.modo }})."
 
       # Demasiado tiempo sin una copia buena (el máximo lo pone el script por
       # modo). Sistema y clientes en Drive ya los vigila el vigilante externo.

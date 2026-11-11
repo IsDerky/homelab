@@ -116,7 +116,7 @@ tests:
               modo: sistema
               destino: local
             exp_annotations:
-              summary: "La copia local de sistema ha fallado (¿disco USB desconectado?)."
+              summary: "La copia local de sistema ha fallado (journalctl -u server-backup@sistema)."
 
   # Atrasada: la del NAS sí avisa; la de sistema en Drive no (la vigila el
   # vigilante externo) aunque esté igual de atrasada
