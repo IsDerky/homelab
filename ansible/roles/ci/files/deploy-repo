@@ -1,5 +1,5 @@
 #!/bin/bash
-# Despliega un repo permitido (oficina | asistente | hosting | roninfc | derkyu-hosting) en un commit de su rama main.
+# Despliega un repo permitido (oficina | asistente | roninfc | derkyu-hosting) en un commit de su rama main.
 # Es lo ÚNICO que el usuario deployer (el de los runners de GitHub) puede
 # ejecutar con sudo:   sudo /usr/local/sbin/deploy-repo <repo> <sha>
 #
@@ -16,7 +16,6 @@ REPO="${1:-}"
 SHA="${2:-}"
 case "$REPO" in
   oficina | asistente | roninfc | derkyu-hosting) GH_REPO=$REPO ;;
-  hosting) GH_REPO=hosting.derkyu.lol ;;
   *) echo "deploy-repo: repo no permitido: '$REPO'" >&2; exit 2 ;;
 esac
 [[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "deploy-repo: sha inválido: '$SHA'" >&2; exit 2; }
@@ -78,34 +77,6 @@ case "$REPO" in
     phase=instalar
     log "Instalando ${SHA:0:7}"
     bash deploy/install.sh </dev/null
-    ;;
-  hosting)
-    # Web estática (Vite) que viene de la VPS de Hostinger. Se compila con
-    # webbuild (sin privilegios: npm ci ejecuta scripts de terceros) sobre una
-    # copia del código, y se publica cambiando el enlace /var/www/hosting-derkyu
-    # de golpe. Guarda las 3 últimas versiones. nginx la sirve solo cuando
-    # el vhost está activo (nginx_sites del homelab, Ansible).
-    phase=compilar
-    log "Compilando ${SHA:0:7} como webbuild"
-    BUILD=/var/lib/webbuild/hosting
-    rm -rf "$BUILD"
-    install -d -o webbuild -g webbuild -m 755 "$BUILD"
-    git archive "$SHA" | runuser -u webbuild -- tar -x -C "$BUILD"
-    runuser -u webbuild -- env HOME=/var/lib/webbuild bash -c \
-      "cd '$BUILD' && npm ci --no-audit --no-fund --loglevel=error && npm run build"
-    phase=instalar
-    REL=/var/www/hosting-derkyu-releases
-    install -d -m 755 "$REL"
-    rm -rf "$REL/$SHA"
-    cp -r "$BUILD/dist" "$REL/$SHA"
-    chown -R root:root "$REL/$SHA"
-    chmod -R a+rX "$REL/$SHA"
-    ln -sfn "$REL/$SHA" /var/www/hosting-derkyu.tmp
-    mv -T /var/www/hosting-derkyu.tmp /var/www/hosting-derkyu
-    # shellcheck disable=SC2012
-    ls -1t "$REL" | tail -n +4 | while read -r old; do rm -rf "${REL:?}/$old"; done
-    rm -rf "$BUILD"
-    log "Publicado en /var/www/hosting-derkyu ($(du -sh "$REL/$SHA" | cut -f1))"
     ;;
   roninfc)
     # Next 15 + puppeteer (venía de la VPS de Hostinger). Compila webbuild con

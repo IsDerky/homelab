@@ -3665,7 +3665,7 @@
         "textMode": "value",
         "justifyMode": "center"
       },
-      "description": "Los 5 runners de GitHub Actions (bentonime, roninfc, hosting, oficina, asistente).",
+      "description": "Los 5 runners de GitHub Actions (bentonime, roninfc, derkyu-hosting, oficina, asistente).",
       "id": 51,
       "gridPos": {
         "x": 18,

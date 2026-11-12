@@ -10,12 +10,12 @@ ci_owner: IsDerky
 ci_repos:
   - { nombre: oficina, github: oficina }
   - { nombre: asistente, github: asistente }
-  - { nombre: hosting, github: hosting.derkyu.lol }
   - { nombre: roninfc, github: roninfc }
   - { nombre: derkyu-hosting, github: derkyu-hosting }
 
 # Los que ya no despliegan por aquí: se para el runner, se borra todo y se da
-# de baja en GitHub (runner y deploy key). Mismo formato que ci_repos.
+# de baja en GitHub (runner y deploy key). Mismo formato que ci_repos, más
+# `borrar` opcional: carpetas que dejó su despliegue.
 ci_repos_retirados: []
 
 ci_runners_dir: /opt/actions-runner
