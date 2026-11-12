@@ -15,7 +15,10 @@ Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
 Environment=HOME=/var/lib/derkyuweb
 EnvironmentFile=/etc/derkyu-hosting.env
-ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p {{ derkyu_hosting_port }}
+# -H localhost y no 127.0.0.1 (escucha igual en 127.0.0.1, que es el localhost de /etc/hosts): el proxy.ts
+# reescribe con la URL que Next le da (http://localhost:<puerto>/...) y Next solo la trata como interna si
+# coincide con su origen, que sale de -H. Con 127.0.0.1 se hacía un proxy a sí mismo y redirigía en bucle (308).
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H localhost -p {{ derkyu_hosting_port }}
 Restart=always
 RestartSec=5
 SuccessExitStatus=143
