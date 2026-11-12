@@ -1,0 +1,19 @@
+---
+# Web de Derkyu Hosting en Next (repo derkyu-hosting). Sustituye a la estática de Vite (deploy-repo hosting).
+# false = todo instalado pero el servicio parado (antes del corte). true = arrancado y comprobado.
+derkyu_hosting_enabled: false
+
+# Solo escucha en loopback: nginx (vhost de hosting) le pasa las peticiones
+derkyu_hosting_port: 3052
+
+# El CI (deploy-repo derkyu-hosting) publica cada versión en releases/<sha> y enlaza current.
+# Las rutas están fijadas también allí.
+derkyu_hosting_root: /srv/derkyu-hosting
+
+derkyu_hosting_memory_max: 512M
+
+# Precios y Novedades salen de la BD de CtrlPanel con un usuario de solo lectura (lo crea el rol ctrlpanel).
+# Sin contraseña la web arranca igual, con los planes y novedades de respaldo.
+derkyu_hosting_db_user: web_precios
+derkyu_hosting_db_name: ctrlpanel
+# derkyu_hosting_db_password: en el vault (homelab-config), la misma que ctrlpanel_web_db_password

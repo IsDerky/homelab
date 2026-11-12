@@ -1,0 +1,76 @@
+---
+- name: Usuario derkyuweb (sin shell ni contraseña)
+  ansible.builtin.user:
+    name: derkyuweb
+    system: true
+    home: /var/lib/derkyuweb
+    create_home: false
+    shell: /usr/sbin/nologin
+    password_lock: true
+
+# De root: las versiones son de solo lectura para el servicio salvo su .next/cache
+# (caché de datos de Next), que el CI le cambia de dueño al publicar
+- name: Carpetas de versiones
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ derkyu_hosting_root }}"
+    - "{{ derkyu_hosting_root }}/releases"
+
+# La contraseña de la BD no va en la unidad (systemctl cat la enseñaría)
+- name: Variables de entorno
+  ansible.builtin.template:
+    src: derkyu-hosting.env.j2
+    dest: /etc/derkyu-hosting.env
+    owner: root
+    group: derkyuweb
+    mode: "0640"
+  no_log: true
+  notify: Reiniciar derkyu-hosting
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: derkyu-hosting.service.j2
+    dest: /etc/systemd/system/derkyu-hosting.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Recargar systemd
+    - Reiniciar derkyu-hosting
+
+- name: Aplicar cambios pendientes antes de arrancar o parar
+  ansible.builtin.meta: flush_handlers
+
+- name: Comprobar que el CI ya ha publicado una versión
+  ansible.builtin.stat:
+    path: "{{ derkyu_hosting_root }}/current/.next/BUILD_ID"
+  register: derkyu_hosting_current
+
+- name: Sin código no se enciende
+  ansible.builtin.assert:
+    that: derkyu_hosting_current.stat.exists
+    fail_msg: No hay versión en {{ derkyu_hosting_root }}/current. Haz push a main de derkyu-hosting o relanza su CI.
+    quiet: true
+  when: derkyu_hosting_enabled
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: derkyu-hosting.service
+    enabled: "{{ derkyu_hosting_enabled }}"
+    state: "{{ 'started' if derkyu_hosting_enabled else 'stopped' }}"
+
+# deploy-repo usa la misma prueba antes de dar una versión por buena
+- name: Comprobar que responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ derkyu_hosting_port }}/
+    status_code: 200
+  register: derkyu_hosting_check
+  until: derkyu_hosting_check.status == 200
+  retries: 10
+  delay: 3
+  when: derkyu_hosting_enabled

@@ -1,0 +1,44 @@
+# {{ ansible_managed }}
+# El código lo publica el CI (deploy-repo derkyu-hosting) en {{ derkyu_hosting_root }}/current (proyecto
+# compilado con sus node_modules). next start y no el server.js standalone: ver deploy-repo.
+[Unit]
+Description=Derkyu Hosting (Next.js)
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=derkyuweb
+Group=derkyuweb
+WorkingDirectory={{ derkyu_hosting_root }}/current
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=HOME=/var/lib/derkyuweb
+EnvironmentFile=/etc/derkyu-hosting.env
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p {{ derkyu_hosting_port }}
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+
+# Solo puede escribir en la caché de datos de Next (.next/cache de cada versión)
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+StateDirectory=derkyuweb
+ReadWritePaths={{ derkyu_hosting_root }}/releases
+MemoryMax={{ derkyu_hosting_memory_max }}
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

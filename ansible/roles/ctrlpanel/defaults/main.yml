@@ -17,6 +17,11 @@ ctrlpanel_db_name: ctrlpanel
 ctrlpanel_db_user: ctrlpanel
 ctrlpanel_db_password: ""
 
+# Usuario de solo lectura para la web de hosting (precios de products y Novedades de derkyu_avisos).
+# Sin contraseña en el vault no se crea. Es la misma que derkyu_hosting_db_password.
+ctrlpanel_web_db_user: web_precios
+# ctrlpanel_web_db_password: en el vault
+
 # Cola y planificador. El planificador cobra créditos y suspende servidores en
 # Pterodactyl: con dos copias encendidas a la vez lo haría dos veces. false =
 # todo instalado pero parado (para preparar una migración).
