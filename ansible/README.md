@@ -421,8 +421,8 @@ Push a `main` → las comprobaciones corren en `ubuntu-latest` → el runner del
 
 | Variable | Por defecto | |
 |---|---|---|
-| `ci_repos` | oficina, asistente, hosting, roninfc | `{nombre, github}`. Tienen que coincidir con los casos de `deploy-repo` |
-| `ci_repos_retirados` | `[]` | Mismo formato |
+| `ci_repos` | oficina, asistente, roninfc, derkyu-hosting | `{nombre, github}`. Tienen que coincidir con los casos de `deploy-repo` |
+| `ci_repos_retirados` | `[]` | Mismo formato, más `borrar` (lista de carpetas que dejó su despliegue) |
 | `ci_github` | `true` | Deploy keys y runners nuevos con `gh` |
 | `ci_runners_dir` | `/opt/actions-runner` | |
 

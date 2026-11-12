@@ -62,12 +62,10 @@
   become: false
   when: ci_github | bool and not ansible_check_mode
 
-- name: Borrar carpeta, copia del repo y deploy key
+- name: Borrar carpeta, copia del repo, deploy key y lo que dejó su despliegue
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
-  loop:
-    - "{{ ci_runners_dir }}/{{ ci_viejo.nombre }}"
-    - /var/lib/deploy-repo/{{ ci_viejo.nombre }}
-    - /root/.ssh/deploy-{{ ci_viejo.nombre }}
-    - /root/.ssh/deploy-{{ ci_viejo.nombre }}.pub
+  loop: "{{ ['/var/lib/deploy-repo/' ~ ci_viejo.nombre, ci_runners_dir ~ '/' ~ ci_viejo.nombre,
+            '/root/.ssh/deploy-' ~ ci_viejo.nombre, '/root/.ssh/deploy-' ~ ci_viejo.nombre ~ '.pub']
+           + (ci_viejo.borrar | default([])) }}"
