@@ -1,0 +1,10 @@
+---
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Reiniciar derkyu-hosting
+  ansible.builtin.systemd_service:
+    name: derkyu-hosting.service
+    state: restarted
+  when: derkyu_hosting_enabled

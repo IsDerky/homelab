@@ -30,3 +30,28 @@
   changed_when: false
   check_mode: false
   when: ctrlpanel_db_user_exists.stdout | trim != '0'
+
+# Web de hosting: SELECT por tabla. derkyu_avisos la crea el tema Derkyu al instalarse: hasta entonces
+# solo products (la web saca las Novedades de respaldo). Volver a aplicar el rol tras instalar el tema.
+- name: ¿Existe ya la tabla de avisos del tema?
+  ansible.builtin.command: >-
+    mariadb -N -e "SHOW TABLES FROM `{{ ctrlpanel_db_name }}` LIKE 'derkyu_avisos'"
+  register: ctrlpanel_tabla_avisos
+  changed_when: false
+  check_mode: false
+  when: ctrlpanel_web_db_password is defined
+
+# Idempotente (IF NOT EXISTS, ALTER con la del vault y GRANT): no se marca como cambio
+- name: Usuario de solo lectura de la web
+  ansible.builtin.command:
+    cmd: mariadb
+    stdin: |
+      CREATE USER IF NOT EXISTS '{{ ctrlpanel_web_db_user }}'@'localhost' IDENTIFIED BY '{{ ctrlpanel_web_db_password }}';
+      ALTER USER '{{ ctrlpanel_web_db_user }}'@'localhost' IDENTIFIED BY '{{ ctrlpanel_web_db_password }}';
+      GRANT SELECT ON `{{ ctrlpanel_db_name }}`.`products` TO '{{ ctrlpanel_web_db_user }}'@'localhost';
+      {% if ctrlpanel_tabla_avisos.stdout | trim != '' %}
+      GRANT SELECT ON `{{ ctrlpanel_db_name }}`.`derkyu_avisos` TO '{{ ctrlpanel_web_db_user }}'@'localhost';
+      {% endif %}
+  no_log: true
+  changed_when: false
+  when: ctrlpanel_web_db_password is defined

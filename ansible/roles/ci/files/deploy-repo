@@ -1,5 +1,5 @@
 #!/bin/bash
-# Despliega un repo permitido (oficina | asistente | hosting | roninfc) en un commit de su rama main.
+# Despliega un repo permitido (oficina | asistente | hosting | roninfc | derkyu-hosting) en un commit de su rama main.
 # Es lo ÚNICO que el usuario deployer (el de los runners de GitHub) puede
 # ejecutar con sudo:   sudo /usr/local/sbin/deploy-repo <repo> <sha>
 #
@@ -15,7 +15,7 @@ set -euo pipefail
 REPO="${1:-}"
 SHA="${2:-}"
 case "$REPO" in
-  oficina | asistente | roninfc) GH_REPO=$REPO ;;
+  oficina | asistente | roninfc | derkyu-hosting) GH_REPO=$REPO ;;
   hosting) GH_REPO=hosting.derkyu.lol ;;
   *) echo "deploy-repo: repo no permitido: '$REPO'" >&2; exit 2 ;;
 esac
@@ -176,6 +176,67 @@ case "$REPO" in
       [[ $REL/$old == "$CUR" ]] || rm -rf "${REL:?}/$old"
     done
     log "Publicado en /srv/roninfc/current ($(du -sh "$REL/$SHA" | cut -f1))"
+    ;;
+  derkyu-hosting)
+    # Web nueva de Derkyu Hosting: Next 16 compilado por webbuild con pnpm (corepack, versión fijada en
+    # packageManager) y servido con next start, como roninfc. No el server.js de la salida standalone: ahí el
+    # proxy.ts vuelve a recibir la ruta ya reescrita (/es) y la redirige a / en bucle (308).
+    # La versión es de root salvo .next/cache (caché de datos de Next), que la escribe el servicio.
+    # Apagado (antes del corte) solo se publica; encendido, reinicia, comprueba y vuelve atrás si no responde.
+    id derkyuweb >/dev/null 2>&1 || { echo "Falta el usuario derkyuweb: aplica playbooks/webs.yml del homelab" >&2; exit 1; }
+    phase=compilar
+    log "Compilando ${SHA:0:7} como webbuild"
+    BUILD=/var/lib/webbuild/derkyu-hosting
+    rm -rf "$BUILD"
+    install -d -o webbuild -g webbuild -m 755 "$BUILD"
+    git archive "$SHA" | runuser -u webbuild -- tar -x -C "$BUILD"
+    runuser -u webbuild -- env HOME=/var/lib/webbuild COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+      npm_config_package_import_method=copy NEXT_TELEMETRY_DISABLED=1 bash -c \
+      "cd '$BUILD' && corepack pnpm install --frozen-lockfile && corepack pnpm build"
+    [ -f "$BUILD/.next/BUILD_ID" ] || { echo "La compilación no dejó .next/BUILD_ID" >&2; exit 1; }
+    phase=instalar
+    REL=/srv/derkyu-hosting/releases
+    install -d -m 755 /srv/derkyu-hosting "$REL"
+    rm -rf "${REL:?}/$SHA"
+    # la salida standalone no se usa: fuera, son ~60 MB por versión
+    rm -rf "$BUILD/.next/standalone"
+    mv "$BUILD" "$REL/$SHA"
+    install -d "$REL/$SHA/.next/cache"
+    chown -R root:root "$REL/$SHA"
+    chmod -R a+rX,go-w "$REL/$SHA"
+    chown -R derkyuweb:derkyuweb "$REL/$SHA/.next/cache"
+    PREV=$(readlink -f /srv/derkyu-hosting/current 2>/dev/null || true)
+    ln -sfn "$REL/$SHA" /srv/derkyu-hosting/current.tmp
+    mv -T /srv/derkyu-hosting/current.tmp /srv/derkyu-hosting/current
+    if systemctl is-enabled --quiet derkyu-hosting 2>/dev/null; then
+      phase=reiniciar
+      log "Reiniciando derkyu-hosting"
+      systemctl restart derkyu-hosting
+      ok=0
+      for _ in $(seq 20); do
+        sleep 2
+        # La misma prueba que el rol derkyu_hosting
+        if curl -fsS -o /dev/null --max-time 10 http://127.0.0.1:3052/; then ok=1; break; fi
+      done
+      if [[ $ok != 1 ]]; then
+        if [[ -n $PREV && -d $PREV ]]; then
+          log "No responde: vuelvo a $(basename "$PREV" | cut -c1-7)"
+          ln -sfn "$PREV" /srv/derkyu-hosting/current.tmp
+          mv -T /srv/derkyu-hosting/current.tmp /srv/derkyu-hosting/current
+          systemctl restart derkyu-hosting
+        fi
+        exit 1
+      fi
+    else
+      log "derkyu-hosting.service está apagado (antes del corte): solo se publica"
+    fi
+    # Las 3 últimas versiones, sin borrar nunca la que está en uso.
+    CUR=$(readlink -f /srv/derkyu-hosting/current)
+    # shellcheck disable=SC2012
+    ls -1t "$REL" | tail -n +4 | while read -r old; do
+      [[ $REL/$old == "$CUR" ]] || rm -rf "${REL:?}/$old"
+    done
+    log "Publicado en /srv/derkyu-hosting/current ($(du -sh "$REL/$SHA" | cut -f1))"
     ;;
 esac
 phase=ok
