@@ -24,3 +24,5 @@ homepage_services: []
 
 # layout de settings.yaml (columnas por grupo)
 homepage_layout: {}
+# Otros nombres que Homepage acepta (p. ej. el dominio viejo durante un cambio)
+homepage_hosts_extra: []
