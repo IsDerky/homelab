@@ -32,7 +32,8 @@ ctrlpanel_enabled: false
 ctrlpanel_check: true
 
 # Carpeta del colector textfile de node-exporter: deja ahí cada 5 min los
-# trabajos fallidos de la cola (ctrlpanel_failed_jobs). Vacío = sin métricas.
+# trabajos fallidos de la cola (ctrlpanel_failed_jobs) y los pagos y compras que se
+# quedan a medias (ctrlpanel_pagos_sin_confirmar, ctrlpanel_compras_*). Vacío = sin métricas.
 ctrlpanel_textfile_dir: ""
 
 ctrlpanel_fpm_max_children: 5

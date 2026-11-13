@@ -259,3 +259,49 @@ tests:
               severity: warning
             exp_annotations:
               summary: "CtrlPanel tiene trabajos de la cola fallidos nuevos (1 en la última hora; php artisan queue:failed)."
+
+  # Un pago sin confirmar avisa a los 5 min; cuando se arregla, deja de avisar
+  - interval: 1m
+    input_series:
+      - series: 'ctrlpanel_pagos_sin_confirmar'
+        values: "0x10 1x10 0x10"
+      - series: 'ctrlpanel_compras_atascadas'
+        values: "0x10 2x10"
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: PagoSinConfirmar
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: PagoSinConfirmar
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "1 pago(s) de CtrlPanel llevan más de 30 min sin confirmar: el webhook de Stripe no llega o falla (Stripe → Webhooks)."
+      - eval_time: 25m
+        alertname: PagoSinConfirmar
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: CompraAtascada
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "2 compra(s) pagadas en CtrlPanel siguen sin hacerse tras 15 min (tabla derkyu_compras, estado pagada)."
+
+  # Las fallidas viejas no avisan; una nueva sí
+  - interval: 5m
+    input_series:
+      - series: 'ctrlpanel_compras_fallidas'
+        values: "3x20 4x20"
+    alert_rule_test:
+      - eval_time: 95m
+        alertname: CompraFallida
+        exp_alerts: []
+      - eval_time: 105m
+        alertname: CompraFallida
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "1 compra(s) pagadas en CtrlPanel fallaron en la última hora; el dinero quedó como saldo (derkyu_compras)."

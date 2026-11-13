@@ -1,12 +1,36 @@
 #!/usr/bin/env bash
-# Trabajos fallidos de la cola de CtrlPanel para el colector textfile de
-# node-exporter. Como root por el socket de MariaDB: sin contraseña en ningún sitio.
+# Métricas de CtrlPanel para el colector textfile de node-exporter: trabajos
+# fallidos de la cola y pagos que se quedan a medias. Como root por el socket de
+# MariaDB: sin contraseña en ningún sitio.
 # Uso: ctrlpanel-metricas BD FICHERO
 set -euo pipefail
 db=$1
 out=$2
 
-n=$(mariadb -N -B -e "SELECT COUNT(*) FROM failed_jobs" "$db")
+q() { mariadb -N -B -e "$1" "$db"; }
+
+fallidos=$(q "SELECT COUNT(*) FROM failed_jobs")
+
+# El cliente vuelve de la pasarela y el pago queda en processing hasta que llega
+# el webhook. Media hora así es que el webhook no llega o falla. Solo los de los
+# últimos 3 días: uno viejo olvidado no debe avisar para siempre.
+sin_confirmar=$(q "SELECT COUNT(*) FROM payments WHERE status = 'processing'
+  AND updated_at < NOW() - INTERVAL 30 MINUTE AND created_at > NOW() - INTERVAL 3 DAY")
+
+# Compras del tema («Pagar y crear»): pagada y sin hacer pasados 15 min, o fallida
+# (el dinero queda como saldo, pero el cliente se ha quedado sin servidor)
+compras=""
+if [ -n "$(q "SHOW TABLES LIKE 'derkyu_compras'")" ]; then
+  atascadas=$(q "SELECT COUNT(*) FROM derkyu_compras WHERE estado = 'pagada'
+    AND updated_at < NOW() - INTERVAL 15 MINUTE AND created_at > NOW() - INTERVAL 3 DAY")
+  fallidas=$(q "SELECT COUNT(*) FROM derkyu_compras WHERE estado = 'fallo'")
+  compras="# HELP ctrlpanel_compras_atascadas Compras pagadas sin hacer desde hace más de 15 min
+# TYPE ctrlpanel_compras_atascadas gauge
+ctrlpanel_compras_atascadas $atascadas
+# HELP ctrlpanel_compras_fallidas Compras pagadas que no se pudieron hacer (total)
+# TYPE ctrlpanel_compras_fallidas gauge
+ctrlpanel_compras_fallidas $fallidas"
+fi
 
 # Escritura atómica: node-exporter nunca ve el fichero a medias
 tmp=$(mktemp "$(dirname "$out")/.ctrlpanel-XXXXXX")
@@ -14,7 +38,11 @@ trap 'rm -f "$tmp"' EXIT
 cat > "$tmp" <<EOF
 # HELP ctrlpanel_failed_jobs Trabajos de la cola de CtrlPanel en failed_jobs
 # TYPE ctrlpanel_failed_jobs gauge
-ctrlpanel_failed_jobs $n
+ctrlpanel_failed_jobs $fallidos
+# HELP ctrlpanel_pagos_sin_confirmar Pagos en processing desde hace más de 30 min (webhook sin llegar)
+# TYPE ctrlpanel_pagos_sin_confirmar gauge
+ctrlpanel_pagos_sin_confirmar $sin_confirmar
+$compras
 EOF
 chmod 644 "$tmp"
 mv "$tmp" "$out"
