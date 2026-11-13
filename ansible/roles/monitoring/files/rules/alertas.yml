@@ -144,6 +144,30 @@ groups:
         annotations:
           summary: "CtrlPanel tiene trabajos de la cola fallidos nuevos ({{ $value }} en la última hora; php artisan queue:failed)."
 
+      # El saldo solo llega por el webhook de la pasarela: si no llega, el cliente ha pagado y no tiene nada
+      - alert: PagoSinConfirmar
+        expr: ctrlpanel_pagos_sin_confirmar > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} pago(s) de CtrlPanel llevan más de 30 min sin confirmar: el webhook de Stripe no llega o falla (Stripe → Webhooks)."
+
+      - alert: CompraAtascada
+        expr: ctrlpanel_compras_atascadas > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} compra(s) pagadas en CtrlPanel siguen sin hacerse tras 15 min (tabla derkyu_compras, estado pagada)."
+
+      - alert: CompraFallida
+        expr: ctrlpanel_compras_fallidas - ctrlpanel_compras_fallidas offset 1h > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} compra(s) pagadas en CtrlPanel fallaron en la última hora; el dinero quedó como saldo (derkyu_compras)."
+
       - alert: RecolectorParado
         expr: time() - ops_snapshot_timestamp_seconds > 1800
         for: 5m
