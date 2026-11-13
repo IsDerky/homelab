@@ -37,3 +37,7 @@ nginx_lan_zone: ""
 nginx_lan_ip: ""
 nginx_lan_names: []
 nginx_lan_cert: lan
+# Zona vieja durante un cambio de dominio: el comodín la cubre también (los
+# registros A siguen donde estén, no se tocan). Al cambiarla, cambiar también
+# nginx_lan_cert para que se saque un certificado nuevo.
+nginx_lan_zone_alias: ""

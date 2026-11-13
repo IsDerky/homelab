@@ -23,6 +23,12 @@
   check_mode: false
   no_log: true
 
+- name: El token llega a la zona
+  ansible.builtin.assert:
+    that: nginx_cf_zone.json.result | length > 0
+    fail_msg: El token de certbot (nginx_certbot_cloudflare_ini) no ve la zona {{ nginx_lan_zone }}.
+    quiet: true
+
 - name: Registros actuales
   ansible.builtin.uri:
     url: https://api.cloudflare.com/client/v4/zones/{{ nginx_cf_zone.json.result[0].id }}/dns_records?type=A&name={{ item }}.{{ nginx_lan_zone }}
@@ -73,6 +79,7 @@
     --dns-cloudflare --dns-cloudflare-credentials /root/.secrets/cloudflare.ini
     --dns-cloudflare-propagation-seconds 30
     --cert-name {{ nginx_lan_cert }} -d *.{{ nginx_lan_zone }}
+    {{ ('-d *.' ~ nginx_lan_zone_alias) if nginx_lan_zone_alias else '' }}
     --deploy-hook "systemctl reload nginx"
   args:
     creates: /etc/letsencrypt/live/{{ nginx_lan_cert }}/fullchain.pem

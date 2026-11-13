@@ -272,6 +272,8 @@ El nombre por sí solo no abre nada: cada vhost tiene `allow 192.168.1.0/24; den
 
 Añadir un servicio: su nombre en `nginx_lan_names` y su `.conf` en `nginx_sites` con `ssl_certificate /etc/letsencrypt/live/lan/...`.
 
+Cambiar de dominio: `nginx_lan_zone` al nuevo, `nginx_lan_zone_alias` al viejo y otro `nginx_lan_cert`. Sale un comodín con las dos zonas, así que cada vhost puede llevar los dos nombres en `server_name` mientras dura el cambio. Los registros A de la zona vieja no se tocan: se borran a mano al terminar.
+
 ## Rol `cloudflared`
 
 Añade el repo de Cloudflare, instala `cloudflared` y lo arranca con el token del túnel (`cloudflared_tunnel_env`, en el vault). Las rutas del túnel se gestionan en el panel de Cloudflare, no aquí. Como reiniciar el túnel corta lo que pasa por él, solo se reinicia si cambia el token o la unidad.

@@ -10,7 +10,7 @@ services:
     environment:
       HOSTNAME: 127.0.0.1
       PORT: "{{ homepage_port }}"
-      HOMEPAGE_ALLOWED_HOSTS: {{ homepage_host }},127.0.0.1:{{ homepage_port }}
+      HOMEPAGE_ALLOWED_HOSTS: {{ ([homepage_host] + homepage_hosts_extra) | join(",") }},127.0.0.1:{{ homepage_port }}
       PUID: "{{ homepage_uid }}"
       PGID: "{{ homepage_uid }}"
     volumes:
