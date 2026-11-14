@@ -13,7 +13,7 @@ Roles para montar piezas del homelab:
 - `adguard`: AdGuard Home en Docker Compose como servicio systemd, con Unbound opcional (`playbooks/apps.yml`, junto con `bentonime`).
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
-- `bd_servidores`: MariaDB aparte para las bases de datos de los servidores de Pterodactyl, solo en la red de Wings (`playbooks/bd-servidores.yml`).
+- `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `ctrlpanel`: la parte de sistema de CtrlPanel (Laravel) con usuario y pool de PHP-FPM propios, y su migración desde otra máquina por fases (`playbooks/migrar-ctrlpanel.yml`).
 - `ci`: runners de GitHub Actions en el servidor que solo pueden desplegar con `deploy-repo`, más sus deploy keys y el registro en GitHub (`playbooks/ci.yml`).
@@ -355,23 +355,39 @@ Una página de inicio con [Homepage](https://gethomepage.dev): una tarjeta por s
 
 ## Rol `bd_servidores`
 
-El "Database Host" de Pterodactyl: un MariaDB en Docker donde el panel crea una base y un usuario por servidor. Va aparte del MariaDB del sistema (el del panel), para que lo que hagan los servidores no toque al panel y tenga su propio tope de memoria.
+Las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings: MariaDB (el "Database Host" nativo del panel), PostgreSQL y MongoDB, cada uno en su contenedor con su tope de memoria. Van aparte del MariaDB del sistema (el del panel), para que lo que hagan los servidores no toque al panel.
 
-- Red del host escuchando solo en la IP del host en la red de Wings (`pterodactyl0`, por defecto `172.18.0.1`): los contenedores de los servidores llegan, el resto de la red no. Al no publicar puertos con Docker, pasa por ufw; hace falta una regla que abra el puerto solo desde esa red y esa interfaz.
-- Usuario de sistema propio, `root` solo desde dentro del contenedor y contraseñas en ficheros. El usuario del panel (`ALL PRIVILEGES ... WITH GRANT OPTION`, lo que pide Pterodactyl) se crea al inicializar la base; cambiar su contraseña después es a mano.
-- La copia la hace `server-backup sistema` con `mariadb-dump --all-databases` dentro del contenedor, y el simulacro comprueba que el volcado está completo.
-- En el panel: Admin → Databases, con la IP de arriba, el puerto y el usuario del panel, ligado al nodo.
+- Red del host escuchando solo en `bd_servidores_ip`. En la máquina del panel es la IP del host en la red de Wings (`pterodactyl0`, `172.18.0.1`); en un nodo de fuera, la IP del túnel de WireGuard: el panel llega por el túnel y los servidores del nodo también, porque es una IP de su propio host. No se publica nada con Docker, así que todo pasa por ufw: hacen falta reglas que abran los puertos desde la red de Wings por `pterodactyl0` y, en los nodos, desde el panel por `wg0`.
+- Usuario de sistema propio y contraseñas en ficheros. En MariaDB, `root` solo desde dentro del contenedor y el usuario del panel con `ALL PRIVILEGES ... WITH GRANT OPTION` (lo que pide Pterodactyl). En PostgreSQL el usuario del panel es el superusuario; `pg_hba` solo lo deja entrar desde `bd_servidores_panel_from`, y desde la red de Wings cada usuario solo entra a la base que se llama como él (`sameuser`). En MongoDB, `--auth` y el usuario del panel como `root`; cada servidor recibe un usuario con `readWrite` en su base. Los usuarios de administración se crean al inicializar cada motor: cambiar sus contraseñas después es a mano.
+- `bd-servidores-volcar <carpeta>` vuelca los motores que estén en marcha. En el servidor lo llama `server-backup sistema` (y el simulacro comprueba que cada volcado está entero); en los nodos, `nodo-export`, y la copia se lo trae con el resto.
+- En el panel: Admin → Databases, con la IP de arriba, el puerto de MariaDB y el usuario del panel, ligado al nodo. PostgreSQL y MongoDB los usa la extensión `derkyudatabases`.
 
 | Variable | Por defecto | |
 |---|---|---|
-| `bd_servidores_ip` | `""` | Obligatoria. IP del host en la red de Wings |
+| `bd_servidores_ip` | `""` | Obligatoria. IP en la red de Wings o en el túnel |
+| `bd_servidores_after` | `""` | Unidad que tiene que estar antes (en los nodos, `wg-quick@wg0.service`) |
 | `bd_servidores_root_password` | `""` | En el vault, 20+ caracteres |
 | `bd_servidores_panel_password` | `""` | En el vault, 20+ caracteres |
-| `bd_servidores_panel_user` | `pterodactyl` | |
+| `bd_servidores_postgres_password` | `""` | En el vault, 20+ caracteres |
+| `bd_servidores_mongo_password` | `""` | En el vault, 20+ caracteres |
+| `bd_servidores_panel_user` | `pterodactyl` | El mismo en los tres motores |
+| `bd_servidores_panel_from` | `[<ip>/32]` | Desde dónde entra el panel a PostgreSQL |
+| `bd_servidores_red_wings` | `172.18.0.0/16` | |
 | `bd_servidores_port` | `3306` | |
-| `bd_servidores_mem` | `768m` | Tope de memoria del contenedor |
+| `bd_servidores_mem` | `768m` | Tope de memoria de MariaDB |
 | `bd_servidores_buffer_pool` | `256M` | `innodb_buffer_pool_size` |
 | `bd_servidores_image` | `mariadb:11.4.13` | |
+| `bd_servidores_postgres` | `true` | |
+| `bd_servidores_postgres_image` | `postgres:17.12` | |
+| `bd_servidores_postgres_port` | `5432` | |
+| `bd_servidores_postgres_mem` | `512m` | |
+| `bd_servidores_postgres_shared_buffers` | `128MB` | |
+| `bd_servidores_postgres_max_connections` | `100` | |
+| `bd_servidores_mongo` | `true` | |
+| `bd_servidores_mongo_image` | `mongo:8.0.38` | |
+| `bd_servidores_mongo_port` | `27017` | |
+| `bd_servidores_mongo_mem` | `768m` | |
+| `bd_servidores_mongo_cache_gb` | `0.25` | `wiredTigerCacheSizeGB` |
 
 ## Rol `roninfc`
 

@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+# Dentro del contenedor (docker exec: hace falta root en el host)
+local   all        all                                       trust
+# El panel crea bases y roles con su superusuario
+{% for origen in bd_servidores_panel_from %}
+{{ 'host    all        %-15s %-25s scram-sha-256' | format(bd_servidores_panel_user, origen) }}
+{% endfor %}
+# Cada servidor solo entra a la base que se llama como su usuario
+{{ 'host    sameuser   all             %-25s scram-sha-256' | format(bd_servidores_red_wings) }}

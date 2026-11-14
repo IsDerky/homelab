@@ -1,0 +1,55 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Vuelca las bases de los servidores (los motores que estén en marcha) en una
+# carpeta: bd-servidores.sql (MariaDB), bd-servidores-postgres.sql y
+# bd-servidores-mongo.archive.gz. Cada fichero se escribe aparte y se cambia por
+# el viejo solo si salió entero. Lo llaman server-backup y nodo-export.
+#   bd-servidores-volcar <carpeta>
+set -euo pipefail
+DIR=${1:?falta la carpeta}
+install -d -m 700 "$DIR"
+corre() { [ "$(docker inspect -f '{{ '{{' }}.State.Running{{ '}}' }}' "$1" 2>/dev/null)" = true ]; }
+fallos=0
+
+# Cada motor por su lado: si uno falla, los demás se vuelcan igual
+if corre bd-servidores; then
+  if docker exec bd-servidores sh -c 'MYSQL_PWD="$(cat /run/secrets/root)" exec mariadb-dump -uroot --all-databases --single-transaction --routines --triggers --events' >"$DIR/bd-servidores.sql.tmp" \
+      && tail -n 1 "$DIR/bd-servidores.sql.tmp" | grep -q 'Dump completed'; then
+    mv "$DIR/bd-servidores.sql.tmp" "$DIR/bd-servidores.sql"
+  else
+    echo "MariaDB: volcado incompleto" >&2; fallos=1
+  fi
+else
+  rm -f "$DIR/bd-servidores.sql"
+fi
+
+if corre bd-servidores-postgres; then
+  # por el socket de dentro (trust): sin contraseña en la línea de órdenes
+  if docker exec bd-servidores-postgres pg_dumpall -U {{ bd_servidores_panel_user }} --clean --if-exists >"$DIR/bd-servidores-postgres.sql.tmp" \
+      && tail -n 3 "$DIR/bd-servidores-postgres.sql.tmp" | grep -q 'PostgreSQL database cluster dump complete'; then
+    mv "$DIR/bd-servidores-postgres.sql.tmp" "$DIR/bd-servidores-postgres.sql"
+  else
+    echo "PostgreSQL: volcado incompleto" >&2; fallos=1
+  fi
+else
+  rm -f "$DIR/bd-servidores-postgres.sql"
+fi
+
+if corre bd-servidores-mongo; then
+  # la contraseña va en un fichero de config dentro del contenedor, no en argv
+  if docker exec bd-servidores-mongo sh -c '
+      umask 077; c=$(mktemp); trap "rm -f $c" EXIT
+      printf "password: \"%s\"\n" "$(cat /run/secrets/mongo)" >"$c"
+      exec mongodump --quiet --host={{ bd_servidores_ip }} --port={{ bd_servidores_mongo_port }} \
+        --username={{ bd_servidores_panel_user }} --authenticationDatabase=admin --config="$c" --archive --gzip' \
+      >"$DIR/bd-servidores-mongo.archive.gz.tmp" && gzip -t "$DIR/bd-servidores-mongo.archive.gz.tmp"; then
+    mv "$DIR/bd-servidores-mongo.archive.gz.tmp" "$DIR/bd-servidores-mongo.archive.gz"
+  else
+    echo "MongoDB: volcado incompleto" >&2; fallos=1
+  fi
+else
+  rm -f "$DIR/bd-servidores-mongo.archive.gz"
+fi
+
+rm -f "$DIR"/*.tmp
+exit $fallos

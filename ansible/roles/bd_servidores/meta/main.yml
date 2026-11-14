@@ -3,7 +3,7 @@ galaxy_info:
   author: Alex (Derky)
   role_name: bd_servidores
   namespace: isderky
-  description: MariaDB aparte para las bases de datos de los servidores de Pterodactyl, solo en la red de Wings
+  description: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en contenedores y solo en la red de Wings o del túnel
   license: MIT
   min_ansible_version: "2.15"
   platforms:

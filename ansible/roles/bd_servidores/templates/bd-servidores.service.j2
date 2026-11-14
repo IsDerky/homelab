@@ -1,9 +1,13 @@
 # {{ ansible_managed }}
 [Unit]
-Description=MariaDB de los servidores de Pterodactyl
+Description=Bases de datos de los servidores de Pterodactyl (MariaDB, PostgreSQL y MongoDB)
 Requires=docker.service
-After=docker.service network-online.target
+After=docker.service network-online.target{{ (' ' ~ bd_servidores_after) if bd_servidores_after else '' }}
 Wants=network-online.target
+{% if bd_servidores_after %}
+# Sin esto no existe la IP a la que se atan
+Requires={{ bd_servidores_after }}
+{% endif %}
 
 [Service]
 Type=oneshot

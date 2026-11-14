@@ -1,17 +1,55 @@
 ---
 bd_servidores_dir: /opt/bd-servidores
-bd_servidores_image: mariadb:11.4.13
 bd_servidores_user: bdservidores
 
-# IP del host en la red de Wings (pterodactyl0): los contenedores de los
-# servidores llegan ahí y el panel también (es una IP local). Nada más la ve.
+# IP donde escuchan los tres motores. Los contenedores de los servidores de
+# Wings tienen que llegar a ella y el panel también:
+#   - en la máquina del panel, la IP del host en la red de Wings (pterodactyl0)
+#   - en un nodo de fuera, la IP del túnel: el panel llega por WireGuard y los
+#     servidores del nodo también (es una IP de su propio host)
+# Nada más la ve: el filtro está en ufw (reglas en el inventario).
 bd_servidores_ip: ""
+
+# Unidad que tiene que estar arriba antes (en los nodos, la del túnel: sin wg0
+# no hay IP a la que atarse)
+bd_servidores_after: ""
+
+# Usuario con el que el panel (Pterodactyl para MariaDB, la extensión
+# derkyudatabases para PostgreSQL y MongoDB) crea bases y usuarios
+bd_servidores_panel_user: pterodactyl
+
+# Desde dónde puede entrar ese usuario en PostgreSQL (pg_hba). En la máquina
+# del panel es la propia IP; en un nodo, la IP del panel en el túnel.
+bd_servidores_panel_from: ["{{ bd_servidores_ip }}/32"]
+
+# Red de los contenedores de Wings: cada servidor entra solo a la base que se
+# llama como su usuario (pg_hba "sameuser")
+bd_servidores_red_wings: 172.18.0.0/16
+
+# MariaDB (el "Database Host" nativo de Pterodactyl)
+bd_servidores_image: mariadb:11.4.13
 bd_servidores_port: 3306
 bd_servidores_mem: 768m
 bd_servidores_buffer_pool: 256M
 
-# Contraseñas (vault). La del usuario del panel solo se usa al crear la base
-# por primera vez: cambiarla después es a mano (ALTER USER) y en el panel.
+# PostgreSQL
+bd_servidores_postgres: true
+bd_servidores_postgres_image: postgres:17.12
+bd_servidores_postgres_port: 5432
+bd_servidores_postgres_mem: 512m
+bd_servidores_postgres_shared_buffers: 128MB
+bd_servidores_postgres_max_connections: 100
+
+# MongoDB (con autenticación; cada base con su usuario readWrite solo en ella)
+bd_servidores_mongo: true
+bd_servidores_mongo_image: mongo:8.0.38
+bd_servidores_mongo_port: 27017
+bd_servidores_mongo_mem: 768m
+bd_servidores_mongo_cache_gb: 0.25
+
+# Contraseñas (vault). Solo se usan al crear cada base por primera vez:
+# cambiarlas después es a mano dentro del motor y en el panel.
 bd_servidores_root_password: ""
-bd_servidores_panel_user: pterodactyl
 bd_servidores_panel_password: ""
+bd_servidores_postgres_password: ""
+bd_servidores_mongo_password: ""

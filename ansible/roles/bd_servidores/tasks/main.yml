@@ -5,13 +5,15 @@
       - bd_servidores_ip is match('^\d+\.\d+\.\d+\.\d+$')
       - bd_servidores_root_password | length >= 20
       - bd_servidores_panel_password | length >= 20
-    fail_msg: Define bd_servidores_ip y las dos contraseñas (vault, 20+ caracteres).
+      - not bd_servidores_postgres or bd_servidores_postgres_password | length >= 20
+      - not bd_servidores_mongo or bd_servidores_mongo_password | length >= 20
+    fail_msg: Define bd_servidores_ip y las contraseñas (vault, 20+ caracteres).
     quiet: true
 
 - name: La IP existe en el host
   ansible.builtin.assert:
     that: bd_servidores_ip in ansible_facts['all_ipv4_addresses']
-    fail_msg: "{{ bd_servidores_ip }} no está en ninguna interfaz (¿Wings sin arrancar?)"
+    fail_msg: "{{ bd_servidores_ip }} no está en ninguna interfaz (¿Wings o el túnel sin arrancar?)"
     quiet: true
 
 - name: Usuario de la base de datos
@@ -24,6 +26,7 @@
     password_lock: true
   register: bd_servidores_account
 
+# data/ es MariaDB (el nombre viene de cuando solo había un motor)
 - name: Carpetas
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -32,24 +35,34 @@
     group: "{{ item.owner }}"
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ bd_servidores_dir }}", owner: root, mode: "0755" }
-    # Las bases de los servidores: van en el backup como volcado
-    - { path: "{{ bd_servidores_dir }}/data", owner: "{{ bd_servidores_user }}", mode: "0700" }
-    - { path: "{{ bd_servidores_dir }}/initdb", owner: "{{ bd_servidores_user }}", mode: "0700" }
+    - { path: "{{ bd_servidores_dir }}", owner: root, mode: "0755", activo: true }
+    - { path: "{{ bd_servidores_dir }}/data", owner: "{{ bd_servidores_user }}", mode: "0700", activo: true }
+    - { path: "{{ bd_servidores_dir }}/initdb", owner: "{{ bd_servidores_user }}", mode: "0700", activo: true }
+    - { path: "{{ bd_servidores_dir }}/postgres", owner: "{{ bd_servidores_user }}", mode: "0700", activo: "{{ bd_servidores_postgres }}" }
+    - { path: "{{ bd_servidores_dir }}/mongo", owner: "{{ bd_servidores_user }}", mode: "0700", activo: "{{ bd_servidores_mongo }}" }
+    - { path: "{{ bd_servidores_dir }}/mongo-config", owner: "{{ bd_servidores_user }}", mode: "0700", activo: "{{ bd_servidores_mongo }}" }
+  when: item.activo | bool
   loop_control:
     label: "{{ item.path }}"
 
-- name: Contraseña de root
+- name: Contraseñas de administración (solo las lee cada contenedor)
   ansible.builtin.copy:
-    content: "{{ bd_servidores_root_password }}"
-    dest: "{{ bd_servidores_dir }}/root-password"
+    content: "{{ item.valor }}"
+    dest: "{{ bd_servidores_dir }}/{{ item.fichero }}"
     owner: "{{ bd_servidores_user }}"
     group: "{{ bd_servidores_user }}"
     mode: "0400"
+  loop:
+    - { fichero: root-password, valor: "{{ bd_servidores_root_password }}", activo: true }
+    - { fichero: postgres-password, valor: "{{ bd_servidores_postgres_password }}", activo: "{{ bd_servidores_postgres }}" }
+    - { fichero: mongo-password, valor: "{{ bd_servidores_mongo_password }}", activo: "{{ bd_servidores_mongo }}" }
+  when: item.activo | bool
+  loop_control:
+    label: "{{ item.fichero }}"
   no_log: true
 
-# Solo se ejecuta al crear la base (data/ vacía)
-- name: Usuario del panel
+# Solo se ejecuta al crear la base de MariaDB (data/ vacía)
+- name: Usuario del panel en MariaDB
   ansible.builtin.template:
     src: panel.sql.j2
     dest: "{{ bd_servidores_dir }}/initdb/panel.sql"
@@ -58,12 +71,31 @@
     mode: "0400"
   no_log: true
 
+- name: Fichero pg_hba de PostgreSQL
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "{{ bd_servidores_dir }}/pg_hba.conf"
+    owner: "{{ bd_servidores_user }}"
+    group: "{{ bd_servidores_user }}"
+    mode: "0400"
+  when: bd_servidores_postgres
+  notify: Aplicar compose de bd-servidores
+
 - name: Compose
   ansible.builtin.template:
     src: compose.yaml.j2
     dest: "{{ bd_servidores_dir }}/compose.yaml"
     mode: "0644"
   notify: Aplicar compose de bd-servidores
+
+# Lo usan server-backup (en el servidor) y nodo-export (en los nodos)
+- name: Script de volcado
+  ansible.builtin.template:
+    src: bd-servidores-volcar.j2
+    dest: /usr/local/sbin/bd-servidores-volcar
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Unidad systemd
   ansible.builtin.template:
@@ -83,9 +115,15 @@
     state: started
   when: not (ansible_check_mode and bd_servidores_unit.changed)
 
-- name: Escucha
+- name: Escuchan
   ansible.builtin.wait_for:
     host: "{{ bd_servidores_ip }}"
-    port: "{{ bd_servidores_port }}"
-    timeout: 120
-  when: not ansible_check_mode
+    port: "{{ item.puerto }}"
+    timeout: 180
+  loop:
+    - { puerto: "{{ bd_servidores_port }}", activo: true }
+    - { puerto: "{{ bd_servidores_postgres_port }}", activo: "{{ bd_servidores_postgres }}" }
+    - { puerto: "{{ bd_servidores_mongo_port }}", activo: "{{ bd_servidores_mongo }}" }
+  when: item.activo | bool and not ansible_check_mode
+  loop_control:
+    label: "{{ item.puerto }}"

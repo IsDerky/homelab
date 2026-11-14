@@ -1,7 +1,8 @@
 ---
-# Aparte: aplicarlo no toca nada más
+# Aparte: aplicarlo no toca nada más. En el servidor del panel y en los nodos de
+# fuera: cada nodo tiene sus bases, en la máquina donde corren sus servidores.
 - name: Bases de datos de los servidores
-  hosts: homelab
+  hosts: homelab:wings_remotos
   become: true
   roles:
     - role: bd_servidores
