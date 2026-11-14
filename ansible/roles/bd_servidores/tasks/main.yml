@@ -79,7 +79,9 @@
     group: "{{ bd_servidores_user }}"
     mode: "0400"
   when: bd_servidores_postgres
-  notify: Aplicar compose de bd-servidores
+  notify:
+    - Aplicar compose de bd-servidores
+    - Reiniciar PostgreSQL
 
 - name: Compose
   ansible.builtin.template:
