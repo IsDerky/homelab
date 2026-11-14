@@ -1,13 +1,13 @@
 # {{ ansible_managed }}
-# data/ son las bases de los servidores: no las gestiona Ansible, van en el
-# backup (server-backup las vuelca con mariadb-dump).
+# data/, postgres/ y mongo/ son las bases de los servidores: no las gestiona
+# Ansible, van en el backup como volcado (bd-servidores-volcar).
+# Los tres con la red del host escuchando solo en {{ bd_servidores_ip }}: así pasan
+# por ufw (lo que publica Docker no) y no chocan con lo que haya en 127.0.0.1.
 services:
   mariadb:
     image: {{ bd_servidores_image }}
     container_name: bd-servidores
     restart: unless-stopped
-    # Red del host escuchando solo en la IP de la red de Wings: así pasa por ufw
-    # (lo que publica Docker no) y no choca con el MariaDB del sistema (127.0.0.1)
     network_mode: host
     user: "{{ bd_servidores_account.uid | default(0) }}:{{ bd_servidores_account.group | default(0) }}"
     command:
@@ -25,3 +25,62 @@ services:
       - ./root-password:/run/secrets/root:ro
       - ./initdb:/docker-entrypoint-initdb.d:ro
     mem_limit: {{ bd_servidores_mem }}
+{% if bd_servidores_postgres %}
+
+  postgres:
+    image: {{ bd_servidores_postgres_image }}
+    container_name: bd-servidores-postgres
+    restart: unless-stopped
+    network_mode: host
+    user: "{{ bd_servidores_account.uid | default(0) }}:{{ bd_servidores_account.group | default(0) }}"
+    command:
+      - postgres
+      - -c
+      - listen_addresses={{ bd_servidores_ip }}
+      - -c
+      - port={{ bd_servidores_postgres_port }}
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - shared_buffers={{ bd_servidores_postgres_shared_buffers }}
+      - -c
+      - max_connections={{ bd_servidores_postgres_max_connections }}
+    environment:
+      # superusuario con el que la extensión del panel crea bases y roles
+      POSTGRES_USER: {{ bd_servidores_panel_user }}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres
+      POSTGRES_DB: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+      - ./postgres-password:/run/secrets/postgres:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    shm_size: 128m
+    mem_limit: {{ bd_servidores_postgres_mem }}
+{% endif %}
+{% if bd_servidores_mongo %}
+
+  mongo:
+    image: {{ bd_servidores_mongo_image }}
+    container_name: bd-servidores-mongo
+    restart: unless-stopped
+    network_mode: host
+    user: "{{ bd_servidores_account.uid | default(0) }}:{{ bd_servidores_account.group | default(0) }}"
+    command:
+      - mongod
+      - --auth
+      - --bind_ip={{ bd_servidores_ip }}
+      - --port={{ bd_servidores_mongo_port }}
+      - --wiredTigerCacheSizeGB={{ bd_servidores_mongo_cache_gb }}
+    environment:
+      # administrador (root) con el que la extensión del panel crea bases y usuarios
+      MONGO_INITDB_ROOT_USERNAME: {{ bd_servidores_panel_user }}
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo
+    volumes:
+      - ./mongo:/data/db
+      - ./mongo-config:/data/configdb
+      - ./mongo-password:/run/secrets/mongo:ro
+    mem_limit: {{ bd_servidores_mongo_mem }}
+{% endif %}

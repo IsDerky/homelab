@@ -37,6 +37,7 @@ BENTO=/home/bentonime/apps/bentonime
 VAULT=/opt/vaultwarden/data # si existe, su BD se vuelca como la de Bentonime
 CTRLPANEL=/var/www/ctrlpanel # si existe, va la app y se vuelca su BD
 BDSERV=bd-servidores # contenedor con las bases de los servidores (rol bd_servidores)
+BDSERV_VOLCAR=/usr/local/sbin/bd-servidores-volcar # del mismo rol: vuelca los tres motores
 
 SIMULACRO_RESULT=/var/lib/server-backup/simulacro.json # lo lee ops-collect
 
@@ -250,8 +251,11 @@ case "$mode" in
       step="BD de CtrlPanel"
       mariadb-dump --single-transaction --routines --triggers --databases ctrlpanel >"$STAGE/ctrlpanel.sql"
     fi
-    if [ "$(docker inspect -f '{{.State.Running}}' "$BDSERV" 2>/dev/null)" = true ]; then
-      step="BD de los servidores"
+    step="BD de los servidores"
+    if [ -x "$BDSERV_VOLCAR" ]; then
+      # MariaDB, PostgreSQL y MongoDB (los que estén en marcha), rol bd_servidores
+      "$BDSERV_VOLCAR" "$STAGE"
+    elif [ "$(docker inspect -f '{{.State.Running}}' "$BDSERV" 2>/dev/null)" = true ]; then
       # La contraseña por entorno, no en la línea de comandos (se vería en ps)
       docker exec "$BDSERV" sh -c 'MYSQL_PWD="$(cat /run/secrets/root)" exec mariadb-dump -uroot --all-databases --single-transaction --routines --triggers --events' >"$STAGE/bd-servidores.sql"
     else
@@ -369,6 +373,14 @@ case "$mode" in
     if [ -f "$dumps/bd-servidores.sql" ]; then
       step="volcado de las BD de los servidores"
       tail -n 1 "$dumps/bd-servidores.sql" | grep -q 'Dump completed'
+    fi
+    if [ -f "$dumps/bd-servidores-postgres.sql" ]; then
+      step="volcado de PostgreSQL de los servidores"
+      tail -n 3 "$dumps/bd-servidores-postgres.sql" | grep -q 'PostgreSQL database cluster dump complete'
+    fi
+    if [ -f "$dumps/bd-servidores-mongo.archive.gz" ]; then
+      step="volcado de MongoDB de los servidores"
+      gzip -t "$dumps/bd-servidores-mongo.archive.gz"
     fi
 
     step="lista de paquetes"

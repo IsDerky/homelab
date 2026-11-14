@@ -11,20 +11,29 @@ if [ -f /etc/pterodactyl/config.yml ]; then
   install -m 600 /etc/pterodactyl/config.yml "$DIR/config.yml"
 fi
 
+# Bases de datos de los servidores de este nodo (rol bd_servidores): el
+# servidor de backups se las trae con el resto. Si falla, se deja el volcado
+# anterior y se apunta en estado.json, sin parar la exportación.
+bd_ok=null
+if [ -x /usr/local/sbin/bd-servidores-volcar ]; then
+  if /usr/local/sbin/bd-servidores-volcar "$DIR/bd"; then bd_ok=true; else bd_ok=false; fi
+fi
+
 # Lo que instalaría apt ahora mismo desde los orígenes de seguridad
 TEXTFILE=/var/lib/node-exporter/textfile
 seguridad=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst .*-security' || true)
 
-python3 - "$DIR/estado.json" "$seguridad" "$TEXTFILE" <<'PY'
+python3 - "$DIR/estado.json" "$seguridad" "$TEXTFILE" "$bd_ok" <<'PY'
 import json, os, sys, time
 path, seguridad, textfile = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+bd_ok = json.loads(sys.argv[4])
 try:
     with open("/var/run/reboot-required.pkgs") as f:
         pkgs = sorted({l.strip() for l in f if l.strip()})
 except OSError:
     pkgs = []
 out = {"at": int(time.time()), "reinicio": os.path.exists("/var/run/reboot-required"),
-       "paquetes_reinicio": pkgs, "seguridad_pendientes": seguridad}
+       "paquetes_reinicio": pkgs, "seguridad_pendientes": seguridad, "volcado_bd_ok": bd_ok}
 tmp = path + ".tmp"
 with open(tmp, "w") as f:
     json.dump(out, f)
