@@ -8,6 +8,18 @@
       - python3-certbot-dns-cloudflare
     state: present
 
+# El nginx.conf de Ubuntu trae TLS 1.0 y 1.1 de serie. Los vhosts de certbot ya
+# los quitan con su include, pero un server con TLS sin ese include los heredaría
+- name: Solo TLS 1.2 y 1.3 por defecto
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    regexp: '^\s*ssl_protocols\s'
+    line: "\tssl_protocols TLSv1.2 TLSv1.3;"
+    backrefs: true
+  notify:
+    - Comprobar nginx
+    - Recargar nginx
+
 - name: Sin el vhost por defecto
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
