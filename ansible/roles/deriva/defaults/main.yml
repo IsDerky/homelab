@@ -17,7 +17,7 @@ deriva_github_host_key: github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVz
 deriva_vault_password_file: "{{ lookup('env', 'ANSIBLE_VAULT_PASSWORD_FILE') }}"
 
 # renovate: datasource=pypi depName=ansible-core
-deriva_ansible_core: 2.21.6
+deriva_ansible_core: 2.22.0
 
 # Solo contra esta máquina. Lo que necesita a otras en la misma pasada (el
 # túnel con los nodos) va con esta etiqueta en site.yml y se salta.
