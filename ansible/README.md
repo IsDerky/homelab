@@ -14,6 +14,7 @@ Roles para montar piezas del homelab:
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
+- `caddy_webs`: Caddy delante de los servidores de webs (HTTPS sin puerto y dominios propios); lo configura el panel por la API (`playbooks/caddy-webs.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
 - `ctrlpanel`: la parte de sistema de CtrlPanel (Laravel) con usuario y pool de PHP-FPM propios, y su migración desde otra máquina por fases (`playbooks/migrar-ctrlpanel.yml`).
 - `ci`: runners de GitHub Actions en el servidor que solo pueden desplegar con `deploy-repo`, más sus deploy keys y el registro en GitHub (`playbooks/ci.yml`).
@@ -388,6 +389,24 @@ Las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings:
 | `bd_servidores_mongo_port` | `27017` | |
 | `bd_servidores_mongo_mem` | `768m` | |
 | `bd_servidores_mongo_cache_gb` | `0.25` | `wiredTigerCacheSizeGB` |
+
+## Rol `caddy_webs`
+
+Caddy en los nodos donde se venden webs, para servirlas por HTTPS sin puerto: la dirección gratis (`<nombre>.web.<dominio>`) y los dominios propios del cliente. Va hacia el puerto principal de cada servidor.
+
+- El rol no escribe rutas. La configuración la hace la extensión `derkyudomains` del panel: carga la del nodo entera con `POST /load` en cada cambio y cada hora, y Caddy la guarda y la recupera al arrancar (`--resume`). `inicial.json` solo vale para el primer arranque: deja la API escuchando en `caddy_webs_admin` y nada más.
+- Red del host. La API escucha en la IP del túnel; hace falta una regla de ufw que la abra solo desde el panel por `wg0`. Público solo el 443 (regla de ufw en el inventario y, en la imagen de Oracle, también en `rules.v4`, que el rol añade). Fuera, en la Security List de Oracle, también hay que abrir el 443.
+- El 80 se queda para certbot (el cert de Wings), así que los certificados salen por TLS-ALPN en el 443 y `http://` no redirige. Son on-demand: antes de pedir uno, Caddy pregunta al panel si el dominio está dado de alta.
+- `data/` (certificados) y `config/` (última configuración) no los toca Ansible.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `caddy_webs_admin` | `""` | Obligatoria. `IP:puerto` de la API (en los nodos, la IP del túnel) |
+| `caddy_webs_after` | `""` | Unidad que tiene que estar antes (en los nodos, `wg-quick@wg0.service`) |
+| `caddy_webs_iptables_ports` | `["443"]` | Puertos que se abren en `rules.v4` si la máquina lo tiene |
+| `caddy_webs_image` | `caddy:2.10.2` | |
+| `caddy_webs_mem` | `256m` | |
+| `caddy_webs_dir` | `/opt/caddy-webs` | |
 
 ## Rol `roninfc`
 

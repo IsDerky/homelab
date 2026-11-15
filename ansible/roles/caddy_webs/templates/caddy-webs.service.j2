@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Caddy de las webs de los servidores (lo configura el panel)
+Requires=docker.service
+After=docker.service network-online.target{{ (' ' ~ caddy_webs_after) if caddy_webs_after else '' }}
+Wants=network-online.target
+{% if caddy_webs_after %}
+# Sin esto no existe la IP de la API
+Requires={{ caddy_webs_after }}
+{% endif %}
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={{ caddy_webs_dir }}
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+
+[Install]
+WantedBy=multi-user.target
