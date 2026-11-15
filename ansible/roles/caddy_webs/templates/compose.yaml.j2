@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# La configuración de verdad no está aquí: la carga el panel por la API
+# (POST /load) y Caddy la guarda en config/caddy/autosave.json, que usa al
+# arrancar (--resume). inicial.json solo vale para el primer arranque: deja la
+# API escuchando en {{ caddy_webs_admin }} y nada más.
+# Red del host: llega a los servidores por 127.0.0.1:<puerto> y la API y el 443
+# pasan por ufw (lo que publica Docker no).
+services:
+  caddy:
+    image: {{ caddy_webs_image }}
+    container_name: caddy-webs
+    restart: unless-stopped
+    network_mode: host
+    user: "{{ caddy_webs_account.uid | default(0) }}:{{ caddy_webs_account.group | default(0) }}"
+    command: ["caddy", "run", "--resume", "--config", "/etc/caddy/inicial.json"]
+    volumes:
+      - ./inicial.json:/etc/caddy/inicial.json:ro
+      - ./data:/data
+      - ./config:/config
+    mem_limit: {{ caddy_webs_mem }}

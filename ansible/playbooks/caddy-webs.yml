@@ -1,0 +1,9 @@
+---
+# Aparte: aplicarlo no toca nada más. Solo en las máquinas que tengan
+# caddy_webs_admin (los nodos donde se venden webs).
+- name: Caddy de las webs
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - role: caddy_webs
+      when: caddy_webs_admin | default('') | length > 0

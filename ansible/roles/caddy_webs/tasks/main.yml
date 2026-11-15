@@ -1,0 +1,112 @@
+---
+- name: Faltan variables
+  ansible.builtin.assert:
+    that: caddy_webs_admin is match('^\d+\.\d+\.\d+\.\d+:\d+$')
+    fail_msg: Define caddy_webs_admin como IP:puerto (en los nodos, la IP del túnel).
+    quiet: true
+
+- name: La IP de la API existe en el host
+  ansible.builtin.assert:
+    that: caddy_webs_admin.split(':')[0] in ansible_facts['all_ipv4_addresses']
+    fail_msg: "{{ caddy_webs_admin.split(':')[0] }} no está en ninguna interfaz (¿el túnel sin arrancar?)"
+    quiet: true
+
+- name: Usuario de Caddy
+  ansible.builtin.user:
+    name: "{{ caddy_webs_user }}"
+    system: true
+    create_home: false
+    home: /nonexistent
+    shell: /usr/sbin/nologin
+    password_lock: true
+  register: caddy_webs_account
+
+# data/: certificados y claves de ACME. config/: la última configuración que
+# cargó el panel. Ninguna de las dos la gestiona Ansible.
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ caddy_webs_dir }}", owner: root, mode: "0755" }
+    - { path: "{{ caddy_webs_dir }}/data", owner: "{{ caddy_webs_user }}", mode: "0700" }
+    - { path: "{{ caddy_webs_dir }}/config", owner: "{{ caddy_webs_user }}", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Configuración del primer arranque
+  ansible.builtin.template:
+    src: inicial.json.j2
+    dest: "{{ caddy_webs_dir }}/inicial.json"
+    mode: "0644"
+  notify: Aplicar compose de caddy-webs
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ caddy_webs_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de caddy-webs
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: caddy-webs.service.j2
+    dest: /etc/systemd/system/caddy-webs.service
+    mode: "0644"
+  register: caddy_webs_unit
+  notify: Recargar systemd
+
+# La imagen de Oracle trae su propio iptables con un REJECT al final de INPUT
+# (rules.v4); lo de ufw no basta ahí. Mismo arreglo que el rol wireguard.
+- name: Comprobar rules.v4
+  ansible.builtin.command: grep -qx -- '-A INPUT -j REJECT --reject-with icmp-host-prohibited' /etc/iptables/rules.v4
+  register: caddy_webs_imagen_iptables
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Puertos públicos en el iptables de la imagen
+  when: caddy_webs_imagen_iptables.rc == 0
+  block:
+    - name: En rules.v4 (próximo arranque, antes del REJECT)
+      ansible.builtin.lineinfile:
+        path: /etc/iptables/rules.v4
+        line: "-A INPUT -p tcp -m state --state NEW -m tcp --dport {{ item }} -j ACCEPT"
+        insertbefore: '^-A INPUT -j REJECT'
+      loop: "{{ caddy_webs_iptables_ports }}"
+
+    # Al principio de INPUT. No con netfilter-persistent save, que guardaría
+    # también las reglas de Docker.
+    - name: En caliente
+      ansible.builtin.iptables:
+        chain: INPUT
+        action: insert
+        protocol: tcp
+        destination_port: "{{ item }}"
+        ctstate: NEW
+        jump: ACCEPT
+        comment: caddy-webs
+      loop: "{{ caddy_webs_iptables_ports }}"
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: caddy-webs.service
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and caddy_webs_unit.changed)
+
+- name: La API responde
+  ansible.builtin.uri:
+    url: "http://{{ caddy_webs_admin }}/config/"
+    status_code: 200
+  register: caddy_webs_api
+  until: caddy_webs_api.status == 200
+  retries: 20
+  delay: 3
+  when: not ansible_check_mode

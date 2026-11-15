@@ -1,0 +1,19 @@
+---
+caddy_webs_dir: /opt/caddy-webs
+caddy_webs_user: caddywebs
+caddy_webs_image: caddy:2.10.2
+caddy_webs_mem: 256m
+
+# Dirección de la API de administración (IP:puerto). Obligatoria. En los nodos,
+# la IP del túnel: el panel le carga la configuración entera por ahí (extensión
+# derkyudomains) y nadie más la ve (ufw solo la abre desde el panel por wg0).
+caddy_webs_admin: ""
+
+# Unidad que tiene que estar arriba antes (sin wg0 no existe la IP del admin)
+caddy_webs_after: ""
+
+# Puertos públicos que se abren también en /etc/iptables/rules.v4 de la imagen
+# de Oracle (si la máquina lo tiene). En ufw van en el inventario, como el resto.
+# Solo 443: el 80 es de certbot (cert de Wings en modo standalone) y los
+# certificados de las webs salen por TLS-ALPN.
+caddy_webs_iptables_ports: ["443"]
