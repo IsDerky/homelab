@@ -1,42 +1,72 @@
 ---
-# Retirada del panel viejo de Pterodactyl de n1, dejando solo Wings. Por fases,
-# en este orden y con días entre apagar y borrar. Sin tags no hace nada.
+# Retirada de un panel viejo de un nodo, dejando solo Wings. Por fases, en este
+# orden y con días entre apagar y borrar. Sin tags no hace nada.
 #   --tags copia    vuelca las bases y guarda la config en el controlador
 #   (a mano: borrar las bases y el host de bases desde el panel nuevo)
 #   --tags apagar   para y desactiva todo, quita los crons y certs del panel y
 #                   deja el cert de Wings renovándose sin nginx
 #   --tags borrar   desinstala y borra
+# Máquina: -e retiro_hosts=<nombre> (por defecto n1). Lo que cambia de una a
+# otra está en retiro_cfg.
 - name: Retirar el panel viejo
-  hosts: n1
+  hosts: "{{ retiro_hosts | default('n1') }}"
   become: true
   vars:
-    retiro_servicios:
-      - pteroq
-      - websocket-ping-paris
-      - pm2-root
-      - nginx
-      - php8.1-fpm
-      - redis-server
-      - mariadb
-    retiro_rutas:
-      - /var/www/pterodactyl
-      - /opt/websocket-ping
-      - /opt/websocket-ping-n1
-      - /root/.pm2
-      - /etc/systemd/system/pteroq.service
-      - /etc/systemd/system/websocket-ping-paris.service
-      - /etc/systemd/system/pm2-root.service
-    retiro_paquetes: '^(nginx(-common|-core|-full)?|libnginx-mod-.*|php8\.1.*|redis-(server|tools)|mariadb-(server|client|common).*)$'
-    retiro_certs:
-      - panel.derkyu.lol
-      - ping.n1.derkyu.lol
-    retiro_wings_cert: n1.derkyu.lol
+    retiro_cfg:
+      # Pterodactyl viejo (retirado el 2026-11-10)
+      n1:
+        servicios: [pteroq, websocket-ping-paris, pm2-root, nginx, php8.1-fpm, redis-server, mariadb]
+        rutas:
+          - /var/www/pterodactyl
+          - /opt/websocket-ping
+          - /opt/websocket-ping-n1
+          - /root/.pm2
+          - /etc/systemd/system/pteroq.service
+          - /etc/systemd/system/websocket-ping-paris.service
+          - /etc/systemd/system/pm2-root.service
+        paquetes: '^(nginx(-common|-core|-full)?|libnginx-mod-.*|php8\.1.*|redis-(server|tools)|mariadb-(server|client|common).*)$'
+        certs: [panel.derkyu.lol, ping.n1.derkyu.lol]
+        wings_cert: n1.derkyu.lol
+        wings_url: https://n1.derkyu.lol:8080
+        bases_panel: [panel]
+        puertos: [80, 443, 3306, 3552]
+        excluir: []
+      # CtrlPanel viejo (mudado al OptiPlex; vhost, cola y cron quitados el
+      # 2026-11-10). El 443 es de Caddy y el 3306 de la IP del túnel son las
+      # bases de los servidores: aquí solo se miran los de 127.0.0.1.
+      nodo2:
+        servicios: [nginx, php8.3-fpm, redis-server, mariadb]
+        rutas: [/var/www/ctrlpanel, /var/www/html]
+        paquetes: '^(nginx(-common|-core|-full)?|libnginx-mod-.*|php8\.3.*|php-common|redis-(server|tools)|mariadb-(server|client|common).*)$'
+        certs: []
+        wings_cert: es-mad-1
+        wings_url: https://es-mad-1.derkyu.com:8080
+        bases_panel: [ctrlpanel]
+        puertos: [3306, 6379, 9000]
+        # el log de CtrlPanel (2 GB en debug, con datos de clientes) no se copia
+        excluir: [var/www/ctrlpanel/storage/logs]
+    retiro_servicios: "{{ retiro_cfg[inventory_hostname].servicios }}"
+    retiro_rutas: "{{ retiro_cfg[inventory_hostname].rutas }}"
+    retiro_paquetes: "{{ retiro_cfg[inventory_hostname].paquetes }}"
+    retiro_certs: "{{ retiro_cfg[inventory_hostname].certs }}"
+    retiro_wings_cert: "{{ retiro_cfg[inventory_hostname].wings_cert }}"
+    retiro_wings_url: "{{ retiro_cfg[inventory_hostname].wings_url }}"
+    retiro_bases_panel: "{{ retiro_cfg[inventory_hostname].bases_panel }}"
+    retiro_puertos: "{{ retiro_cfg[inventory_hostname].puertos }}"
+    retiro_excluir: "{{ retiro_cfg[inventory_hostname].excluir }}"
     retiro_verificar: true
     retiro_nodo: /root/retiro-panel
     retiro_copia: "{{ lookup('ansible.builtin.env', 'HOME') }}/copias/retiro-panel/{{ inventory_hostname }}"
     retiro_bases_sistema: [information_schema, performance_schema, sys, mysql]
 
   tasks:
+    - name: Máquina conocida
+      ansible.builtin.assert:
+        that: inventory_hostname in retiro_cfg
+        fail_msg: "{{ inventory_hostname }} no está en retiro_cfg"
+        quiet: true
+      tags: [always]
+
     - name: Copia
       tags: [never, copia]
       block:
@@ -70,8 +100,9 @@
         - name: Empaquetar la config
           vars:
             rutas: "{{ retiro_existen.results | selectattr('stat.exists') | map(attribute='item') | map('regex_replace', '^/', '') | list }}"
+            excluir: "{{ retiro_excluir | map('regex_replace', '^', '--exclude=') | list }}"
           ansible.builtin.command:
-            argv: "{{ ['tar', 'czf', retiro_nodo ~ '/ficheros.tar.gz', '-C', '/'] + rutas }}"
+            argv: "{{ ['tar', 'czf', retiro_nodo ~ '/ficheros.tar.gz', '-C', '/'] + excluir + rutas }}"
           changed_when: true
 
         - name: Ficheros de la copia
@@ -117,9 +148,9 @@
 
         - name: Las bases de servidores ya no están
           ansible.builtin.assert:
-            that: retiro_quedan.stdout_lines | difference(retiro_bases_sistema + ['panel']) | length == 0
+            that: retiro_quedan.stdout_lines | difference(retiro_bases_sistema + retiro_bases_panel) | length == 0
             fail_msg: >-
-              Quedan {{ retiro_quedan.stdout_lines | difference(retiro_bases_sistema + ['panel']) | join(', ') }}:
+              Quedan {{ retiro_quedan.stdout_lines | difference(retiro_bases_sistema + retiro_bases_panel) | join(', ') }}:
               bórralas desde el panel nuevo (servidor → Databases) y quita el host de bases antes de apagar MariaDB
 
         - name: Servicios
@@ -162,10 +193,11 @@
 
         - name: Puertos del panel cerrados
           ansible.builtin.wait_for:
+            host: 127.0.0.1
             port: "{{ item }}"
             state: stopped
             timeout: 30
-          loop: [80, 443, 3306, 3552]
+          loop: "{{ retiro_puertos }}"
 
         # standalone necesita el 80 libre, que es lo que fallaba con nginx delante
         - name: La renovación del cert de Wings funciona
@@ -175,7 +207,7 @@
 
         - name: Wings sigue respondiendo con su cert
           ansible.builtin.uri:
-            url: https://{{ retiro_wings_cert }}:8080/api/system
+            url: "{{ retiro_wings_url }}/api/system"
             status_code: [200, 401, 403]
           delegate_to: localhost
           become: false
@@ -216,7 +248,7 @@
           ansible.builtin.file:
             path: "{{ item }}"
             state: absent
-          loop: "{{ retiro_rutas + ['/etc/nginx', '/etc/php/8.1', '/etc/mysql', '/var/lib/mysql', '/etc/redis', '/var/lib/redis', retiro_nodo] }}"
+          loop: "{{ retiro_rutas + ['/etc/nginx', '/etc/php', '/etc/mysql', '/var/lib/mysql', '/etc/redis', '/var/lib/redis', retiro_nodo] }}"
 
         - name: Recargar systemd
           ansible.builtin.systemd_service:
