@@ -19,7 +19,7 @@ backup_restic_asset_id:
   amd64: 466999719
   arm64: 466999588
 # renovate: datasource=github-releases depName=rclone/rclone
-backup_rclone_version: 1.75.2
+backup_rclone_version: 1.76.0
 backup_rclone_sha256:
   amd64: 349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702
   arm64: 7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10
