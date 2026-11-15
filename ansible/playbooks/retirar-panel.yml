@@ -38,7 +38,8 @@
         servicios: [nginx, php8.3-fpm, redis-server, mariadb]
         rutas: [/var/www/ctrlpanel, /var/www/html]
         paquetes: '^(nginx(-common|-core|-full)?|libnginx-mod-.*|php8\.3.*|php-common|redis-(server|tools)|mariadb-(server|client|common).*)$'
-        certs: []
+        # el del nombre viejo del nodo: Wings ya va con es-mad-1
+        certs: [nodo2.derkyu.lol]
         wings_cert: es-mad-1
         wings_url: https://es-mad-1.derkyu.com:8080
         bases_panel: [ctrlpanel]
