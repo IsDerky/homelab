@@ -1,5 +1,5 @@
 #!/bin/bash
-# Despliega un repo permitido (oficina | asistente | roninfc | derkyu-hosting) en un commit de su rama main.
+# Despliega un repo permitido (oficina | asistente | roninfc | derkyu-hosting | derkyu-bot) en un commit de su rama main.
 # Es lo ÚNICO que el usuario deployer (el de los runners de GitHub) puede
 # ejecutar con sudo:   sudo /usr/local/sbin/deploy-repo <repo> <sha>
 #
@@ -15,7 +15,7 @@ set -euo pipefail
 REPO="${1:-}"
 SHA="${2:-}"
 case "$REPO" in
-  oficina | asistente | roninfc | derkyu-hosting) GH_REPO=$REPO ;;
+  oficina | asistente | roninfc | derkyu-hosting | derkyu-bot) GH_REPO=$REPO ;;
   *) echo "deploy-repo: repo no permitido: '$REPO'" >&2; exit 2 ;;
 esac
 [[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "deploy-repo: sha inválido: '$SHA'" >&2; exit 2; }
@@ -74,6 +74,14 @@ case "$REPO" in
     # Bot, recolector y polkit. Usa el Bun ya instalado (/usr/local/bin/bun) y
     # no pregunta nada: las claves ya están en /etc/asistente.env y sin
     # terminal install.sh no las pide. El vigilante (Cloudflare) va aparte.
+    phase=instalar
+    log "Instalando ${SHA:0:7}"
+    bash deploy/install.sh </dev/null
+    ;;
+  derkyu-bot)
+    # Bot de Discord del hosting. Usa el Bun del asistente; install.sh no crea
+    # /etc/derkyu-bot.env (si falta, para) y vuelve a la versión anterior en
+    # /opt/derkyu-bot.old si el servicio no arranca.
     phase=instalar
     log "Instalando ${SHA:0:7}"
     bash deploy/install.sh </dev/null
