@@ -18,7 +18,7 @@ jobs:
     if: github.actor == 'renovate[bot]' && startsWith(github.head_ref, 'renovate/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref }}
       - run: python3 .github/scripts/sumas.py
