@@ -66,6 +66,8 @@ case "${1:-}" in
     rm -f "$E/corte" "$E/corte-avisado"
     ;;
   LOWBATT)
+    # este ya cuenta el corte: que el aviso de corte pendiente no salga después
+    touch "$E/corte-avisado"
     mapfile -d '' f < <(campos)
     dm -t "🪫 Batería baja: apagando el servidor" -c red "${f[@]}" \
       "upsmon apaga el servidor ahora. Al volver la luz hay que encenderlo a mano si la BIOS no lo hace sola."

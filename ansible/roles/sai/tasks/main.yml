@@ -8,7 +8,9 @@
 # La regla de udev de NUT (acceso del usuario nut al USB) solo se aplica al
 # conectar el SAI: si ya estaba enchufado al instalar, hay que repasar el USB
 - name: Permisos del USB del SAI
-  ansible.builtin.shell: udevadm control --reload-rules && udevadm trigger --subsystem-match=usb --action=add && udevadm settle
+  ansible.builtin.shell: |
+    [ -S /run/udev/control ] || exit 0   # sin udev (contenedores) no hace falta
+    udevadm control --reload-rules && udevadm trigger --subsystem-match=usb --action=add && udevadm settle
   changed_when: true
   when: sai_paquetes.changed and not ansible_check_mode
   notify: Reiniciar el driver del SAI
@@ -19,20 +21,27 @@
   args:
     creates: /etc/nut/.clave-upsmon
 
+# En seco sobre una máquina limpia aún no existe; si ya existe se lee igual, o
+# las plantillas con la clave saldrían cambiadas en cada --check (y en la deriva)
+- name: Comprobar la clave
+  ansible.builtin.stat:
+    path: /etc/nut/.clave-upsmon
+  register: sai_clave_fichero
+
 - name: Permisos de la clave
   ansible.builtin.file:
     path: /etc/nut/.clave-upsmon
     owner: root
     group: nut
     mode: "0640"
-  when: not ansible_check_mode
+  when: sai_clave_fichero.stat.exists or not ansible_check_mode
 
 - name: Leer la clave
   ansible.builtin.slurp:
     src: /etc/nut/.clave-upsmon
   register: sai_clave
   no_log: true
-  when: not ansible_check_mode
+  when: sai_clave_fichero.stat.exists or not ansible_check_mode
 
 - name: Configuración de NUT
   ansible.builtin.template:
