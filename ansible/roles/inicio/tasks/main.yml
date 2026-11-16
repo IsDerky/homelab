@@ -33,6 +33,17 @@
     mode: "0644"
     directory_mode: "0755"
 
+# Iconos propios del inventario (logos de las webs, que no van en este repo), en icons/apps/
+- name: Iconos de las apps
+  ansible.builtin.copy:
+    src: "{{ inicio_iconos_dir }}/"
+    dest: "{{ inicio_dir }}/icons/apps/"
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+  when: inicio_iconos_dir | length > 0
+
 - name: Qué sale en la página (con las consultas)
   ansible.builtin.template:
     src: elementos.json.j2

@@ -51,7 +51,7 @@ def sondas(base):
 
 
 def app(a, estado):
-    salida = {k: a[k] for k in ("app", "nombre", "icono", "url") if a.get(k)}
+    salida = {k: a[k] for k in ("app", "nombre", "icono", "forma", "url") if a.get(k)}
     if a.get("sonda"):
         valor = estado.get(a["sonda"])
         salida["arriba"] = None if valor is None else valor >= 1
