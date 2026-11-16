@@ -39,6 +39,13 @@ endurecimiento_servicios_fuera:
 # Tope del journal (SystemMaxUse). Vacío = el de systemd.
 endurecimiento_journal_max: ""
 
+# OOMScoreAdjust por unidad: cuanto más negativo, más tarde lo elige el kernel
+# si se acaba la memoria. Va en un drop-in y además se aplica en caliente a los
+# procesos que ya corren, sin reiniciar nada. Solo unidades instaladas.
+#   endurecimiento_oom:
+#     mariadb.service: -800
+endurecimiento_oom: {}
+
 # /etc/issue y /etc/issue.net
 endurecimiento_banner: |
   Authorized access only. All activity is logged and monitored.

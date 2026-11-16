@@ -1,0 +1,6 @@
+---
+# De endurecimiento_oom, solo las unidades que existen en esta máquina
+endurecimiento_oom_instaladas: >-
+  {{ endurecimiento_oom | dict2items
+     | selectattr('key', 'in', endurecimiento_unidades.stdout_lines | map('split') | map('first') | list)
+     | list }}
