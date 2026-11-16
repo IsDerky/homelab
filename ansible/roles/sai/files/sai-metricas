@@ -1,0 +1,40 @@
+#!/bin/bash
+# Lo que dice el SAI, en formato de Prometheus para el colector textfile de node-exporter
+set -uo pipefail
+
+# shellcheck source=/dev/null
+. /etc/nut/sai.env
+tmp="$SAI_METRICAS.$$"
+
+if ! datos=$(upsc "$SAI_UPS" 2>/dev/null); then
+  printf '# HELP sai_conectado 1 si upsd responde y el driver lee el SAI\n# TYPE sai_conectado gauge\nsai_conectado 0\n' >"$tmp"
+  mv "$tmp" "$SAI_METRICAS"
+  exit 0
+fi
+dato() { awk -F': ' -v k="$1" '$1 == k { print $2 }' <<<"$datos"; }
+estado=$(dato ups.status)
+hay() { grep -qw "$1" <<<"$estado" && echo 1 || echo 0; }
+
+{
+  echo '# HELP sai_conectado 1 si upsd responde y el driver lee el SAI'
+  echo '# TYPE sai_conectado gauge'
+  echo 'sai_conectado 1'
+  echo '# HELP sai_en_bateria 1 si va con batería (corte de luz)'
+  echo '# TYPE sai_en_bateria gauge'
+  echo "sai_en_bateria $(hay OB)"
+  echo '# HELP sai_bateria_baja 1 si la batería está por debajo del umbral de apagado'
+  echo '# TYPE sai_bateria_baja gauge'
+  echo "sai_bateria_baja $(hay LB)"
+  echo '# HELP sai_cambiar_bateria 1 si el SAI pide cambiar la batería'
+  echo '# TYPE sai_cambiar_bateria gauge'
+  echo "sai_cambiar_bateria $(hay RB)"
+  for par in battery.charge:sai_bateria_porcentaje battery.runtime:sai_autonomia_segundos \
+    ups.load:sai_carga_porcentaje input.voltage:sai_tension_entrada_voltios \
+    battery.voltage:sai_tension_bateria_voltios ups.realpower.nominal:sai_potencia_nominal_vatios; do
+    v=$(dato "${par%%:*}")
+    [[ "$v" =~ ^[0-9]+(\.[0-9]+)?$ ]] || continue
+    echo "# TYPE ${par#*:} gauge"
+    echo "${par#*:} $v"
+  done
+} >"$tmp"
+mv "$tmp" "$SAI_METRICAS"

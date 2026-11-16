@@ -1,0 +1,3 @@
+#!/bin/sh
+# NOTIFYCMD de upsmon (corre como nut): pasa el tipo de aviso a sai-aviso como root
+exec sudo -n /usr/local/sbin/sai-aviso "${NOTIFYTYPE:-}"

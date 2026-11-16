@@ -1,0 +1,28 @@
+---
+# SAI por USB con NUT: avisos por DM (con discord-dm del rol avisos), apagado
+# ordenado con batería baja y métricas para node-exporter.
+sai_nombre: sai
+sai_descripcion: SAI
+sai_driver: usbhid-ups
+sai_puerto: auto
+# lsusb del SAI (vacío = el primero que encuentre el driver)
+sai_vendorid: ""
+sai_productid: ""
+
+# Batería baja = por debajo de este % o de estos segundos de autonomía. Lo
+# decidimos aquí y no el SAI (ignorelb): el suyo suele avisar demasiado tarde.
+sai_carga_baja: 30
+sai_autonomia_baja: 300
+
+# Cortes más cortos que esto no avisan (parpadeos de la luz)
+sai_aviso_tras: 20
+# Sin conexión con el SAI durante esto, avisa (al reiniciar el driver se pierde un momento)
+sai_aviso_sin_conexion_tras: 60
+
+sai_apagar_cmd: /sbin/shutdown -h +0
+# Tras apagar, que el SAI corte su salida y la devuelva al volver la luz (hace
+# falta para que el equipo arranque solo con «encender al volver la corriente»
+# en la BIOS). Corta también lo demás que cuelgue del SAI.
+sai_cortar_salida: false
+
+sai_metricas_dir: /var/lib/node-exporter/textfile

@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Métricas del SAI cada 30 s
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

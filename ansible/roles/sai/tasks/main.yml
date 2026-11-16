@@ -1,0 +1,123 @@
+---
+- name: Paquetes
+  ansible.builtin.apt:
+    name: [nut-server, nut-client]
+    state: present
+
+# Clave de upsmon contra upsd: se genera aquí y no sale de la máquina
+- name: Clave de upsmon
+  ansible.builtin.shell: umask 027 && openssl rand -hex 24 > /etc/nut/.clave-upsmon
+  args:
+    creates: /etc/nut/.clave-upsmon
+
+- name: Permisos de la clave
+  ansible.builtin.file:
+    path: /etc/nut/.clave-upsmon
+    owner: root
+    group: nut
+    mode: "0640"
+  when: not ansible_check_mode
+
+- name: Leer la clave
+  ansible.builtin.slurp:
+    src: /etc/nut/.clave-upsmon
+  register: sai_clave
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Configuración de NUT
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: /etc/nut/{{ item.src | regex_replace('\.j2$', '') }}
+    owner: root
+    group: nut
+    mode: "0640"
+  loop:
+    - { src: nut.conf.j2, aviso: Reiniciar upsd }
+    - { src: ups.conf.j2, aviso: Reiniciar el driver del SAI }
+    - { src: upsd.conf.j2, aviso: Reiniciar upsd }
+    - { src: upsd.users.j2, aviso: Reiniciar upsd }
+    - { src: upsmon.conf.j2, aviso: Reiniciar upsmon }
+  loop_control:
+    label: "{{ item.src }}"
+  vars:
+    sai_upsmon_clave: "{{ (sai_clave.content | b64decode | trim) if sai_clave.content is defined else 'x' }}"
+  no_log: "{{ item.src in ['upsd.users.j2', 'upsmon.conf.j2'] }}"
+  notify: "{{ item.aviso }}"
+
+- name: Datos para los avisos
+  ansible.builtin.template:
+    src: sai.env.j2
+    dest: /etc/nut/sai.env
+    owner: root
+    group: root
+    mode: "0644"
+
+# upsmon corre como nut y los avisos necesitan el token de Discord (solo root):
+# nut solo puede lanzar sai-aviso, que solo acepta los tipos de aviso de upsmon
+- name: Scripts
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - { src: sai-aviso, dest: /usr/local/sbin/sai-aviso }
+    - { src: sai-notificar, dest: /usr/local/bin/sai-notificar }
+    - { src: sai-metricas, dest: /usr/local/sbin/sai-metricas }
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Sudo para los avisos
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/sai
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+
+- name: Carpeta de métricas
+  ansible.builtin.file:
+    path: "{{ sai_metricas_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Unidades de las métricas
+  ansible.builtin.template:
+    src: sai-metricas.{{ item }}.j2
+    dest: /etc/systemd/system/sai-metricas.{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: sai_unidades
+
+# El enumerador es oneshot: se habilita y lo relanza su .path cuando cambia ups.conf
+- name: Enumerador de drivers
+  ansible.builtin.systemd_service:
+    name: nut-driver-enumerator.service
+    enabled: true
+  when: not ansible_check_mode
+
+- name: Servicios de NUT
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - nut-driver-enumerator.path
+    - nut-server.service
+    - nut-monitor.service
+  when: not ansible_check_mode
+
+- name: Timer de las métricas
+  ansible.builtin.systemd_service:
+    name: sai-metricas.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ sai_unidades.changed }}"
+  when: not (ansible_check_mode and sai_unidades.changed)

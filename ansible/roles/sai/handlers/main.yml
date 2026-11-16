@@ -1,0 +1,21 @@
+---
+# El enumerador crea nut-driver@<sai> a partir de ups.conf
+- name: Reiniciar el driver del SAI
+  ansible.builtin.systemd_service:
+    name: nut-driver-enumerator.service
+    state: restarted
+  when: not ansible_check_mode
+  notify: Reiniciar upsd
+
+- name: Reiniciar upsd
+  ansible.builtin.systemd_service:
+    name: nut-server.service
+    state: restarted
+  when: not ansible_check_mode
+  notify: Reiniciar upsmon
+
+- name: Reiniciar upsmon
+  ansible.builtin.systemd_service:
+    name: nut-monitor.service
+    state: restarted
+  when: not ansible_check_mode

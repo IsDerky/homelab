@@ -1,0 +1,97 @@
+#!/bin/bash
+# Avisos del SAI por DM de Discord. Lo llama upsmon (sai-notificar) con el tipo de aviso.
+# Los cortes y la pérdida de conexión se confirman un rato después: un parpadeo de la
+# luz o reiniciar el driver no avisan. Cuando vuelve, solo avisa si antes avisó del fallo.
+set -uo pipefail
+
+# shellcheck source=/dev/null
+. /etc/nut/sai.env
+E=/run/sai
+mkdir -p "$E"
+chmod 700 "$E"
+
+dato() { upsc "$SAI_UPS" "$1" 2>/dev/null; }
+
+dm() {
+  /usr/local/bin/discord-dm --footer "SAI · $(hostname)" "$@" >/dev/null 2>&1 \
+    || logger -t sai-aviso "no se pudo mandar el DM: $*"
+}
+
+luego() {
+  systemd-run --quiet --collect --unit="sai-$1-$(date +%s%N)" --on-active="$2" /usr/local/sbin/sai-aviso "$1"
+}
+
+duracion() {
+  local s=$(($(date +%s) - $1))
+  if [ "$s" -ge 3600 ]; then
+    printf '%d h %d min' $((s / 3600)) $((s % 3600 / 60))
+  elif [ "$s" -ge 60 ]; then
+    printf '%d min %d s' $((s / 60)) $((s % 60))
+  else
+    printf '%d s' "$s"
+  fi
+}
+
+# Batería, autonomía y consumo, como campos del embed
+campos() {
+  local carga autonomia uso nominal
+  carga=$(dato battery.charge)
+  autonomia=$(dato battery.runtime)
+  uso=$(dato ups.load)
+  nominal=$(dato ups.realpower.nominal)
+  [ -n "$carga" ] && printf '%s\0' -f "Batería=${carga} %"
+  [ -n "$autonomia" ] && printf '%s\0' -f "Autonomía=~$((autonomia / 60)) min"
+  [ -n "$uso" ] && [ -n "$nominal" ] && printf '%s\0' -f "Consumo=~$((uso * nominal / 100)) W"
+}
+
+case "${1:-}" in
+  ONBATT)
+    date +%s >"$E/corte"
+    rm -f "$E/corte-avisado"
+    luego CORTE "$SAI_AVISO_TRAS"
+    ;;
+  CORTE)
+    [ -f "$E/corte" ] && [ ! -f "$E/corte-avisado" ] || exit 0
+    dato ups.status | grep -qw OB || exit 0
+    touch "$E/corte-avisado"
+    mapfile -d '' f < <(campos)
+    dm -t "🔌 Corte de luz" -c amber "${f[@]}" \
+      "El servidor va con el SAI. Se apaga solo si la batería baja del ${SAI_CARGA_BAJA} % o quedan menos de $((SAI_AUTONOMIA_BAJA / 60)) min."
+    ;;
+  ONLINE)
+    if [ -f "$E/corte-avisado" ]; then
+      mapfile -d '' f < <(campos)
+      dm -t "✅ Vuelve la luz" -c green -f "Corte=$(duracion "$(cat "$E/corte")")" "${f[@]}"
+    fi
+    rm -f "$E/corte" "$E/corte-avisado"
+    ;;
+  LOWBATT)
+    mapfile -d '' f < <(campos)
+    dm -t "🪫 Batería baja: apagando el servidor" -c red "${f[@]}" \
+      "upsmon apaga el servidor ahora. Al volver la luz hay que encenderlo a mano si la BIOS no lo hace sola."
+    ;;
+  COMMBAD)
+    date +%s >"$E/conexion"
+    rm -f "$E/conexion-avisado"
+    luego CONEXION "$SAI_AVISO_SIN_CONEXION_TRAS"
+    ;;
+  CONEXION)
+    [ -f "$E/conexion" ] && [ ! -f "$E/conexion-avisado" ] || exit 0
+    upsc "$SAI_UPS" ups.status >/dev/null 2>&1 && exit 0
+    touch "$E/conexion-avisado"
+    dm -t "⚠️ Sin conexión con el SAI" -c amber \
+      "No se puede leer el SAI (¿cable USB?). Mientras no vuelva, no hay apagado automático si se va la luz."
+    ;;
+  COMMOK)
+    if [ -f "$E/conexion-avisado" ]; then
+      dm -t "✅ SAI conectado otra vez" -c green -f "Sin conexión=$(duracion "$(cat "$E/conexion")")"
+    fi
+    rm -f "$E/conexion" "$E/conexion-avisado"
+    ;;
+  REPLBATT)
+    dm -t "🔋 El SAI pide cambiar la batería" -c amber "Lo dice el propio SAI tras su autotest. Se repite una vez por semana."
+    ;;
+  *)
+    exit 0
+    ;;
+esac
