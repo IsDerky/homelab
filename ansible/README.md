@@ -231,7 +231,7 @@ Probado en un contenedor 24.04 con systemd: en seco sobre limpio, dos pasadas (l
 Instala `discord-dm` y los scripts que lo usan:
 
 - `login-alert`, llamado desde PAM al abrir sesión por SSH. Avisa salvo si se entra desde `avisos_login_trusted_ips`. Va como `optional`, así que si falla se entra igual.
-- `smartd-discord`, que se engancha a la línea de `smartd.conf` que pongas en `avisos_smartd_line`.
+- `smartd-discord`, que se engancha a los discos que pongas en `avisos_smartd_lineas` (uno por línea de `smartd.conf`).
 - `ops-ping` y su timer, solo si defines `avisos_watchdog_env`.
 
 `avisos_discord_env` y `avisos_watchdog_env` son el contenido de los `.env` y van en el vault.

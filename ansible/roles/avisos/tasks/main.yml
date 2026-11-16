@@ -50,12 +50,18 @@
     line: session optional pam_exec.so quiet /usr/local/bin/login-alert
     insertafter: EOF
 
-- name: Aviso de smartd
-  ansible.builtin.lineinfile:
-    path: /etc/smartd.conf
-    regexp: ^(DEVICESCAN|/dev/)
-    line: "{{ avisos_smartd_line }}"
-  when: avisos_smartd_line | length > 0
+- name: Discos que vigila smartd
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol avisos)
+      {% for linea in avisos_smartd_lineas %}
+      {{ linea }}
+      {% endfor %}
+    dest: /etc/smartd.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: avisos_smartd_lineas | length > 0
   notify: Reiniciar smartd
 
 # Latido al vigilante externo
