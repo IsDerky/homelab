@@ -5,8 +5,9 @@
 
 :root {
   --texto: #f4f0ff; --apagado: #a99fc4; --verde: #39ff14; --morado: #9933ff; --rojo: #ff5c7a;
-  --borde: rgba(255, 255, 255, .08); --widget: rgba(22, 19, 33, .72); --cristal: rgba(28, 24, 40, .62);
-  --celda: 52px; --hueco: 18px; --icono: 84px;
+  --borde: rgba(255, 255, 255, .08); --widget: rgba(22, 19, 33, .72); --cristal: rgba(28, 24, 40, .7);
+  --celda: 52px; --hueco: 18px; --icono: 84px; --radio: 22px;
+  --curva: cubic-bezier(.2, .9, .25, 1);   /* sale rápido y frena suave, como iOS */
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
@@ -27,80 +28,98 @@ body { background: #000; color: var(--texto); font: 14px/1.35 "Chakra Petch", ui
 .resumen.mal::before { background: var(--rojo); box-shadow: 0 0 8px rgba(255, 92, 122, .7); }
 .resumen.mal { color: var(--texto); }
 
-/* rejilla de unidades cuadradas: app 2x2, widget 4x2 o 2x2 */
+/* rejilla de unidades cuadradas: app 2x2; widgets 2x2, 2x3, 4x2 o 4x3 */
 .rejilla { display: grid; grid-template-columns: repeat(12, var(--celda)); grid-auto-rows: var(--celda);
            gap: var(--hueco); grid-auto-flow: dense; justify-content: center; }
 .t2x2 { grid-column: span 2; grid-row: span 2; }
+.t3x2 { grid-column: span 3; grid-row: span 2; }
 .t4x2 { grid-column: span 4; grid-row: span 2; }
+.t6x2 { grid-column: span 6; grid-row: span 2; }
 
+/* ---------- apps ---------- */
 .app { display: flex; flex-direction: column; align-items: center; gap: 7px; text-decoration: none; color: inherit;
        background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 div.app { cursor: default; }
 .app:focus-visible { outline: none; }
 .app:focus-visible .icono { outline: 2px solid var(--morado); outline-offset: 3px; }
-.icono { position: relative; width: var(--icono); height: var(--icono); border-radius: 22px; display: grid; place-items: center;
+.icono { position: relative; width: var(--icono); height: var(--icono); border-radius: var(--radio); display: grid; place-items: center;
          background: linear-gradient(160deg, #221d33, #120f1b); border: 1px solid var(--borde);
-         box-shadow: 0 6px 18px rgba(0, 0, 0, .55); transition: transform .15s; }
-a.app:hover .icono, button.app:hover .icono { transform: translateY(-2px) scale(1.03); }
-.icono img { width: 60%; height: 60%; image-rendering: pixelated; }
+         box-shadow: 0 6px 18px rgba(0, 0, 0, .55); transition: transform .2s var(--curva); }
+a.app:hover .icono, button.app:hover .icono { transform: translateY(-2px) scale(1.04); }
+a.app:active .icono, button.app:active .icono { transform: scale(.95); }
+/* formas: glifo (logo centrado), lleno (tapa la placa, como los iconos de iOS), pixel (pixel-art propio) */
+.icono img { width: 62%; height: 62%; object-fit: contain; }
+.icono.lleno { border: 0; }
+.icono.lleno img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radio); }
+.icono.pixel img { width: 60%; height: 60%; image-rendering: pixelated; }
 .nombre { font-size: 12.5px; font-weight: 600; text-shadow: 0 1px 3px #000; white-space: nowrap; max-width: 108px;
           overflow: hidden; text-overflow: ellipsis; }
 .icono[data-arriba]::after { content: ""; position: absolute; top: -3px; right: -3px; width: 13px; height: 13px; border-radius: 50%;
-                             background: var(--verde); border: 2.5px solid #000; box-shadow: 0 0 8px rgba(57, 255, 20, .6); }
+                             background: var(--verde); border: 2.5px solid #000; box-shadow: 0 0 8px rgba(57, 255, 20, .6); z-index: 1; }
 .icono[data-arriba="no"]::after { background: var(--rojo); box-shadow: 0 0 8px rgba(255, 92, 122, .7); }
 
 /* carpeta cerrada: cristal con los iconos en pequeño (3x3) */
 .carpeta .icono { background: var(--cristal); backdrop-filter: blur(14px); padding: 11px;
                   grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px; }
-.carpeta .icono .mini { width: 17px; height: 17px; border-radius: 5px; background: linear-gradient(160deg, #2a2440, #16121f);
-                        display: grid; place-items: center; }
-.carpeta .icono .mini img { width: 13px; height: 13px; }
+.carpeta .icono .mini { width: 18px; height: 18px; border-radius: 5px; overflow: hidden; display: grid; place-items: center;
+                        background: linear-gradient(160deg, #2a2440, #16121f); }
+.carpeta .icono .mini img { width: 70%; height: 70%; object-fit: contain; }
+.carpeta .icono .mini.lleno img { width: 100%; height: 100%; object-fit: cover; }
+.carpeta .icono .mini.pixel img { width: 72%; height: 72%; image-rendering: pixelated; }
 
-/* widget */
-.widget { display: flex; flex-direction: column; gap: 7px; }
+/* ---------- widgets ---------- */
+.widget { display: flex; flex-direction: column; gap: 8px; }
 .widget .caja { flex: 1; min-height: 0; background: var(--widget); backdrop-filter: blur(16px); border: 1px solid var(--borde);
-                border-radius: 22px; padding: 12px 12px; display: flex; flex-direction: column; justify-content: space-between;
+                border-radius: var(--radio); padding: 16px 16px 14px; display: flex; flex-direction: column; justify-content: space-between;
                 box-shadow: 0 6px 18px rgba(0, 0, 0, .55); }
-.widget .titulo { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--apagado); font-weight: 600;
+.widget .titulo { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--apagado); font-weight: 600;
                   text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; overflow: hidden; }
-.widget .titulo img, .widget .titulo svg { width: 16px; height: 16px; flex: none; image-rendering: pixelated; }
+.widget .titulo img, .widget .titulo svg { width: 18px; height: 18px; flex: none; image-rendering: pixelated; }
 .widget .titulo svg { stroke: var(--apagado); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .widget .titulo .estado { color: var(--texto); text-transform: none; letter-spacing: 0; font-weight: 400; }
 .widget .nombre { align-self: center; }
-.cifras { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 4px; }
-.cifra .v { font-size: 22px; font-weight: 600; line-height: 1.1; white-space: nowrap; }
-.cifra .v small { font-size: 13px; color: var(--apagado); font-weight: 400; margin-left: 2px; }
+.cifras { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 8px 6px; }
+.cifra .v { font-size: 26px; font-weight: 600; line-height: 1.05; white-space: nowrap; }
+.cifra .v small { font-size: 14px; color: var(--apagado); font-weight: 400; margin-left: 2px; }
 .cifra .v.rojo { color: var(--rojo); }
-.cifra .l { font-size: 10.5px; letter-spacing: -.01em; color: var(--apagado); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.t2x2.widget .cifras { --n: 2; }
+.cifra .l { font-size: 11.5px; margin-top: 3px; color: var(--apagado); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* estrechos: 2 cifras (los de 2 columnas, una por fila) */
+.t3x2.widget .cifras { --n: 2; }
+.t2x2.widget .cifras { --n: 1; gap: 6px; }
+.t2x2.widget .cifra { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .t2x2.widget .cifra .v { font-size: 20px; }
+.t2x2.widget .cifra .l { margin: 0; }
+.t4x2.widget .cifra .v { font-size: 22px; }
 
 .aviso { text-align: center; color: var(--apagado); font-size: 13px; margin-top: 34px; }
 
-/* carpeta abierta */
-.carpeta-abierta { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .45); backdrop-filter: blur(18px);
-                   display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 18px; }
+/* ---------- carpeta abierta: crece desde su icono (inicio.js), sin oscurecer apenas el fondo ---------- */
+.carpeta-abierta { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+                   background: rgba(0, 0, 0, 0); backdrop-filter: blur(0); transition: background .32s var(--curva), backdrop-filter .32s var(--curva); }
+.carpeta-abierta.abierta { background: rgba(0, 0, 0, .08); backdrop-filter: blur(2px); }
 .carpeta-abierta[hidden] { display: none; }
-.carpeta-abierta:not([hidden]) { animation: aparece .18s ease-out; }
-@keyframes aparece { from { opacity: 0; transform: scale(.96); } }
-.carpeta-abierta h2 { margin: 0; font-size: 26px; font-weight: 600; }
-.carpeta-abierta .dentro { background: var(--cristal); border: 1px solid var(--borde); border-radius: 34px; padding: 26px 30px;
-                           display: grid; grid-template-columns: repeat(3, 108px); gap: 22px 16px; }
+.carpeta-abierta .panel { display: flex; flex-direction: column; align-items: center; gap: 16px; transform-origin: center;
+                          transition: transform .38s var(--curva), opacity .26s ease-out; will-change: transform; }
+.carpeta-abierta h2 { margin: 0; font-size: 26px; font-weight: 600; text-shadow: 0 2px 10px rgba(0, 0, 0, .8); }
+.carpeta-abierta .dentro { background: var(--cristal); backdrop-filter: blur(20px); border: 1px solid var(--borde); border-radius: 34px;
+                           padding: 26px 30px; display: grid; grid-template-columns: repeat(3, 108px); gap: 22px 16px;
+                           box-shadow: 0 30px 80px rgba(0, 0, 0, .65), 0 8px 24px rgba(0, 0, 0, .45); }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 @media (max-width: 760px) {
   /* 8 columnas que llenan el ancho: 4 apps por fila, como un iPhone */
-  :root { --hueco: 10px; --celda: calc((100vw - 28px - 7 * var(--hueco)) / 8); --icono: min(64px, calc(var(--celda) * 2 - 6px)); }
+  :root { --hueco: 10px; --celda: calc((100vw - 28px - 7 * var(--hueco)) / 8); --icono: min(64px, calc(var(--celda) * 2 - 6px)); --radio: 17px; }
   .pagina { padding: 22px 14px 48px; }
   /* filas algo más altas que anchas: icono + nombre caben en 2 filas también a 360 px */
   .rejilla { grid-template-columns: repeat(8, var(--celda)); grid-auto-rows: calc(var(--celda) + 6px); }
-  /* los widgets más altos (3 filas) para que quepan título y cifras: los anchos toda la fila, los pequeños media */
-  .t4x2 { grid-column: span 8; grid-row: span 3; }
-  .t2x2.widget { grid-column: span 4; grid-row: span 3; }
+  /* widgets: los anchos toda la fila, los estrechos media; siempre 3 filas para que quepan */
+  .t4x2.widget, .t6x2.widget { grid-column: span 8; grid-row: span 3; }
+  .t2x2.widget, .t3x2.widget { grid-column: span 4; grid-row: span 3; }
   .cabecera { margin-bottom: 24px; }
-  .icono { border-radius: 17px; }
-  .carpeta .icono { padding: 8px; } .carpeta .icono .mini { width: 13px; height: 13px; } .carpeta .icono .mini img { width: 10px; height: 10px; }
-  .hora { font-size: 48px; } .cifra .v { font-size: 17px; } .t2x2.widget .cifra .v { font-size: 16px; }
-  .widget .caja { padding: 10px 11px; border-radius: 18px; }
+  .carpeta .icono { padding: 8px; } .carpeta .icono .mini { width: 13px; height: 13px; border-radius: 4px; }
+  .hora { font-size: 48px; }
+  .cifra .v, .t4x2.widget .cifra .v { font-size: 19px; } .t2x2.widget .cifra .v { font-size: 18px; }
+  .cifra .v small { font-size: 12px; } .cifra .l { font-size: 10.5px; }
+  .widget .caja { padding: 12px 12px 10px; }
   .carpeta-abierta .dentro { grid-template-columns: repeat(3, 84px); padding: 20px; gap: 18px 10px; }
 }

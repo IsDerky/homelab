@@ -56,13 +56,18 @@ const cifra = (c) => {
 };
 
 // ---------- piezas de la rejilla ----------
+// forma del icono: lleno (cuadrado que tapa la placa, como los de iOS), pixel (pixel-art) o glifo (centrado)
+const FORMAS = ['lleno', 'pixel', 'glifo'];
+const forma = (f) => (FORMAS.includes(f) ? f : 'glifo');
+
 const app = (a, conTamano = true) => {
   const e = crear(a.url ? 'a' : 'div', 'app' + (conTamano ? ' t2x2' : ''));
   if (a.url) {
     e.href = a.url;
-    e.rel = 'noopener';
+    e.target = '_blank';   // todo en otra pestaña (pedido por él): el inicio se queda abierto
+    e.rel = 'noopener noreferrer';
   }
-  const ic = crear('div', 'icono');
+  const ic = crear('div', 'icono ' + forma(a.forma));
   if (a.icono) ic.append(icono(a.icono));
   if (a.arriba === true) ic.dataset.arriba = 'si';
   if (a.arriba === false) ic.dataset.arriba = 'no';
@@ -77,18 +82,20 @@ const carpeta = (c) => {
   b.dataset.carpeta = c.carpeta;
   const ic = crear('div', 'icono');
   for (const a of c.apps.slice(0, 9)) {
-    const m = crear('span', 'mini');
+    const m = crear('span', 'mini ' + forma(a.forma));
     if (a.icono) m.append(icono(a.icono));
     ic.append(m);
   }
   if (c.apps.some((a) => a.arriba === false)) ic.dataset.arriba = 'no';
   b.append(ic, crear('div', 'nombre', c.nombre));
-  b.addEventListener('click', () => abrir(c.carpeta));
+  // detail 0 = teclado (Intro/espacio): solo entonces se lleva el foco dentro
+  b.addEventListener('click', (e) => abrir(c.carpeta, e.detail === 0));
   return b;
 };
 
+const TAMANOS = ['2x2', '3x2', '4x2', '6x2'];
 const widget = (w) => {
-  const e = crear('div', 'widget t' + (w.tamano === '2x2' ? '2x2' : '4x2'));
+  const e = crear('div', 'widget t' + (TAMANOS.includes(w.tamano) ? w.tamano : '6x2'));
   const caja = crear('div', 'caja');
   const titulo = crear('div', 'titulo');
   if (w.icono) titulo.append(icono(w.icono));
@@ -101,29 +108,76 @@ const widget = (w) => {
   return e;
 };
 
-// ---------- carpeta abierta ----------
+// ---------- carpeta abierta: crece desde su icono y vuelve a él al cerrar ----------
 let datos = null;
 let abierta = null;
 let antesDeAbrir = null;
+const quieto = matchMedia('(prefers-reduced-motion: reduce)');
 const pintarCarpeta = () => {
   const c = datos && datos.elementos.find((e) => e.carpeta === abierta);
   if (!c) return cerrar();
   $('carpeta-titulo').textContent = c.nombre;
   $('carpeta-dentro').replaceChildren(...c.apps.map((a) => app(a, false)));
 };
-const abrir = (id) => {
+// transformación que lleva el panel abierto al sitio y tamaño del icono de la carpeta
+const desdeIcono = () => {
+  const icono = document.querySelector(`[data-carpeta="${CSS.escape(abierta || '')}"] .icono`);
+  const panel = $('carpeta-panel');
+  if (!icono) return 'scale(.6)';
+  const a = icono.getBoundingClientRect();
+  const b = panel.getBoundingClientRect();
+  const s = a.width / b.width;
+  const dx = a.left + a.width / 2 - (b.left + b.width / 2);
+  const dy = a.top + a.height / 2 - (b.top + b.height / 2);
+  return `translate(${dx}px, ${dy}px) scale(${s})`;
+};
+const abrir = (id, teclado = false) => {
   antesDeAbrir = document.activeElement;
   abierta = id;
   pintarCarpeta();
-  $('carpeta').hidden = false;
-  $('carpeta-dentro').querySelector('a, [tabindex]')?.focus();
+  const capa = $('carpeta');
+  const panel = $('carpeta-panel');
+  capa.hidden = false;
+  if (!quieto.matches) {
+    // primero en el sitio del icono, sin transición; en el siguiente fotograma, a su sitio
+    panel.style.transition = 'none';
+    panel.style.transform = desdeIcono();
+    panel.style.opacity = '0';
+    capa.classList.remove('abierta');
+    panel.getBoundingClientRect();
+    panel.style.transition = '';
+    requestAnimationFrame(() => {
+      capa.classList.add('abierta');
+      panel.style.transform = '';
+      panel.style.opacity = '';
+    });
+  } else {
+    capa.classList.add('abierta');
+  }
+  if (teclado) $('carpeta-dentro').querySelector('a, [tabindex]')?.focus({ preventScroll: true });
 };
 const cerrar = () => {
-  abierta = null;
-  $('carpeta').hidden = true;
-  antesDeAbrir?.focus?.();
+  const capa = $('carpeta');
+  const panel = $('carpeta-panel');
+  if (capa.hidden) return;
+  const fin = () => {
+    capa.hidden = true;
+    panel.style.transform = '';
+    panel.style.opacity = '';
+    abierta = null;
+  };
+  capa.classList.remove('abierta');
+  if (quieto.matches) {
+    fin();
+  } else {
+    panel.style.transform = desdeIcono();
+    panel.style.opacity = '0';
+    panel.addEventListener('transitionend', fin, { once: true });
+    setTimeout(() => { if (!capa.hidden) fin(); }, 450);   // por si no llega el transitionend
+  }
+  antesDeAbrir?.focus?.({ preventScroll: true });
 };
-$('carpeta').addEventListener('click', (e) => { if (!e.target.closest('.dentro')) cerrar(); });
+$('carpeta').addEventListener('click', (e) => { if (!e.target.closest('.panel')) cerrar(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && abierta) cerrar(); });
 
 // ---------- datos ----------

@@ -8,13 +8,15 @@ inicio_dir: /var/www/inicio
 inicio_prometheus: http://127.0.0.1:9090
 inicio_titulo: Inicio
 inicio_intervalo: 30
+# Carpeta del controlador con iconos propios (logos de las webs); salen como icons/apps/<fichero>
+inicio_iconos_dir: ""
 
 # Lo que sale en la página, en orden. Tres tipos:
 #
 #   - widget: servidor          # id
 #     titulo: Servidor
 #     icono: inicio.svg         # fichero de icons/ o uno de serie: sai, nube, escudo
-#     tamano: 4x2               # 4x2 (ancho) o 2x2
+#     tamano: 6x2               # 6x2 o 4x2 (4 cifras), 3x2 o 2x2 (2 cifras)
 #     estado:                   # opcional: texto junto al título según el valor
 #       consulta: sai_conectado * (1 + sai_en_bateria)
 #       textos: {"0": sin conexión, "1": con corriente, "2": con batería}
@@ -29,8 +31,9 @@ inicio_intervalo: 30
 #
 #   - app: oficina
 #     nombre: Oficina
-#     icono: oficina.svg
-#     url: https://oficina.example.com/      # sin url no es enlace (p. ej. el NAS)
+#     icono: oficina.svg        # de icons/ o apps/<fichero> (inicio_iconos_dir)
+#     forma: pixel              # glifo (por defecto, centrado), lleno (tapa la placa) o pixel
+#     url: https://oficina.example.com/      # se abre en otra pestaña; sin url no es enlace (p. ej. el NAS)
 #     sonda: https://oficina.example.com/    # instance de probe_success para el punto verde/rojo
 #
 #   - carpeta: hosting
