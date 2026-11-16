@@ -102,6 +102,59 @@
   when: endurecimiento_journal_max | length > 0
   notify: Reiniciar journald
 
+- name: Carpetas de drop-in para la prioridad ante falta de memoria
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item.key }}.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ endurecimiento_oom_instaladas }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Prioridad ante falta de memoria (OOMScoreAdjust)
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol endurecimiento)
+      [Service]
+      OOMScoreAdjust={{ item.value }}
+    dest: "/etc/systemd/system/{{ item.key }}.d/oom.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ endurecimiento_oom_instaladas }}"
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Recargar systemd
+
+- name: Recargar systemd antes de seguir
+  ansible.builtin.meta: flush_handlers
+
+# El drop-in solo cuenta al arrancar el servicio: a los procesos que ya
+# corren (php-fpm, workers de mariadb...) se les pone a mano, sin reiniciar
+- name: Aplicar la prioridad a los procesos que ya corren
+  ansible.builtin.shell: |
+    set -eu
+    cg=$(systemctl show -p ControlGroup --value "{{ item.key }}")
+    [ -n "$cg" ] && [ -f "/sys/fs/cgroup$cg/cgroup.procs" ] || exit 0
+    cambiado=0
+    for pid in $(cat "/sys/fs/cgroup$cg/cgroup.procs"); do
+      actual=$(cat "/proc/$pid/oom_score_adj" 2>/dev/null) || continue
+      if [ "$actual" != "{{ item.value }}" ]; then
+        echo "{{ item.value }}" > "/proc/$pid/oom_score_adj" 2>/dev/null && cambiado=1
+      fi
+    done
+    [ "$cambiado" = 1 ] && echo cambiado || true
+  args:
+    executable: /bin/bash
+  loop: "{{ endurecimiento_oom_instaladas }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: endurecimiento_oom_vivo
+  changed_when: "'cambiado' in endurecimiento_oom_vivo.stdout"
+  when: not ansible_check_mode
+
 # Paquetes desinstalados que dejaron su config (kernels viejos sobre todo)
 - name: Paquetes en estado rc
   ansible.builtin.command:
