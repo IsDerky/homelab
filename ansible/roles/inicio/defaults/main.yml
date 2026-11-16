@@ -20,6 +20,8 @@ inicio_iconos_dir: ""
 #     estado:                   # opcional: texto junto al título según el valor
 #       consulta: sai_conectado * (1 + sai_en_bateria)
 #       textos: {"0": sin conexión, "1": con corriente, "2": con batería}
+#       bien: [1]               # opcional: valores con punto verde junto al título; el resto, rojo
+#     punto: cifras             # opcional (sin estado.bien): verde si ninguna cifra está en rojo ni a medias (valor/de)
 #     cifras:                   # hasta 4 (2 en los de 2x2)
 #       - etiqueta: CPU
 #         consulta: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])))
