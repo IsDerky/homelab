@@ -1,0 +1,8 @@
+---
+# Página de inicio propia (sustituye a Homepage). El vhost va en el inventario
+# (inicio-lan.conf, rol nginx).
+- name: Página de inicio
+  hosts: homelab
+  become: true
+  roles:
+    - inicio

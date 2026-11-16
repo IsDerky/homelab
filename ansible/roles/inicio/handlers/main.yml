@@ -1,0 +1,7 @@
+---
+# Al cambiar la configuración, datos nuevos ya (sin esperar al temporizador)
+- name: Actualizar los datos del inicio
+  ansible.builtin.systemd_service:
+    name: inicio-datos.service
+    state: started
+  when: not ansible_check_mode

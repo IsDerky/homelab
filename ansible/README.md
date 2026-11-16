@@ -13,6 +13,7 @@ Roles para montar piezas del homelab:
 - `bentonime`: la parte de sistema de la app principal (usuario, unidad systemd, sudo mínimo para el deploy). El código lo despliega su CI.
 - `adguard`: AdGuard Home en Docker Compose como servicio systemd, con Unbound opcional (`playbooks/apps.yml`, junto con `bentonime`).
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
+- `inicio`: página de inicio propia, estática, con carpetas, widgets y el estado de cada web sacados de Prometheus (`playbooks/inicio.yml`). Sustituye a `homepage`.
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
 - `caddy_webs`: Caddy delante de los servidores de webs (HTTPS sin puerto y dominios propios); lo configura el panel por la API (`playbooks/caddy-webs.yml`).
@@ -331,6 +332,24 @@ Con `code_server_migrate_from` hace el cambio una sola vez: para el `code-server
 | `code_server_user` | `""` | Obligatoria |
 | `code_server_migrate_from` | `""` | Usuario del que migrar (p. ej. `root`) |
 | `code_server_port` | `8081` | El de su `config.yaml`, para comprobar que arranca |
+
+## Rol `inicio`
+
+Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados con el nombre debajo, carpetas que se abren encima (como las de iOS) y widgets con cifras. El fondo son curvas de nivel generadas en un canvas (estáticas, de morado a verde).
+
+- **Los datos no salen del navegador.** `inicio-datos` (Python, sin dependencias) corre cada `inicio_intervalo` segundos con un temporizador, hace a Prometheus solo las consultas del inventario y escribe `/run/inicio/datos.json` ya sin las consultas. La página lee ese fichero; nadie puede lanzarle a Prometheus una consulta propia desde la página.
+- **Estado de cada web desde las sondas de blackbox** (`probe_success`, por `instance`): cada app dice qué sonda es la suya con `sonda`. Una carpeta se marca en rojo si alguna de sus apps no responde, y arriba sale cuáles.
+- Una consulta que falla deja su cifra en «–», no rompe la página. Si `datos.json` se queda viejo (más de 4 intervalos), la página lo avisa.
+- El servicio corre con el usuario de sistema `inicio`, sin capacidades, solo con red a localhost y escribiendo solo en `/run/inicio` (no `DynamicUser`: su carpeta iría a `/run/private`, 0700, y nginx no llegaría).
+- Qué sale y en qué orden va en `inicio_elementos` (widgets, apps y carpetas; el formato está comentado en `defaults/main.yml`). El vhost es del inventario: raíz en `/var/www/inicio` y `location = /datos.json` con `alias /run/inicio/datos.json`.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `inicio_elementos` | `[]` | Widgets, apps y carpetas, en orden |
+| `inicio_titulo` | `Inicio` | Título de la pestaña |
+| `inicio_intervalo` | `30` | Segundos entre actualizaciones de los datos |
+| `inicio_prometheus` | `http://127.0.0.1:9090` | Prometheus (el servicio solo tiene red a localhost) |
+| `inicio_dir` | `/var/www/inicio` | Dónde va la página |
 
 ## Rol `homepage`
 

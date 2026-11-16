@@ -1,0 +1,70 @@
+---
+- name: Paquetes
+  ansible.builtin.apt:
+    name: python3
+    state: present
+
+- name: Usuario de los datos
+  ansible.builtin.user:
+    name: inicio
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    home: /nonexistent
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ inicio_dir }}"
+    - /etc/inicio
+
+# Sin delete: la página no deja ficheros propios en la carpeta (los datos van a /run)
+- name: Página
+  ansible.builtin.copy:
+    src: web/
+    dest: "{{ inicio_dir }}/"
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+
+- name: Qué sale en la página (con las consultas)
+  ansible.builtin.template:
+    src: elementos.json.j2
+    dest: /etc/inicio/elementos.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Actualizar los datos del inicio
+
+- name: Script de los datos
+  ansible.builtin.copy:
+    src: inicio-datos
+    dest: /usr/local/bin/inicio-datos
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Actualizar los datos del inicio
+
+- name: Unidades
+  ansible.builtin.template:
+    src: inicio-datos.{{ item }}.j2
+    dest: /etc/systemd/system/inicio-datos.{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: inicio_unidades
+
+- name: Timer
+  ansible.builtin.systemd_service:
+    name: inicio-datos.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ inicio_unidades.changed }}"
+  when: not (ansible_check_mode and inicio_unidades.changed)

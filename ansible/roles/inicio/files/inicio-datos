@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Datos de la página de inicio: hace a Prometheus las consultas de elementos.json
+y escribe el resultado (sin las consultas) para que la página lo lea.
+
+Uso: inicio-datos --prometheus http://127.0.0.1:9090 --entrada elementos.json --salida datos.json
+Una consulta que falla o no devuelve nada deja su valor a null: la página enseña «–».
+"""
+
+import argparse
+import json
+import math
+import os
+import sys
+import tempfile
+import time
+import urllib.parse
+import urllib.request
+
+TIMEOUT = 5
+
+
+def consultar(base, expr):
+    """Valor de una consulta instantánea (la primera serie) o None."""
+    url = f"{base}/api/v1/query?" + urllib.parse.urlencode({"query": expr})
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as r:
+            datos = json.load(r)
+        resultado = datos["data"]["result"]
+        if datos["data"]["resultType"] == "scalar":
+            valor = float(resultado[1])
+        elif resultado:
+            valor = float(resultado[0]["value"][1])
+        else:
+            return None
+    except Exception as e:  # noqa: BLE001 (una consulta mala no puede tirar la página entera)
+        print(f"consulta fallida: {expr!r}: {e}", file=sys.stderr)
+        return None
+    return valor if math.isfinite(valor) else None
+
+
+def sondas(base):
+    """probe_success por instance (la URL que se sondea)."""
+    url = f"{base}/api/v1/query?" + urllib.parse.urlencode({"query": "probe_success"})
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as r:
+            resultado = json.load(r)["data"]["result"]
+    except Exception as e:  # noqa: BLE001
+        print(f"sin sondas: {e}", file=sys.stderr)
+        return {}
+    return {s["metric"].get("instance"): float(s["value"][1]) for s in resultado}
+
+
+def app(a, estado):
+    salida = {k: a[k] for k in ("app", "nombre", "icono", "url") if a.get(k)}
+    if a.get("sonda"):
+        valor = estado.get(a["sonda"])
+        salida["arriba"] = None if valor is None else valor >= 1
+    return salida
+
+
+def widget(w, base):
+    salida = {k: w[k] for k in ("widget", "titulo", "icono", "tamano") if w.get(k)}
+    if w.get("estado"):
+        valor = consultar(base, w["estado"]["consulta"])
+        textos = w["estado"].get("textos", {})
+        salida["estado"] = textos.get(str(int(valor))) if valor is not None else None
+    salida["cifras"] = []
+    for c in w.get("cifras", []):
+        cifra = {k: c[k] for k in ("etiqueta", "unidad", "decimales", "formato", "rojo") if k in c}
+        cifra["valor"] = consultar(base, c["consulta"])
+        if c.get("de"):
+            cifra["de"] = consultar(base, c["de"])
+        salida["cifras"].append(cifra)
+    return salida
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--prometheus", required=True)
+    p.add_argument("--entrada", required=True)
+    p.add_argument("--salida", required=True)
+    args = p.parse_args()
+    base = args.prometheus.rstrip("/")
+
+    with open(args.entrada) as f:
+        config = json.load(f)
+    estado = sondas(base)
+
+    elementos = []
+    caidas = []
+    for e in config.get("elementos", []):
+        if "widget" in e:
+            elementos.append(widget(e, base))
+        elif "carpeta" in e:
+            apps = [app(a, estado) for a in e.get("apps", [])]
+            caidas += [a["nombre"] for a in apps if a.get("arriba") is False]
+            elementos.append({"carpeta": e["carpeta"], "nombre": e["nombre"], "apps": apps})
+        elif "app" in e:
+            a = app(e, estado)
+            if a.get("arriba") is False:
+                caidas.append(a["nombre"])
+            elementos.append(a)
+
+    datos = {
+        "titulo": config.get("titulo", "Inicio"),
+        "intervalo": config.get("intervalo", 30),
+        "generado": int(time.time()),
+        "sondas": {"bien": int(sum(1 for v in estado.values() if v >= 1)), "total": len(estado), "caidas": caidas},
+        "elementos": elementos,
+    }
+    # atómico: la página nunca lee un fichero a medias
+    carpeta = os.path.dirname(os.path.abspath(args.salida))
+    with tempfile.NamedTemporaryFile("w", dir=carpeta, delete=False, suffix=".tmp") as f:
+        json.dump(datos, f, ensure_ascii=False, separators=(",", ":"))
+        temporal = f.name
+    os.chmod(temporal, 0o644)
+    os.replace(temporal, args.salida)
+
+
+if __name__ == "__main__":
+    main()
