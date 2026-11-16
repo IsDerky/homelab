@@ -53,3 +53,5 @@
   ansible.builtin.import_playbook: honeypot.yml
 - name: Credenciales trampa
   ansible.builtin.import_playbook: trampas.yml
+- name: Registro forense (auditd)
+  ansible.builtin.import_playbook: auditd.yml

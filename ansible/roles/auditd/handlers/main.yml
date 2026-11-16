@@ -1,0 +1,12 @@
+---
+# systemd no deja reiniciar auditd a mano (RefuseManualStop): HUP relee auditd.conf
+- name: Recargar la configuración de auditd
+  ansible.builtin.command: systemctl kill -s HUP auditd.service
+  changed_when: true
+  when: auditd_arrancar | default(true)
+
+# Junta rules.d y las carga sin reiniciar nada
+- name: Cargar las reglas de auditd
+  ansible.builtin.command: augenrules --load
+  changed_when: true
+  when: auditd_arrancar | default(true)

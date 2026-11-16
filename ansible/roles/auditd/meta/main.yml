@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: auditd
+  namespace: isderky
+  description: Registro forense con auditd (comandos de personas, cuentas, sudo, SSH, persistencia), sin alertas
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+dependencies: []

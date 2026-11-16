@@ -38,3 +38,10 @@ ctrlpanel_textfile_dir: ""
 
 ctrlpanel_fpm_max_children: 5
 ctrlpanel_log_level: error
+
+# Caché de Laravel en el Redis local (el de Pterodactyl). Pterodactyl usa las
+# bases 0 (datos y caché) y 1 (sesiones): CtrlPanel va en otras, o un
+# cache:clear suyo vaciaría las sesiones del panel. false = caché en ficheros.
+ctrlpanel_cache_redis: false
+ctrlpanel_redis_db: 2
+ctrlpanel_redis_cache_db: 3

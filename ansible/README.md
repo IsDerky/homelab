@@ -28,6 +28,7 @@ Roles para montar piezas del homelab:
 - `node_exporter`: node-exporter suelto escuchando solo en la IP del túnel, para los nodos (también en `playbooks/wireguard.yml`).
 - `crowdsec`: CrowdSec con el bouncer de iptables y la lista de la comunidad, alimentado también por el honeypot (`playbooks/crowdsec.yml`).
 - `cuenta_ro`: cuenta SSH de solo lectura con la clave restringida y sudo solo para comandos de consulta con argumentos fijos (`playbooks/ssh.yml`).
+- `auditd`: registro forense sin alertas. Apunta los comandos de las sesiones de personas (no los de los servicios) y los cambios en cuentas, sudo, SSH, servicios, cron y módulos del kernel, y quién lee las credenciales trampa. Se consulta con `ausearch -k <clave> -i` (`playbooks/auditd.yml`).
 - `trampas`: ficheros con credenciales falsas (por ejemplo un `.git-credentials`) con un token por máquina. Solo los usaría alguien que ha entrado; el dominio al que apuntan avisa si llega uno (`playbooks/trampas.yml`). Leerlos no avisa, así que las copias y la deriva no dan falsos positivos.
 - `deriva`: cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en Grafana cuántas tareas cambiarían (`playbooks/deriva.yml`).
 
