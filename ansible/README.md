@@ -241,7 +241,7 @@ NUT en modo `standalone` con el SAI por USB (`usbhid-ups`). upsmon apaga el serv
 
 Los avisos van por `discord-dm` (rol `avisos`): corte de luz, vuelta de la luz con lo que duró, batería baja, sin conexión con el SAI y cambio de batería. Un corte de menos de `sai_aviso_tras` segundos no avisa, y la conexión perdida solo avisa si dura más de `sai_aviso_sin_conexion_tras`. upsmon corre como `nut` y el token es de root, así que `nut` solo puede lanzar `sai-aviso` por sudo, y este solo acepta los tipos de aviso de upsmon.
 
-La clave de upsmon contra upsd se genera en la máquina (`/etc/nut/.clave-upsmon`) y no pasa por el inventario. Las métricas (`sai_*`) salen cada 30 s a `sai_metricas_dir`.
+La clave de upsmon contra upsd se genera en la máquina (`/etc/nut/.clave-upsmon`) y no pasa por el inventario. Las métricas (`sai_*`) salen cada 30 s a `sai_metricas_dir`. Se ven en el dashboard "SAI" del rol `monitoring`.
 
 `sai_cortar_salida` hace que, tras apagar, el SAI corte su salida y la devuelva al volver la luz. Solo sirve si la BIOS enciende el equipo al volver la corriente, y apaga también todo lo demás que cuelgue del SAI. Por defecto no.
 
