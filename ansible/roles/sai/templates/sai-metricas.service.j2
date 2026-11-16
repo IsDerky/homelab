@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Métricas del SAI para node-exporter
+After=nut-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sai-metricas
+ProtectSystem=strict
+ReadWritePaths={{ sai_metricas_dir }}
+PrivateTmp=true
+NoNewPrivileges=true

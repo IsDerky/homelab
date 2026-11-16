@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+maxretry = 3
+
+[{{ sai_nombre }}]
+  driver = {{ sai_driver }}
+  port = {{ sai_puerto }}
+  desc = "{{ sai_descripcion }}"
+{% if sai_driver == "usbhid-ups" %}
+{% if sai_vendorid %}
+  vendorid = {{ sai_vendorid }}
+{% endif %}
+{% if sai_productid %}
+  productid = {{ sai_productid }}
+{% endif %}
+  pollinterval = 5
+  # batería baja la decide upsmon con estos umbrales, no el SAI
+  ignorelb
+  override.battery.charge.low = {{ sai_carga_baja }}
+  override.battery.runtime.low = {{ sai_autonomia_baja }}
+{% endif %}

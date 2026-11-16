@@ -7,6 +7,7 @@ Roles para montar piezas del homelab:
 - `ufw` y `fail2ban`: cortafuegos y baneos, con jails y filtros propios (`playbooks/firewall.yml`).
 - `backup`: backups con restic a Google Drive (vía rclone), timers de systemd y simulacro de restauración.
 - `avisos`: DMs por Discord para inicios de sesión SSH, errores de SMART y el latido a un vigilante externo.
+- `sai`: SAI por USB con NUT. Avisa por DM de cortes de luz, apaga el servidor con batería baja y deja métricas para node-exporter (`playbooks/sai.yml`).
 - `nginx`: nginx con los vhosts del inventario y certbot con validación DNS de Cloudflare.
 - `cloudflared`: túnel de Cloudflare gestionado desde el panel, solo con el token.
 - `bentonime`: la parte de sistema de la app principal (usuario, unidad systemd, sudo mínimo para el deploy). El código lo despliega su CI.
@@ -233,6 +234,16 @@ Instala `discord-dm` y los scripts que lo usan:
 - `ops-ping` y su timer, solo si defines `avisos_watchdog_env`.
 
 `avisos_discord_env` y `avisos_watchdog_env` son el contenido de los `.env` y van en el vault.
+
+## Rol `sai`
+
+NUT en modo `standalone` con el SAI por USB (`usbhid-ups`). upsmon apaga el servidor cuando la batería baja de `sai_carga_baja` % o quedan menos de `sai_autonomia_baja` segundos; los umbrales del propio SAI se ignoran (`ignorelb`) porque suelen llegar tarde.
+
+Los avisos van por `discord-dm` (rol `avisos`): corte de luz, vuelta de la luz con lo que duró, batería baja, sin conexión con el SAI y cambio de batería. Un corte de menos de `sai_aviso_tras` segundos no avisa, y la conexión perdida solo avisa si dura más de `sai_aviso_sin_conexion_tras`. upsmon corre como `nut` y el token es de root, así que `nut` solo puede lanzar `sai-aviso` por sudo, y este solo acepta los tipos de aviso de upsmon.
+
+La clave de upsmon contra upsd se genera en la máquina (`/etc/nut/.clave-upsmon`) y no pasa por el inventario. Las métricas (`sai_*`) salen cada 30 s a `sai_metricas_dir`.
+
+`sai_cortar_salida` hace que, tras apagar, el SAI corte su salida y la devuelva al volver la luz. Solo sirve si la BIOS enciende el equipo al volver la corriente, y apaga también todo lo demás que cuelgue del SAI. Por defecto no.
 
 ## Rol `nginx`
 

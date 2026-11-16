@@ -1,0 +1,6 @@
+---
+- name: SAI
+  hosts: homelab
+  become: true
+  roles:
+    - sai
