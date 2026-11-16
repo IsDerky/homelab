@@ -1,0 +1,40 @@
+---
+- name: ¿Existen ya?
+  ansible.builtin.stat:
+    path: "{{ item.ruta }}"
+  loop: "{{ trampas_ficheros }}"
+  loop_control:
+    label: "{{ item.ruta }}"
+  register: trampas_stat
+
+- name: Leer los que ya existen
+  ansible.builtin.slurp:
+    src: "{{ item.item.ruta }}"
+  loop: "{{ trampas_stat.results | selectattr('stat.exists') }}"
+  loop_control:
+    label: "{{ item.item.ruta }}"
+  register: trampas_actuales
+  no_log: true
+
+# Un fichero de verdad con el mismo nombre se respeta
+- name: Ficheros de verdad que no se tocan
+  ansible.builtin.debug:
+    msg: "{{ item.item.item.ruta }} ya existe y no es la trampa: no se toca"
+  loop: "{{ trampas_actuales.results }}"
+  loop_control:
+    label: "{{ item.item.item.ruta }}"
+  when: (item.content | b64decode | trim) != (item.item.item.contenido | trim)
+
+- name: Ficheros trampa
+  ansible.builtin.copy:
+    content: "{{ item.contenido | trim }}\n"
+    dest: "{{ item.ruta }}"
+    owner: "{{ item.usuario | default('root') }}"
+    group: "{{ item.usuario | default('root') }}"
+    mode: "0600"
+    # Lo que ya existe (sea la trampa o no) no se reescribe
+    force: false
+  loop: "{{ trampas_ficheros }}"
+  loop_control:
+    label: "{{ item.ruta }}"
+  no_log: true

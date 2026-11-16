@@ -1,0 +1,13 @@
+---
+# Ficheros con credenciales falsas que solo usaría alguien que ha entrado. El
+# token apunta a un dominio que no sirve para nada más y avisa si se usa (en mi
+# caso, el vigilante externo). Un token distinto por máquina para saber de dónde
+# salió. Los tokens, en el inventario privado, nunca aquí.
+#   trampas_ficheros:
+#     - ruta: /root/.git-credentials
+#       contenido: "https://deploy:<token>@git.ejemplo.com"
+#     - ruta: /home/ubuntu/.git-credentials
+#       contenido: "https://deploy:<token>@git.ejemplo.com"
+#       usuario: ubuntu
+# Si el fichero ya existe y no es la trampa, no se toca (se avisa en la salida).
+trampas_ficheros: []

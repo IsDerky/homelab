@@ -1,0 +1,7 @@
+---
+# Credenciales trampa en todas las máquinas (los tokens van por máquina en host_vars)
+- name: Credenciales trampa
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - trampas
