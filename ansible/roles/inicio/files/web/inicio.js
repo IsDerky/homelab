@@ -1,0 +1,257 @@
+// Página de inicio: dibuja la rejilla con datos.json (lo escribe inicio-datos cada 30 s), la hora y el fondo.
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const crear = (etiqueta, clase, texto) => {
+  const e = document.createElement(etiqueta);
+  if (clase) e.className = clase;
+  if (texto !== undefined) e.textContent = texto;
+  return e;
+};
+
+// iconos de serie para los widgets (trazo, como los del área de clientes)
+const ICONOS = {
+  sai: '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4"/><path d="M11 9l-2 4h4l-2 4"/>',
+  nube: '<path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/>',
+  escudo: '<path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/>',
+};
+const icono = (nombre) => {
+  if (ICONOS[nombre]) {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.setAttribute('aria-hidden', 'true');
+    s.innerHTML = ICONOS[nombre];
+    return s;
+  }
+  const i = crear('img');
+  i.src = 'icons/' + nombre;
+  i.alt = '';
+  return i;
+};
+
+// ---------- cifras ----------
+const numero = (v, decimales = 0) =>
+  v.toLocaleString('es-ES', { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
+const duracion = (s) =>
+  s < 60 ? [Math.round(s), 's'] : s < 3600 ? [Math.round(s / 60), 'min'] : s < 86400 ? [Math.round(s / 3600), 'h'] : [numero(s / 86400, 1), 'd'];
+
+const cifra = (c) => {
+  const caja = crear('div', 'cifra');
+  const v = crear('div', 'v');
+  if (c.valor === null || c.valor === undefined) {
+    v.textContent = '–';
+  } else if (c.formato === 'duracion') {
+    const [n, u] = duracion(c.valor);
+    v.append(String(n), crear('small', '', u));
+  } else {
+    v.textContent = numero(c.valor, c.decimales ?? 0) + (c.de !== undefined ? '/' + (c.de === null ? '–' : numero(c.de)) : '');
+    if (c.unidad) v.append(crear('small', '', c.unidad));
+  }
+  const r = c.rojo;
+  if (r && c.valor !== null && ((r.mayor !== undefined && c.valor > r.mayor) || (r.menor !== undefined && c.valor < r.menor))) {
+    v.classList.add('rojo');
+  }
+  caja.append(v, crear('div', 'l', c.etiqueta || ''));
+  return caja;
+};
+
+// ---------- piezas de la rejilla ----------
+const app = (a, conTamano = true) => {
+  const e = crear(a.url ? 'a' : 'div', 'app' + (conTamano ? ' t2x2' : ''));
+  if (a.url) {
+    e.href = a.url;
+    e.rel = 'noopener';
+  }
+  const ic = crear('div', 'icono');
+  if (a.icono) ic.append(icono(a.icono));
+  if (a.arriba === true) ic.dataset.arriba = 'si';
+  if (a.arriba === false) ic.dataset.arriba = 'no';
+  e.append(ic, crear('div', 'nombre', a.nombre));
+  if (a.arriba === false) e.title = a.nombre + ': no responde';
+  return e;
+};
+
+const carpeta = (c) => {
+  const b = crear('button', 'app carpeta t2x2');
+  b.type = 'button';
+  b.dataset.carpeta = c.carpeta;
+  const ic = crear('div', 'icono');
+  for (const a of c.apps.slice(0, 9)) {
+    const m = crear('span', 'mini');
+    if (a.icono) m.append(icono(a.icono));
+    ic.append(m);
+  }
+  if (c.apps.some((a) => a.arriba === false)) ic.dataset.arriba = 'no';
+  b.append(ic, crear('div', 'nombre', c.nombre));
+  b.addEventListener('click', () => abrir(c.carpeta));
+  return b;
+};
+
+const widget = (w) => {
+  const e = crear('div', 'widget t' + (w.tamano === '2x2' ? '2x2' : '4x2'));
+  const caja = crear('div', 'caja');
+  const titulo = crear('div', 'titulo');
+  if (w.icono) titulo.append(icono(w.icono));
+  titulo.append(w.titulo || '');
+  if (w.estado) titulo.append(crear('span', 'estado', '· ' + w.estado));
+  const cifras = crear('div', 'cifras');
+  cifras.append(...(w.cifras || []).map(cifra));
+  caja.append(titulo, cifras);
+  e.append(caja, crear('div', 'nombre', w.titulo || ''));
+  return e;
+};
+
+// ---------- carpeta abierta ----------
+let datos = null;
+let abierta = null;
+let antesDeAbrir = null;
+const pintarCarpeta = () => {
+  const c = datos && datos.elementos.find((e) => e.carpeta === abierta);
+  if (!c) return cerrar();
+  $('carpeta-titulo').textContent = c.nombre;
+  $('carpeta-dentro').replaceChildren(...c.apps.map((a) => app(a, false)));
+};
+const abrir = (id) => {
+  antesDeAbrir = document.activeElement;
+  abierta = id;
+  pintarCarpeta();
+  $('carpeta').hidden = false;
+  $('carpeta-dentro').querySelector('a, [tabindex]')?.focus();
+};
+const cerrar = () => {
+  abierta = null;
+  $('carpeta').hidden = true;
+  antesDeAbrir?.focus?.();
+};
+$('carpeta').addEventListener('click', (e) => { if (!e.target.closest('.dentro')) cerrar(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && abierta) cerrar(); });
+
+// ---------- datos ----------
+const pintar = () => {
+  document.title = datos.titulo;
+  $('rejilla').replaceChildren(...datos.elementos.map((e) => (e.widget ? widget(e) : e.carpeta ? carpeta(e) : app(e))));
+  const s = datos.sondas;
+  const r = $('resumen');
+  r.classList.toggle('mal', s.caidas.length > 0);
+  r.textContent = s.caidas.length ? `No responde: ${s.caidas.join(', ')}` : `Todo en marcha · ${s.bien}/${s.total} sondas`;
+  if (abierta) pintarCarpeta();
+};
+
+const avisar = (texto) => {
+  $('aviso').hidden = !texto;
+  $('aviso').textContent = texto || '';
+};
+
+let intervalo = 30;
+const cargar = async () => {
+  try {
+    const r = await fetch('datos.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    datos = await r.json();
+    intervalo = datos.intervalo || 30;
+    pintar();
+    const edad = Date.now() / 1000 - datos.generado;
+    avisar(edad > intervalo * 4 ? `Datos de hace ${Math.round(edad / 60)} min: ¿está parado inicio-datos?` : '');
+  } catch (e) {
+    avisar('No se pueden leer los datos (' + e.message + ').');
+  }
+  setTimeout(cargar, intervalo * 1000);
+};
+
+// ---------- hora ----------
+const reloj = () => {
+  const ahora = new Date();
+  $('hora').textContent = ahora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  $('fecha').textContent = ahora.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+};
+
+// ---------- fondo: curvas de nivel (ruido Perlin 3D + marching squares), estático, morado → verde ----------
+const fondo = (() => {
+  const lienzo = $('fondo');
+  const ctx = lienzo.getContext('2d');
+  const p = new Uint8Array(512);
+  {
+    const b = [...Array(256).keys()];
+    let s = 1337;
+    for (let i = 255; i > 0; i--) {
+      s = (s * 16807) % 2147483647;
+      const j = s % (i + 1);
+      [b[i], b[j]] = [b[j], b[i]];
+    }
+    for (let i = 0; i < 512; i++) p[i] = b[i & 255];
+  }
+  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const grad = (h, x, y, z) => {
+    h &= 15;
+    const u = h < 8 ? x : y;
+    const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+    return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+  };
+  const ruido = (x, y, z) => {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+    x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+    const u = fade(x), v = fade(y), w = fade(z);
+    const A = p[X] + Y, AA = p[A] + Z, AB = p[A + 1] + Z, B = p[X + 1] + Y, BA = p[B] + Z, BB = p[B + 1] + Z;
+    return lerp(lerp(lerp(grad(p[AA], x, y, z), grad(p[BA], x - 1, y, z), u),
+                     lerp(grad(p[AB], x, y - 1, z), grad(p[BB], x - 1, y - 1, z), u), v),
+                lerp(lerp(grad(p[AA + 1], x, y, z - 1), grad(p[BA + 1], x - 1, y, z - 1), u),
+                     lerp(grad(p[AB + 1], x, y - 1, z - 1), grad(p[BB + 1], x - 1, y - 1, z - 1), u), v), w);
+  };
+  const CELDA = 8, ESCALA = 0.0042, NIVELES = 16;
+
+  return () => {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const ancho = innerWidth, alto = innerHeight;
+    lienzo.width = ancho * dpr;
+    lienzo.height = alto * dpr;
+    const cols = Math.ceil(ancho / CELDA) + 1, filas = Math.ceil(alto / CELDA) + 1;
+    const campo = new Float32Array(cols * filas);
+    for (let j = 0; j < filas; j++) {
+      for (let i = 0; i < cols; i++) {
+        const x = i * CELDA * ESCALA, y = j * CELDA * ESCALA;
+        campo[j * cols + i] = (ruido(x, y, 0.5) + 0.5 * ruido(x * 2.1, y * 2.1, 0.8)) * NIVELES;
+      }
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, ancho, alto);
+    ctx.beginPath();
+    for (let j = 0; j < filas - 1; j++) {
+      for (let i = 0; i < cols - 1; i++) {
+        const a = campo[j * cols + i], b = campo[j * cols + i + 1];
+        const c = campo[(j + 1) * cols + i + 1], d = campo[(j + 1) * cols + i];
+        const x0 = i * CELDA, y0 = j * CELDA;
+        for (let n = Math.ceil(Math.min(a, b, c, d)); n <= Math.max(a, b, c, d); n++) {
+          const pts = [];
+          if ((a < n) !== (b < n)) pts.push(x0 + CELDA * (n - a) / (b - a), y0);
+          if ((b < n) !== (c < n)) pts.push(x0 + CELDA, y0 + CELDA * (n - b) / (c - b));
+          if ((d < n) !== (c < n)) pts.push(x0 + CELDA * (n - d) / (c - d), y0 + CELDA);
+          if ((a < n) !== (d < n)) pts.push(x0, y0 + CELDA * (n - a) / (d - a));
+          for (let k = 0; k + 3 < pts.length; k += 4) {
+            ctx.moveTo(pts[k], pts[k + 1]);
+            ctx.lineTo(pts[k + 2], pts[k + 3]);
+          }
+        }
+      }
+    }
+    const g = ctx.createLinearGradient(0, 0, ancho, alto * 0.3);
+    g.addColorStop(0, 'rgba(153, 51, 255, .55)');
+    g.addColorStop(0.45, 'rgba(140, 60, 255, .5)');
+    g.addColorStop(0.62, 'rgba(70, 150, 200, .45)');
+    g.addColorStop(1, 'rgba(60, 230, 130, .5)');
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+  };
+})();
+
+let esperaFondo;
+addEventListener('resize', () => {
+  clearTimeout(esperaFondo);
+  esperaFondo = setTimeout(fondo, 150);
+});
+
+reloj();
+setInterval(reloj, 15000);
+fondo();
+cargar();

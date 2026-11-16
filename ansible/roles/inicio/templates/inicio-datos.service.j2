@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Datos de la página de inicio (consultas a Prometheus)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/inicio-datos --prometheus {{ inicio_prometheus }} --entrada /etc/inicio/elementos.json --salida /run/inicio/datos.json
+# usuario propio y no DynamicUser: con DynamicUser la carpeta va a /run/private (0700) y nginx no llega
+User=inicio
+Group=inicio
+RuntimeDirectory=inicio
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+UMask=0022
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+SystemCallFilter=@system-service
+MemoryMax=64M

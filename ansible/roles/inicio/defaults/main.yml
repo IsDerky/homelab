@@ -1,0 +1,39 @@
+---
+# Página de inicio propia (sustituye a Homepage): iconos cuadrados con el nombre
+# debajo, carpetas que se abren encima y widgets con cifras de Prometheus.
+# La página es estática; los datos los escribe inicio-datos cada 30 s en
+# /run/inicio/datos.json con las consultas de aquí (el navegador nunca habla
+# con Prometheus).
+inicio_dir: /var/www/inicio
+inicio_prometheus: http://127.0.0.1:9090
+inicio_titulo: Inicio
+inicio_intervalo: 30
+
+# Lo que sale en la página, en orden. Tres tipos:
+#
+#   - widget: servidor          # id
+#     titulo: Servidor
+#     icono: inicio.svg         # fichero de icons/ o uno de serie: sai, nube, escudo
+#     tamano: 4x2               # 4x2 (ancho) o 2x2
+#     estado:                   # opcional: texto junto al título según el valor
+#       consulta: sai_conectado * (1 + sai_en_bateria)
+#       textos: {"0": sin conexión, "1": con corriente, "2": con batería}
+#     cifras:                   # hasta 4 (2 en los de 2x2)
+#       - etiqueta: CPU
+#         consulta: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])))
+#         unidad: "%"
+#         decimales: 0
+#         de: count(algo)       # opcional: sale «valor/de»
+#         formato: duracion     # opcional: la consulta da segundos → «14 min», «3 h»
+#         rojo: {mayor: 90}     # opcional: en rojo si pasa de (mayor) o baja de (menor)
+#
+#   - app: oficina
+#     nombre: Oficina
+#     icono: oficina.svg
+#     url: https://oficina.example.com/      # sin url no es enlace (p. ej. el NAS)
+#     sonda: https://oficina.example.com/    # instance de probe_success para el punto verde/rojo
+#
+#   - carpeta: hosting
+#     nombre: Hosting
+#     apps: [ ...apps como arriba... ]
+inicio_elementos: []

@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Datos de la página de inicio cada {{ inicio_intervalo }} s
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec={{ inicio_intervalo }}s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

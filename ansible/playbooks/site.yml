@@ -29,6 +29,8 @@
   ansible.builtin.import_playbook: cloudflared.yml
 - name: Aplicaciones
   ansible.builtin.import_playbook: apps.yml
+- name: Página de inicio
+  ansible.builtin.import_playbook: inicio.yml
 - name: Vaultwarden
   ansible.builtin.import_playbook: vaultwarden.yml
 - name: Webs
