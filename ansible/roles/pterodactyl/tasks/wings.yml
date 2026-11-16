@@ -41,6 +41,17 @@
     - Recargar systemd
     - Reiniciar wings
 
+# Lleva el token del nodo: con él se controlan todos los servidores. Wings lo
+# escribe con 0600, pero una copia a mano puede dejarlo legible para todos.
+- name: Configuración de Wings solo para root
+  ansible.builtin.file:
+    path: /etc/pterodactyl/config.yml
+    owner: root
+    group: root
+    mode: "0600"
+  # Antes de configurar el nodo en el panel todavía no existe
+  failed_when: false
+
 - name: Wings activo
   ansible.builtin.systemd_service:
     name: wings.service
