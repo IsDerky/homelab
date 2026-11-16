@@ -6,8 +6,13 @@
 :root {
   --texto: #f4f0ff; --apagado: #a99fc4; --verde: #39ff14; --morado: #9933ff; --rojo: #ff5c7a;
   --borde: rgba(255, 255, 255, .08); --widget: rgba(22, 19, 33, .72); --cristal: rgba(28, 24, 40, .7);
-  --celda: 52px; --hueco: 18px; --icono: 84px; --radio: 22px;
   --curva: cubic-bezier(.2, .9, .25, 1);   /* sale rápido y frena suave, como iOS */
+  /* la rejilla ocupa todo el ancho útil: la celda sale del ancho de la ventana y el número de columnas */
+  --ancho: min(100vw, 1480px); --margen: 40px; --hueco: 18px; --cols: 12;
+  --celda: calc((var(--ancho) - 2 * var(--margen) - (var(--cols) - 1) * var(--hueco)) / var(--cols));
+  --icono: min(calc(var(--celda) * 2 + var(--hueco) - 34px), 96px);
+  --radio: calc(var(--icono) * .26);
+  --cifra: clamp(20px, calc(var(--celda) * .38), 32px);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
@@ -18,10 +23,10 @@ body { background: #000; color: var(--texto); font: 14px/1.35 "Chakra Petch", ui
 .velo-fondo { position: fixed; inset: 0; z-index: 0; pointer-events: none;
               background: radial-gradient(70vw 70vh at 50% 42%, rgba(0, 0, 0, .55), transparent 75%); }
 
-.pagina { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 34px 20px 60px; }
+.pagina { position: relative; z-index: 1; max-width: var(--ancho); margin: 0 auto; padding: 38px var(--margen) 60px; }
 
-.cabecera { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 0 4px 34px; flex-wrap: wrap; }
-.hora { font: 700 64px/1 "Tektur", "Chakra Petch", sans-serif; letter-spacing: -.01em; }
+.cabecera { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 0 0 38px; flex-wrap: wrap; }
+.hora { font: 700 clamp(52px, 5vw, 76px)/1 "Tektur", "Chakra Petch", sans-serif; letter-spacing: -.01em; }
 .fecha { color: var(--apagado); font-size: 15px; margin-top: 8px; }
 .resumen { display: flex; align-items: center; gap: 8px; color: var(--apagado); font-size: 13.5px; }
 .resumen::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 8px rgba(57, 255, 20, .6); }
@@ -29,8 +34,17 @@ body { background: #000; color: var(--texto); font: 14px/1.35 "Chakra Petch", ui
 .resumen.mal { color: var(--texto); }
 
 /* rejilla de unidades cuadradas: app 2x2; widgets 2x2, 2x3, 4x2 o 4x3 */
-.rejilla { display: grid; grid-template-columns: repeat(12, var(--celda)); grid-auto-rows: var(--celda);
+.rejilla { display: grid; grid-template-columns: repeat(var(--cols), var(--celda)); grid-auto-rows: var(--celda);
            gap: var(--hueco); grid-auto-flow: dense; justify-content: center; }
+.zona { display: contents; }   /* en estrecho, widgets y apps comparten una sola rejilla */
+/* pantallas anchas: 16 columnas; widgets en columna a la izquierda (6) y apps a la derecha (10), como un iPad */
+@media (min-width: 1200px) {
+  :root { --cols: 16; --cols-widgets: 6; }
+  .rejilla { display: flex; align-items: flex-start; gap: var(--hueco); justify-content: center; }
+  .zona { display: grid; grid-auto-rows: var(--celda); gap: var(--hueco); grid-auto-flow: dense; }
+  .zona-widgets { grid-template-columns: repeat(var(--cols-widgets), var(--celda)); }
+  .zona-apps { grid-template-columns: repeat(calc(var(--cols) - var(--cols-widgets)), var(--celda)); }
+}
 .t2x2 { grid-column: span 2; grid-row: span 2; }
 .t3x2 { grid-column: span 3; grid-row: span 2; }
 .t4x2 { grid-column: span 4; grid-row: span 2; }
@@ -52,16 +66,17 @@ a.app:active .icono, button.app:active .icono { transform: scale(.95); }
 .icono.lleno { border: 0; }
 .icono.lleno img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radio); }
 .icono.pixel img { width: 60%; height: 60%; image-rendering: pixelated; }
-.nombre { font-size: 12.5px; font-weight: 600; text-shadow: 0 1px 3px #000; white-space: nowrap; max-width: 108px;
+.nombre { font-size: clamp(12.5px, calc(var(--celda) * .17), 15px); font-weight: 600; text-shadow: 0 1px 3px #000; white-space: nowrap;
+          max-width: calc(var(--celda) * 2 + var(--hueco));
           overflow: hidden; text-overflow: ellipsis; }
 .icono[data-arriba]::after { content: ""; position: absolute; top: -3px; right: -3px; width: 13px; height: 13px; border-radius: 50%;
                              background: var(--verde); border: 2.5px solid #000; box-shadow: 0 0 8px rgba(57, 255, 20, .6); z-index: 1; }
 .icono[data-arriba="no"]::after { background: var(--rojo); box-shadow: 0 0 8px rgba(255, 92, 122, .7); }
 
 /* carpeta cerrada: cristal con los iconos en pequeño (3x3) */
-.carpeta .icono { background: var(--cristal); backdrop-filter: blur(14px); padding: 11px;
-                  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px; }
-.carpeta .icono .mini { width: 18px; height: 18px; border-radius: 5px; overflow: hidden; display: grid; place-items: center;
+.carpeta .icono { background: var(--cristal); backdrop-filter: blur(14px); padding: calc(var(--icono) * .13);
+                  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: calc(var(--icono) * .05); }
+.carpeta .icono .mini { width: calc(var(--icono) * .22); height: calc(var(--icono) * .22); border-radius: calc(var(--icono) * .06); overflow: hidden; display: grid; place-items: center;
                         background: linear-gradient(160deg, #2a2440, #16121f); }
 .carpeta .icono .mini img { width: 70%; height: 70%; object-fit: contain; }
 .carpeta .icono .mini.lleno img { width: 100%; height: 100%; object-fit: cover; }
@@ -70,26 +85,30 @@ a.app:active .icono, button.app:active .icono { transform: scale(.95); }
 /* ---------- widgets ---------- */
 .widget { display: flex; flex-direction: column; gap: 8px; }
 .widget .caja { flex: 1; min-height: 0; background: var(--widget); backdrop-filter: blur(16px); border: 1px solid var(--borde);
-                border-radius: var(--radio); padding: 16px 16px 14px; display: flex; flex-direction: column; justify-content: space-between;
+                border-radius: var(--radio); padding: calc(var(--celda) * .26) calc(var(--celda) * .28); display: flex; flex-direction: column; justify-content: space-between;
                 box-shadow: 0 6px 18px rgba(0, 0, 0, .55); }
-.widget .titulo { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--apagado); font-weight: 600;
+.widget .titulo { display: flex; align-items: center; gap: 8px; font-size: clamp(12.5px, calc(var(--celda) * .17), 15px); color: var(--apagado); font-weight: 600;
                   text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; overflow: hidden; }
 .widget .titulo img, .widget .titulo svg { width: 18px; height: 18px; flex: none; image-rendering: pixelated; }
 .widget .titulo svg { stroke: var(--apagado); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .widget .titulo .estado { color: var(--texto); text-transform: none; letter-spacing: 0; font-weight: 400; }
+.widget .titulo .punto { margin-left: auto; width: 10px; height: 10px; flex: none; border-radius: 50%;
+                         background: var(--verde); box-shadow: 0 0 8px rgba(57, 255, 20, .6); }
+.widget .titulo .punto.mal { background: var(--rojo); box-shadow: 0 0 8px rgba(255, 92, 122, .7); }
 .widget .nombre { align-self: center; }
-.cifras { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 8px 6px; }
-.cifra .v { font-size: 26px; font-weight: 600; line-height: 1.05; white-space: nowrap; }
-.cifra .v small { font-size: 14px; color: var(--apagado); font-weight: 400; margin-left: 2px; }
+/* cifras repartidas de borde a borde: la primera pegada a la izquierda, la última a la derecha */
+.cifras { display: flex; justify-content: space-between; gap: 8px 12px; }
+.cifra { min-width: 0; }
+.cifra .v { font-size: var(--cifra); font-weight: 600; line-height: 1.05; white-space: nowrap; }
+.cifra .v small { font-size: calc(var(--cifra) * .5); color: var(--apagado); font-weight: 400; margin-left: 2px; }
 .cifra .v.rojo { color: var(--rojo); }
-.cifra .l { font-size: 11.5px; margin-top: 3px; color: var(--apagado); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* estrechos: 2 cifras (los de 2 columnas, una por fila) */
-.t3x2.widget .cifras { --n: 2; }
-.t2x2.widget .cifras { --n: 1; gap: 6px; }
+.cifra .l { font-size: clamp(11px, calc(var(--celda) * .16), 14px); margin-top: 3px; color: var(--apagado); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* estrechos de 2 columnas: una cifra por fila */
+.t2x2.widget .cifras { flex-direction: column; gap: 6px; }
 .t2x2.widget .cifra { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
-.t2x2.widget .cifra .v { font-size: 20px; }
+.t2x2.widget .cifra .v { font-size: calc(var(--cifra) * .8); }
 .t2x2.widget .cifra .l { margin: 0; }
-.t4x2.widget .cifra .v { font-size: 22px; }
+.t4x2.widget .cifra .v { font-size: calc(var(--cifra) * .85); }
 
 .aviso { text-align: center; color: var(--apagado); font-size: 13px; margin-top: 34px; }
 
@@ -102,24 +121,22 @@ a.app:active .icono, button.app:active .icono { transform: scale(.95); }
                           transition: transform .38s var(--curva), opacity .26s ease-out; will-change: transform; }
 .carpeta-abierta h2 { margin: 0; font-size: 26px; font-weight: 600; text-shadow: 0 2px 10px rgba(0, 0, 0, .8); }
 .carpeta-abierta .dentro { background: var(--cristal); backdrop-filter: blur(20px); border: 1px solid var(--borde); border-radius: 34px;
-                           padding: 26px 30px; display: grid; grid-template-columns: repeat(3, 108px); gap: 22px 16px;
+                           padding: 28px 32px; display: grid; grid-template-columns: repeat(3, calc(var(--icono) + 28px)); gap: 24px 16px;
                            box-shadow: 0 30px 80px rgba(0, 0, 0, .65), 0 8px 24px rgba(0, 0, 0, .45); }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 @media (max-width: 760px) {
   /* 8 columnas que llenan el ancho: 4 apps por fila, como un iPhone */
-  :root { --hueco: 10px; --celda: calc((100vw - 28px - 7 * var(--hueco)) / 8); --icono: min(64px, calc(var(--celda) * 2 - 6px)); --radio: 17px; }
-  .pagina { padding: 22px 14px 48px; }
+  :root { --cols: 8; --hueco: 10px; --margen: 14px; --ancho: 100vw; --icono: min(64px, calc(var(--celda) * 2 - 6px)); }
+  .pagina { padding-top: 22px; padding-bottom: 48px; }
   /* filas algo más altas que anchas: icono + nombre caben en 2 filas también a 360 px */
-  .rejilla { grid-template-columns: repeat(8, var(--celda)); grid-auto-rows: calc(var(--celda) + 6px); }
+  .rejilla { grid-auto-rows: calc(var(--celda) + 6px); }
   /* widgets: los anchos toda la fila, los estrechos media; siempre 3 filas para que quepan */
   .t4x2.widget, .t6x2.widget { grid-column: span 8; grid-row: span 3; }
   .t2x2.widget, .t3x2.widget { grid-column: span 4; grid-row: span 3; }
   .cabecera { margin-bottom: 24px; }
-  .carpeta .icono { padding: 8px; } .carpeta .icono .mini { width: 13px; height: 13px; border-radius: 4px; }
   .hora { font-size: 48px; }
-  .cifra .v, .t4x2.widget .cifra .v { font-size: 19px; } .t2x2.widget .cifra .v { font-size: 18px; }
-  .cifra .v small { font-size: 12px; } .cifra .l { font-size: 10.5px; }
+  :root { --cifra: 19px; }
   .widget .caja { padding: 12px 12px 10px; }
-  .carpeta-abierta .dentro { grid-template-columns: repeat(3, 84px); padding: 20px; gap: 18px 10px; }
+  .carpeta-abierta .dentro { padding: 20px; gap: 18px 10px; }
 }

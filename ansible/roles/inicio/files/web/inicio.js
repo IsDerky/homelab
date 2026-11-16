@@ -101,6 +101,11 @@ const widget = (w) => {
   if (w.icono) titulo.append(icono(w.icono));
   titulo.append(w.titulo || '');
   if (w.estado) titulo.append(crear('span', 'estado', '· ' + w.estado));
+  if (w.ok !== undefined) {
+    const p = crear('span', 'punto' + (w.ok ? '' : ' mal'));
+    p.title = w.ok ? 'Todo bien' : 'Algo falla';
+    titulo.append(p);
+  }
   const cifras = crear('div', 'cifras');
   cifras.append(...(w.cifras || []).map(cifra));
   caja.append(titulo, cifras);
@@ -183,7 +188,14 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && abierta)
 // ---------- datos ----------
 const pintar = () => {
   document.title = datos.titulo;
-  $('rejilla').replaceChildren(...datos.elementos.map((e) => (e.widget ? widget(e) : e.carpeta ? carpeta(e) : app(e))));
+  // dos zonas: en pantalla ancha, widgets a la izquierda y apps a la derecha; en estrecha se juntan (display: contents)
+  const zonaWidgets = crear('div', 'zona zona-widgets');
+  const zonaApps = crear('div', 'zona zona-apps');
+  for (const e of datos.elementos) {
+    if (e.widget) zonaWidgets.append(widget(e));
+    else zonaApps.append(e.carpeta ? carpeta(e) : app(e));
+  }
+  $('rejilla').replaceChildren(zonaWidgets, zonaApps);
   const s = datos.sondas;
   const r = $('resumen');
   r.classList.toggle('mal', s.caidas.length > 0);

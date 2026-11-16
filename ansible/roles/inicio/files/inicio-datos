@@ -64,6 +64,8 @@ def widget(w, base):
         valor = consultar(base, w["estado"]["consulta"])
         textos = w["estado"].get("textos", {})
         salida["estado"] = textos.get(str(int(valor))) if valor is not None else None
+        if "bien" in w["estado"]:
+            salida["ok"] = valor is not None and int(valor) in w["estado"]["bien"]
     salida["cifras"] = []
     for c in w.get("cifras", []):
         cifra = {k: c[k] for k in ("etiqueta", "unidad", "decimales", "formato", "rojo") if k in c}
@@ -71,7 +73,19 @@ def widget(w, base):
         if c.get("de"):
             cifra["de"] = consultar(base, c["de"])
         salida["cifras"].append(cifra)
+    if w.get("punto") == "cifras":
+        salida["ok"] = all(cifra_bien(c) for c in salida["cifras"])
     return salida
+
+
+def cifra_bien(c):
+    """Sin dato, en rojo o con «valor/de» incompleto cuenta como fallo."""
+    v, r = c["valor"], c.get("rojo") or {}
+    if v is None:
+        return False
+    if "mayor" in r and v > r["mayor"] or "menor" in r and v < r["menor"]:
+        return False
+    return "de" not in c or c["de"] is not None and v >= c["de"]
 
 
 def main():
