@@ -51,3 +51,5 @@
   ansible.builtin.import_playbook: monitoring.yml
 - name: Honeypot
   ansible.builtin.import_playbook: honeypot.yml
+- name: Credenciales trampa
+  ansible.builtin.import_playbook: trampas.yml
