@@ -50,6 +50,11 @@ backup_local_repo: "{{ backup_local_mount }}/restic"
 #     host: nodo1.ejemplo.com
 backup_remote_nodes: []
 
+# Rutas de más para el modo sistema (cada 6 h), además de las fijas del script.
+# Las que no existan se saltan.
+#   - /var/lib/mi-app
+backup_sistema_extra: []
+
 # Secretos: definirlos con Ansible Vault. Solo se escriben si el fichero no
 # existe (máquina nueva); si ya está, el rol comprueba que coincide.
 backup_restic_password: ""
