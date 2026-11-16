@@ -1,0 +1,34 @@
+---
+- name: Paquete auditd
+  ansible.builtin.apt:
+    name: auditd
+    state: present
+
+- name: Tamaño y rotación del registro
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: "^{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: max_log_file, value: "{{ auditd_max_log_file }}" }
+    - { key: num_logs, value: "{{ auditd_num_logs }}" }
+    - { key: max_log_file_action, value: ROTATE }
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Recargar la configuración de auditd
+
+- name: Reglas forenses
+  ansible.builtin.template:
+    src: 90-forense.rules.j2
+    dest: /etc/audit/rules.d/90-forense.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Cargar las reglas de auditd
+
+- name: Servicio auditd activo
+  ansible.builtin.systemd_service:
+    name: auditd.service
+    enabled: true
+    state: started
+  when: auditd_arrancar | default(true)

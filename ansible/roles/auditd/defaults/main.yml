@@ -1,0 +1,18 @@
+---
+# Registro forense con auditd, sin alertas: sirve para mirar qué pasó si salta
+# una credencial trampa o un inicio de sesión raro. Se apuntan los comandos de
+# las sesiones de personas (los servicios no tienen auid y no salen) y los
+# cambios en cuentas, sudo, SSH, servicios, cron y módulos del kernel.
+
+# Tamaño del registro: max_log_file (MB) × num_logs, rotando
+auditd_max_log_file: 50
+auditd_num_logs: 10
+
+# Rutas de más que vigilar: permisos r, w, x, a (lectura, escritura,
+# ejecución, cambio de atributos)
+#   auditd_vigilar:
+#     - {ruta: /etc/pterodactyl/config.yml, permisos: wa, clave: wings}
+auditd_vigilar: []
+
+# Si existe trampas_ficheros (rol trampas), se apunta quién lee cada trampa
+auditd_vigilar_trampas: true

@@ -1,0 +1,7 @@
+---
+# Registro forense con auditd en todas las máquinas (sin alertas)
+- name: Registro forense
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - auditd

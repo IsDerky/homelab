@@ -1,0 +1,41 @@
+## {{ ansible_managed }}
+## Solo registro, sin alertas. Buscar con: ausearch -k <clave> -i
+
+# Comandos de sesiones de personas: auid se pone al entrar (SSH, consola) y lo
+# heredan sus procesos; los servicios no lo tienen y no se apuntan
+-a always,exit -F arch=b64 -S execve -F auid!=4294967295 -k comandos
+{% if ansible_facts.architecture == 'x86_64' %}
+-a always,exit -F arch=b32 -S execve -F auid!=4294967295 -k comandos
+{% endif %}
+
+# Cuentas y sudo
+-w /etc/passwd -p wa -k cuentas
+-w /etc/shadow -p wa -k cuentas
+-w /etc/group -p wa -k cuentas
+-w /etc/gshadow -p wa -k cuentas
+-w /etc/sudoers -p wa -k sudo
+-w /etc/sudoers.d/ -p wa -k sudo
+
+# SSH: configuración y claves de root
+-w /etc/ssh/sshd_config -p wa -k ssh
+-w /etc/ssh/sshd_config.d/ -p wa -k ssh
+-w /root/.ssh/ -p wa -k ssh
+
+# Persistencia: servicios y cron
+-w /etc/systemd/system/ -p wa -k persistencia
+-w /etc/cron.d/ -p wa -k persistencia
+-w /var/spool/cron/ -p wa -k persistencia
+
+# Módulos del kernel
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k modulos
+{% for v in auditd_vigilar %}
+
+-w {{ v.ruta }} -p {{ v.permisos | default('wa') }} -k {{ v.clave }}
+{% endfor %}
+{% if auditd_vigilar_trampas and (trampas_ficheros | default([])) %}
+
+# Credenciales trampa: quién las lee (las copias de /root también salen aquí)
+{% for t in trampas_ficheros %}
+-w {{ t.ruta }} -p r -k trampa
+{% endfor %}
+{% endif %}

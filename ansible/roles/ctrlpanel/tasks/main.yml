@@ -89,6 +89,25 @@
   when: ctrlpanel_env.stat.exists
   notify: Limpiar caché de config
 
+# Solo la caché: sesiones y cola siguen en ficheros y en la BD
+- name: Caché en Redis
+  ansible.builtin.lineinfile:
+    path: "{{ ctrlpanel_dir }}/.env"
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: CACHE_DRIVER, value: redis }
+    - { key: REDIS_HOST, value: 127.0.0.1 }
+    - { key: REDIS_DB, value: "{{ ctrlpanel_redis_db }}" }
+    - { key: REDIS_CACHE_DB, value: "{{ ctrlpanel_redis_cache_db }}" }
+    - { key: REDIS_PREFIX, value: ctrlpanel_ }
+  loop_control:
+    label: "{{ item.key }}"
+  when: ctrlpanel_env.stat.exists and ctrlpanel_cache_redis
+  notify:
+    - Limpiar caché de config
+    - Reiniciar la cola de CtrlPanel
+
 - name: Permisos del .env
   ansible.builtin.file:
     path: "{{ ctrlpanel_dir }}/.env"
