@@ -67,6 +67,26 @@
     group: root
     mode: "0755"
 
+- name: Carpeta de configuración de server-backup
+  ansible.builtin.file:
+    path: /etc/server-backup
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Rutas de más del modo sistema
+  ansible.builtin.copy:
+    content: |
+      # Lo escribe Ansible (backup_sistema_extra): una ruta por línea
+      {% for ruta in backup_sistema_extra %}
+      {{ ruta }}
+      {% endfor %}
+    dest: /etc/server-backup/sistema-extra
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Unidad server-backup@
   ansible.builtin.copy:
     src: server-backup@.service

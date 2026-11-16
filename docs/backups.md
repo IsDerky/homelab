@@ -4,7 +4,7 @@ restic sobre rclone a Google Drive, y una segunda copia en el disco USB. Todo se
 
 | Modo | Cuándo | Qué hace | Retención |
 |---|---|---|---|
-| `sistema` | Cada 6 h | BDs SQLite con `sqlite3 .backup` (la app y Vaultwarden), dump del panel, `/etc`, `/opt`, scripts, crons | 7 días enteros, 4 semanales, 12 mensuales |
+| `sistema` | Cada 6 h | BDs SQLite con `sqlite3 .backup` (la app y Vaultwarden), dump del panel, `/etc`, `/opt`, scripts, crons y las rutas de `backup_sistema_extra` | 7 días enteros, 4 semanales, 12 mensuales |
 | `clientes` | A diario | Volúmenes y backups de los servidores de juego, también los de los nodos | 7 diarios, 4 semanales, 3 mensuales |
 | `nas` | A diario | La carpeta del NAS, solo a Drive (en local estaría en el mismo disco) | 7 diarios, 4 semanales, 6 mensuales |
 | `mantenimiento` | Domingos | `prune` y `check` de una cuarta parte en Drive; en local, `check --read-data` completo | — |

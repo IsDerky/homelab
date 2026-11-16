@@ -41,6 +41,16 @@ BDSERV_VOLCAR=/usr/local/sbin/bd-servidores-volcar # del mismo rol: vuelca los t
 
 SIMULACRO_RESULT=/var/lib/server-backup/simulacro.json # lo lee ops-collect
 
+# Carpetas de más para el modo sistema, una por línea (backup_sistema_extra).
+# Las SQLite que tengan (hasta un nivel de subcarpeta) se vuelcan con .backup.
+SISTEMA_EXTRA=/etc/server-backup/sistema-extra
+extra=()
+if [ -f "$SISTEMA_EXTRA" ]; then
+  while read -r p; do
+    case "$p" in /*) if [ -d "$p" ]; then extra+=("$p"); fi ;; esac
+  done <"$SISTEMA_EXTRA"
+fi
+
 # Copia local: un repo restic en el disco USB, con la misma contraseña
 LOCAL_MOUNT=/srv/backup-local
 LOCAL_REPO=$LOCAL_MOUNT/restic
@@ -154,6 +164,7 @@ paths_sistema() {
     if [ -e "$f" ]; then paths+=("$f"); fi
   done
   if [ -d "$CTRLPANEL" ]; then paths+=("$CTRLPANEL"); fi
+  paths+=("${extra[@]}")
   # Métricas de Prometheus: se regeneran, y serían hasta 2 GB cada 6 h
   # Cachés de compilación de root: se regeneran solas
   excludes=(--exclude /root/.cache
@@ -169,6 +180,13 @@ paths_sistema() {
     --exclude "$CTRLPANEL/node_modules"
     --exclude "$CTRLPANEL/storage/logs"
     --exclude "$CTRLPANEL/storage/framework/cache")
+  # En las rutas de más, las SQLite van por su volcado de STAGE; .bun es caché
+  for p in "${extra[@]}"; do
+    excludes+=(--exclude "$p/.bun")
+    for nivel in "$p" "$p/*"; do
+      excludes+=(--exclude "$nivel/*.sqlite*" --exclude "$nivel/*.db" --exclude "$nivel/*.db-*")
+    done
+  done
   # Todas las de los últimos 7 días, luego 4 semanales y 12 mensuales (1 año)
   keep=(--keep-within 7d --keep-weekly 4 --keep-monthly 12)
 }
@@ -261,6 +279,15 @@ case "$mode" in
     else
       rm -f "$STAGE/bd-servidores.sql"
     fi
+    # SQLite de las rutas de más: volcado coherente aquí, el fichero vivo se excluye
+    rm -rf "$STAGE/extra"
+    for p in "${extra[@]}"; do
+      step="BD SQLite de $p"
+      while IFS= read -r -d '' db; do
+        install -d -m 700 "$STAGE/extra$(dirname "$db")"
+        sqlite3 "$db" ".backup '$STAGE/extra$db'"
+      done < <(find "$p" -maxdepth 2 -name .bun -prune -o -type f \( -name '*.sqlite' -o -name '*.db' \) -print0)
+    done
     step="lista de paquetes"
     dpkg --get-selections >"$STAGE/paquetes.txt"
 
