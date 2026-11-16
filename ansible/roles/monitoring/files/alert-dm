@@ -4,9 +4,13 @@
 Alertmanager solo sabe escribir en canales (webhook de Discord); los avisos del
 servidor van por DM, así que esto traduce su JSON a una llamada a discord-dm.
 
+La alerta Watchdog (siempre activa) no va por DM: si hay OPS_PING, se avisa con
+él al vigilante externo, que salta si deja de llegar. Sin OPS_PING se ignora.
+
 Variables de entorno:
   ALERT_DM_LISTEN  dirección y puerto (127.0.0.1:9851)
   DISCORD_DM       ruta de discord-dm (/usr/local/bin/discord-dm)
+  OPS_PING         ruta de ops-ping (vacío = el latido no sale de aquí)
 """
 
 import json
@@ -17,6 +21,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LISTEN = os.environ.get("ALERT_DM_LISTEN", "127.0.0.1:9851")
 DISCORD_DM = os.environ.get("DISCORD_DM", "/usr/local/bin/discord-dm")
+OPS_PING = os.environ.get("OPS_PING", "")
+LATIDO = "Watchdog"
 MAX_BODY = 1024 * 1024
 
 
@@ -42,6 +48,12 @@ def notify(payload):
     status = payload.get("status", "firing")
     sent = 0
     for alert in payload.get("alerts", []):
+        if alert.get("labels", {}).get("alertname") == LATIDO:
+            # ops-ping nunca falla hacia fuera: cuenta como enviado igual
+            if OPS_PING and alert.get("status", status) == "firing":
+                subprocess.run([OPS_PING, "alertas"], capture_output=True, text=True)
+            sent += 1
+            continue
         result = subprocess.run(message(alert, alert.get("status", status)), capture_output=True, text=True)
         if result.returncode != 0:
             print(f"discord-dm falló: {result.stderr.strip()}", file=sys.stderr)

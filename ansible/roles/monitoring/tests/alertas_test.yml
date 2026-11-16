@@ -305,3 +305,15 @@ tests:
               severity: warning
             exp_annotations:
               summary: "1 compra(s) pagadas en CtrlPanel fallaron en la última hora; el dinero quedó como saldo (derkyu_compras)."
+
+  # El latido está siempre activo, sin depender de ninguna serie
+  - interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels:
+              severity: none
+            exp_annotations:
+              summary: "Latido de la cadena de alertas: si deja de llegar al vigilante externo, algo de Prometheus, Alertmanager o alert-dm no funciona."

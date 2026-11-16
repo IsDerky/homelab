@@ -190,6 +190,34 @@ class AlertDmTest(unittest.TestCase):
             alert_dm.DISCORD_DM = old
             os.unlink(f.name)
 
+    def test_latido_va_a_ops_ping_y_no_por_dm(self):
+        d = tempfile.mkdtemp()
+        registro = os.path.join(d, "llamadas")
+        scripts = {}
+        for nombre in ("dm", "ping"):
+            ruta = os.path.join(d, nombre)
+            with open(ruta, "w") as f:
+                f.write(f'#!/bin/sh\necho "{nombre} $*" >> {registro}\n')
+            os.chmod(ruta, 0o755)
+            scripts[nombre] = ruta
+        old = alert_dm.DISCORD_DM, alert_dm.OPS_PING
+        alert_dm.DISCORD_DM, alert_dm.OPS_PING = scripts["dm"], scripts["ping"]
+        try:
+            payload = {"status": "firing", "alerts": [
+                {"status": "firing", "labels": {"alertname": "Watchdog"}},
+                {"status": "resolved", "labels": {"alertname": "Watchdog"}},
+            ]}
+            self.assertEqual(alert_dm.notify(payload), 2)
+            with open(registro) as f:
+                self.assertEqual(f.read().splitlines(), ["ping alertas"])
+            # Sin OPS_PING el latido se ignora, sin DM
+            alert_dm.OPS_PING = ""
+            self.assertEqual(alert_dm.notify(payload), 2)
+            with open(registro) as f:
+                self.assertEqual(f.read().splitlines(), ["ping alertas"])
+        finally:
+            alert_dm.DISCORD_DM, alert_dm.OPS_PING = old
+
 
 LIST_UNITS = """\
 nginx.service                 loaded    active   running   A high performance web server
