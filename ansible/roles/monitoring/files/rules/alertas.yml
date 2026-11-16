@@ -18,6 +18,17 @@ groups:
       - record: slo:probe_errors:ratio_rate30d
         expr: 1 - avg by (servicio) (avg_over_time(probe_success{job="blackbox"}[30d]))
 
+  # Siempre activa. alert-dm no la manda por DM: avisa al vigilante externo, que
+  # salta si deja de llegar (Prometheus, Alertmanager o alert-dm caídos).
+  - name: latido
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Latido de la cadena de alertas: si deja de llegar al vigilante externo, algo de Prometheus, Alertmanager o alert-dm no funciona."
+
   - name: alertas
     rules:
       # Quema rápida del margen de error (multiventana, como en el libro de SRE

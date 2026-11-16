@@ -14,6 +14,12 @@ Restart=on-failure
 DynamicUser=yes
 LoadCredential=discord-notify.env:/etc/discord-notify.env
 BindReadOnlyPaths=%d/discord-notify.env:/etc/discord-notify.env
+{% if monitoring_latido_externo %}
+# Latido al vigilante externo con la alerta Watchdog (ops-ping del rol avisos)
+LoadCredential=ops-watchdog.env:/etc/ops-watchdog.env
+Environment=OPS_PING=/usr/local/bin/ops-ping
+Environment=OPS_WATCHDOG_ENV=%d/ops-watchdog.env
+{% endif %}
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
