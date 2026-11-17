@@ -199,6 +199,7 @@
         dest: /etc/systemd/system/cambios-recoger.{{ item }}
         mode: "0644"
       loop: [service, timer]
+      register: monitoring_cambios_units
       notify: Recargar systemd
 
 - name: Carpeta del colector textfile
@@ -234,6 +235,7 @@
 - name: Recargar systemd si hay unidades nuevas
   ansible.builtin.meta: flush_handlers
 
+# en seco una unidad nueva no llega a existir (cambios-recoger la primera vez): se arranca en la pasada de verdad
 - name: Servicios
   ansible.builtin.systemd_service:
     name: "{{ item }}"
@@ -244,7 +246,7 @@
        + (['systemd-textfile.timer'] if monitoring_systemd_units | length > 0 else [])
        + (['ops-exporter.service'] if monitoring_ops_group | length > 0 else [])
        + (['alert-dm.service'] if monitoring_alert_dm else [])
-       + (['cambios-recoger.timer'] if monitoring_cambios else []) }}
+       + (['cambios-recoger.timer'] if monitoring_cambios and not (ansible_check_mode and monitoring_cambios_units is changed) else []) }}
 
 - name: Esperar a que escuchen
   ansible.builtin.wait_for:
