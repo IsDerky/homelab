@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Resumen diario de la RAM de cada servidor de juego (el día anterior)
+
+[Timer]
+OnCalendar=*-*-* 00:20
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

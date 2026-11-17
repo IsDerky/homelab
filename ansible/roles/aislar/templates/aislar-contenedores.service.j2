@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Aislamiento en red de los contenedores de los servidores de juego
+After=docker.service
+# al reiniciar Docker se vuelve a comprobar
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/aislar-contenedores
+
+[Install]
+WantedBy=docker.service

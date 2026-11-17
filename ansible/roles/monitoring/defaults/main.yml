@@ -107,6 +107,12 @@ monitoring_alert_dm: true
 # los avisos de alert-dm («Cambios (2 h)»)
 monitoring_cambios: true
 
+# Resumen diario de la RAM de cada servidor de juego (mediana, p95, máximo y
+# límite de contenedor_memoria_bytes, del rol abuso) en un JSONL que no caduca
+# con la retención de Prometheus
+monitoring_ram_historico: true
+monitoring_ram_historico_fichero: /var/lib/ram-servidores/historico.jsonl
+
 # La alerta Watchdog sale por ops-ping al vigilante externo (necesita el rol
 # avisos con avisos_watchdog_env). false = alert-dm la ignora.
 monitoring_latido_externo: false

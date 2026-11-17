@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Comprobar el aislamiento de los contenedores cada {{ aislar_intervalo }}
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ aislar_intervalo }}
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

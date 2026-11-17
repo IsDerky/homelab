@@ -1,0 +1,62 @@
+---
+- name: Paquetes
+  ansible.builtin.apt:
+    name: [iptables, conntrack]
+    state: present
+
+- name: Cargar br_netfilter al arrancar
+  ansible.builtin.copy:
+    content: "br_netfilter\n"
+    dest: /etc/modules-load.d/aislar.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Script
+  ansible.builtin.copy:
+    src: aislar-contenedores
+    dest: /usr/local/sbin/aislar-contenedores
+    owner: root
+    group: root
+    mode: "0755"
+  register: aislar_script
+
+- name: Configuración
+  ansible.builtin.template:
+    src: aislar-contenedores.conf.j2
+    dest: /etc/aislar-contenedores.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: aislar_conf
+
+- name: Unidades
+  ansible.builtin.template:
+    src: aislar-contenedores.{{ item }}.j2
+    dest: /etc/systemd/system/aislar-contenedores.{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: aislar_units
+
+- name: Unidades activas
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    daemon_reload: "{{ aislar_units.changed }}"
+  loop: [aislar-contenedores.service, aislar-contenedores.timer]
+  when: not (ansible_check_mode and aislar_units.changed)
+
+- name: Timer en marcha
+  ansible.builtin.systemd_service:
+    name: aislar-contenedores.timer
+    state: started
+  when: not (ansible_check_mode and aislar_units.changed)
+
+# El script es idempotente: si ya está como debe no toca nada
+- name: Aplicar
+  ansible.builtin.command: /usr/local/sbin/aislar-contenedores
+  register: aislar_salida
+  changed_when: aislar_salida.stdout | length > 0
+  when: not ansible_check_mode

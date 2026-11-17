@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Resumen diario de la RAM de cada servidor de juego
+After=monitoring.service
+
+[Service]
+Type=oneshot
+Environment=RAM_PROMETHEUS=http://127.0.0.1:{{ monitoring_ports.prometheus }}
+Environment=RAM_HISTORICO={{ monitoring_ram_historico_fichero }}
+ExecStart=/usr/local/bin/ram-servidores
+Nice=10
+TimeoutStartSec=120s
+PrivateTmp=yes
+ProtectHome=yes

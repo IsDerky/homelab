@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Aísla en red los contenedores de los servidores de juego (puente de Wings):
+# no pueden abrir conexiones a redes privadas (la LAN, la VPN, el servicio de
+# metadatos de la nube ni otros contenedores por su IP interna). Siguen
+# pudiendo salir a Internet, entrar por sus puertos publicados (también desde
+# otro contenedor del nodo, por la IP pública: DNAT) y usar el host por lo que
+# deje ufw (las bases de datos).
+#
+# Cadena AISLAR (IPv4 e IPv6) colgada de DOCKER-USER con -i <puente>. Sin
+# br_netfilter el tráfico entre contenedores del mismo puente no pasa por
+# iptables, así que se carga y se activa bridge-nf-call-ip(6)tables.
+# Idempotente: solo reconstruye la cadena si no está como debe. Deja en el
+# textfile de node-exporter si está activo y cuántos paquetes ha cortado.
+#
+# Configuración en /etc/aislar-contenedores.conf (variables de bash):
+#   PUENTE=pterodactyl0
+#   REDES4="10.0.0.0/8 ..."   REDES6="fc00::/7 fe80::/10"
+#   PERMITIR4="10.0.0.5:tcp:3306 ..."   PERMITIR6=""   (destino:proto:puerto)
+#   TEXTFILE=/var/lib/node-exporter/textfile
+set -euo pipefail
+CONF=${AISLAR_CONF:-/etc/aislar-contenedores.conf}
+PUENTE=pterodactyl0
+REDES4="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 100.64.0.0/10"
+REDES6="fc00::/7 fe80::/10"
+PERMITIR4=""
+PERMITIR6=""
+TEXTFILE=/var/lib/node-exporter/textfile
+# shellcheck disable=SC1090
+[ -f "$CONF" ] && . "$CONF"
+
+modprobe br_netfilter >/dev/null 2>&1 || true
+sysctl -qw net.bridge.bridge-nf-call-iptables=1 net.bridge.bridge-nf-call-ip6tables=1
+
+reglas() { # familia → reglas de la cadena, en formato de iptables -S
+  local redes permitir
+  if [ "$1" = 4 ]; then redes=$REDES4; permitir=$PERMITIR4; else redes=$REDES6; permitir=$PERMITIR6; fi
+  echo "-N AISLAR"
+  echo "-A AISLAR -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
+  echo "-A AISLAR -m conntrack --ctstate DNAT -j RETURN"
+  local p d proto puerto
+  for p in $permitir; do
+    d=${p%:*:*}; proto=${p#"$d":}; puerto=${proto#*:}; proto=${proto%%:*}
+    echo "-A AISLAR -d $d -p $proto -m $proto --dport $puerto -j RETURN"
+  done
+  for d in $redes; do
+    echo "-A AISLAR -d $d -m limit --limit 6/min -j LOG --log-prefix \"aislar: \""
+    echo "-A AISLAR -d $d -j DROP"
+  done
+}
+
+normaliza() { # quita /128 y /32 que iptables -S añade a las direcciones sueltas
+  sed -E 's#(-d [0-9a-f:.]+)/(32|128) #\1 #'
+}
+
+estado=1
+for fam in 4 6; do
+  if [ $fam = 4 ]; then ipt=iptables; else ipt=ip6tables; fi
+  if ! $ipt -S DOCKER-USER >/dev/null 2>&1; then
+    echo "$ipt: no hay cadena DOCKER-USER (¿Docker parado o con otro cortafuegos?)" >&2
+    estado=0
+    continue
+  fi
+  quiero=$(reglas $fam)
+  # la cadena desde dentro: las reglas que construye iptables al leerlas
+  tiene=$($ipt -S AISLAR 2>/dev/null | normaliza || true)
+  quiero_n=$($ipt -N AISLAR_TMP 2>/dev/null || $ipt -F AISLAR_TMP; while read -r r; do
+      [ "$r" = "-N AISLAR" ] && continue
+      eval "$ipt ${r/AISLAR/AISLAR_TMP}"
+    done <<<"$quiero"; $ipt -S AISLAR_TMP | sed 's/AISLAR_TMP/AISLAR/' | normaliza; $ipt -F AISLAR_TMP; $ipt -X AISLAR_TMP)
+  if [ "$tiene" != "$quiero_n" ]; then
+    $ipt -N AISLAR 2>/dev/null || true
+    $ipt -F AISLAR
+    while read -r r; do
+      [ "$r" = "-N AISLAR" ] && continue
+      eval "$ipt $r"
+    done <<<"$quiero"
+    echo "$ipt: cadena AISLAR puesta"
+  fi
+  # el salto, el primero de DOCKER-USER
+  if [ "$($ipt -S DOCKER-USER | sed -n 2p)" != "-A DOCKER-USER -i $PUENTE -j AISLAR" ]; then
+    while $ipt -D DOCKER-USER -i "$PUENTE" -j AISLAR 2>/dev/null; do :; done
+    $ipt -I DOCKER-USER 1 -i "$PUENTE" -j AISLAR
+    echo "$ipt: salto desde DOCKER-USER puesto"
+  fi
+done
+[ "$(cat /proc/sys/net/bridge/bridge-nf-call-iptables 2>/dev/null)" = 1 ] || estado=0
+
+if [ -d "$TEXTFILE" ]; then
+  cortados=0
+  for ipt in iptables ip6tables; do
+    n=$($ipt -L AISLAR -v -x -n 2>/dev/null | awk '$3 == "DROP" {s += $1} END {print s + 0}')
+    cortados=$((cortados + n))
+  done
+  tmp=$(mktemp "$TEXTFILE/.aislar.XXXXXX")
+  {
+    echo "# HELP aislar_contenedores_activo 1 si la cadena AISLAR y br_netfilter están puestos"
+    echo "# TYPE aislar_contenedores_activo gauge"
+    echo "aislar_contenedores_activo $estado"
+    echo "# HELP aislar_contenedores_cortados_total Paquetes de contenedores cortados hacia redes privadas"
+    echo "# TYPE aislar_contenedores_cortados_total counter"
+    echo "aislar_contenedores_cortados_total $cortados"
+  } >"$tmp"
+  chmod 644 "$tmp"
+  mv "$tmp" "$TEXTFILE/aislar.prom"
+fi
+[ $estado = 1 ]

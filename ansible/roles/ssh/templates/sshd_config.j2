@@ -16,6 +16,11 @@ X11Forwarding {{ 'yes' if ssh_x11_forwarding | bool else 'no' }}
 PrintMotd no
 AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server
+RevokedKeys /etc/ssh/revoked_keys
+{% if ssh_trusted_user_ca_keys %}
+TrustedUserCAKeys /etc/ssh/trusted_user_ca_keys
+AuthorizedPrincipalsFile /etc/ssh/principals/%u
+{% endif %}
 {% for block in ssh_match_blocks %}
 
 Match {{ block.match }}

@@ -1,4 +1,65 @@
 ---
+# Antes que sshd_config: el validate (sshd -t) necesita que existan los ficheros a los que apunta
+- name: Claves revocadas
+  ansible.builtin.copy:
+    content: "{{ (ssh_revoked_keys | join('\n') + '\n') if ssh_revoked_keys else '' }}"
+    dest: /etc/ssh/revoked_keys
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recargar ssh
+
+- name: CA de los certificados de usuario
+  ansible.builtin.copy:
+    content: "{{ ssh_trusted_user_ca_keys | join('\n') }}\n"
+    dest: /etc/ssh/trusted_user_ca_keys
+    owner: root
+    group: root
+    mode: "0644"
+  when: ssh_trusted_user_ca_keys | length > 0
+  notify: Recargar ssh
+
+- name: Sin CA, fuera el fichero
+  ansible.builtin.file:
+    path: /etc/ssh/trusted_user_ca_keys
+    state: absent
+  when: ssh_trusted_user_ca_keys | length == 0
+  notify: Recargar ssh
+
+- name: Carpeta de principals
+  ansible.builtin.file:
+    path: /etc/ssh/principals
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Principals por usuario
+  ansible.builtin.copy:
+    content: "{{ item.value | join('\n') }}\n"
+    dest: /etc/ssh/principals/{{ item.key }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ssh_authorized_principals | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Principals que ya no están en la lista
+  ansible.builtin.find:
+    paths: /etc/ssh/principals
+    file_type: file
+  register: ssh_principals_hay
+
+- name: Quitar principals sobrantes
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ ssh_principals_hay.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: (item.path | basename) not in ssh_authorized_principals
+
 - name: Configuración de sshd
   ansible.builtin.template:
     src: sshd_config.j2
