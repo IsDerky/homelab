@@ -15,8 +15,7 @@ Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
 Environment=HOME=/var/lib/derkyuweb
 {% if derkyu_hosting_umami_dominio %}
-# Id de la web en Umami (rol umami), para lo que se renderiza al vuelo; deploy-repo lo lee de
-# aquí para las páginas estáticas, que lo fijan al compilar
+# Id de la web en Umami (rol umami). Las páginas se pintan al pedirlas, así que lo leen al arrancar
 EnvironmentFile=-/etc/umami/{{ derkyu_hosting_umami_dominio }}.env
 {% endif %}
 # Usuario de la BD cifrado con systemd-creds (rol credenciales): systemd lo descifra en %d al
