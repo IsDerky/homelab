@@ -13,6 +13,23 @@ ssh_max_auth_tries: 3
 ssh_log_level: VERBOSE
 ssh_client_alive_count_max: 2
 
+# Certificados de usuario firmados por una CA propia. Claves públicas de la CA
+# (una por línea); vacío = sin certificados. Las authorized_keys siguen valiendo,
+# así que añadir la CA no deja a nadie fuera.
+#   ssh_trusted_user_ca_keys:
+#     - ssh-ed25519 AAAA... ca-homelab
+ssh_trusted_user_ca_keys: []
+# Qué principals del certificado entran como cada usuario. Un usuario sin
+# entrada no entra con certificado (solo con sus authorized_keys).
+#   ssh_authorized_principals:
+#     root: [admin]
+#     backup: [copias]
+ssh_authorized_principals: {}
+# Claves (públicas o de certificado) revocadas: no entran aunque el
+# certificado siga vigente. El fichero existe siempre (sshd rechaza todas las
+# claves si RevokedKeys apunta a un fichero que no está).
+ssh_revoked_keys: []
+
 # Bloques Match al final del fichero:
 #   - match: User backup Address 10.0.0.5
 #     options:
