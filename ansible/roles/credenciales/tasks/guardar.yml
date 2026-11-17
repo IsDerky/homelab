@@ -1,0 +1,15 @@
+---
+# Guarda un secreto cifrado. Variables:
+#   credenciales_nombre   nombre del fichero en /etc/credstore.encrypted (y de LoadCredentialEncrypted)
+#   credenciales_valor    contenido (del vault)
+#   credenciales_avisar   handler del rol que llama (reiniciar su servicio) si cambia
+# En --check no se ejecuta: credencial-guardar descifra para comparar y eso no cabe en seco.
+- name: Guardar la credencial {{ credenciales_nombre }}
+  ansible.builtin.command:
+    cmd: /usr/local/sbin/credencial-guardar {{ credenciales_nombre }} {{ credenciales_clave }}
+    stdin: "{{ credenciales_valor }}"
+    stdin_add_newline: false
+  register: credenciales_resultado
+  changed_when: credenciales_resultado.stdout == 'cambiada'
+  no_log: true
+  notify: "{{ credenciales_avisar }}"

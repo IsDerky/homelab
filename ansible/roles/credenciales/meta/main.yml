@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: credenciales
+  namespace: isderky
+  description: Secretos de los servicios cifrados con systemd-creds en vez de ficheros .env en claro
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

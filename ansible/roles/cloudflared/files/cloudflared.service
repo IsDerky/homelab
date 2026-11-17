@@ -4,7 +4,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-EnvironmentFile=/etc/cloudflared/tunnel.env
+# Token cifrado con systemd-creds (rol credenciales); systemd lo descifra en %d al arrancar
+LoadCredentialEncrypted=cloudflared-token:/etc/credstore.encrypted/cloudflared-token
+Environment=TUNNEL_TOKEN_FILE=%d/cloudflared-token
 TimeoutStartSec=0
 Type=notify
 ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run --protocol http2

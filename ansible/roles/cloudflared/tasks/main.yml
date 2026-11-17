@@ -28,15 +28,16 @@
     state: present
     update_cache: "{{ cloudflared_repo is changed }}"
 
+# Cifrado con systemd-creds; la unidad lo recibe con LoadCredentialEncrypted y cloudflared lo lee
+# de un fichero (TUNNEL_TOKEN_FILE), así el token no está en claro en disco ni en el entorno
 - name: Token del túnel
-  ansible.builtin.copy:
-    content: "{{ cloudflared_tunnel_env }}"
-    dest: /etc/cloudflared/tunnel.env
-    owner: root
-    group: root
-    mode: "0600"
-  no_log: true
-  notify: Reiniciar cloudflared
+  ansible.builtin.include_role:
+    name: credenciales
+    tasks_from: guardar
+  vars:
+    credenciales_nombre: cloudflared-token
+    credenciales_valor: "{{ cloudflared_tunnel_env | trim | regex_replace('^TUNNEL_TOKEN=', '') }}"
+    credenciales_avisar: Reiniciar cloudflared
 
 - name: Unidad cloudflared
   ansible.builtin.copy:
@@ -49,8 +50,17 @@
     - Recargar systemd
     - Reiniciar cloudflared
 
+- name: Aplicar la unidad nueva antes de quitar el fichero viejo
+  ansible.builtin.meta: flush_handlers
+
 - name: Servicio cloudflared
   ansible.builtin.systemd_service:
     name: cloudflared.service
     enabled: true
     state: started
+
+# El token en claro de antes de systemd-creds
+- name: Quitar tunnel.env
+  ansible.builtin.file:
+    path: /etc/cloudflared/tunnel.env
+    state: absent

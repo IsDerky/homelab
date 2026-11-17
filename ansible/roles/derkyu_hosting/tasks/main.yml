@@ -21,16 +21,16 @@
     - "{{ derkyu_hosting_root }}"
     - "{{ derkyu_hosting_root }}/releases"
 
-# La contraseña de la BD no va en la unidad (systemctl cat la enseñaría)
+# La contraseña de la BD no va en la unidad (systemctl cat la enseñaría): cifrada con systemd-creds,
+# la unidad la recibe con LoadCredentialEncrypted y credencial-env la pasa al entorno de Next
 - name: Variables de entorno
-  ansible.builtin.template:
-    src: derkyu-hosting.env.j2
-    dest: /etc/derkyu-hosting.env
-    owner: root
-    group: derkyuweb
-    mode: "0640"
-  no_log: true
-  notify: Reiniciar derkyu-hosting
+  ansible.builtin.include_role:
+    name: credenciales
+    tasks_from: guardar
+  vars:
+    credenciales_nombre: derkyu-hosting.env
+    credenciales_valor: "{{ lookup('ansible.builtin.template', 'derkyu-hosting.env.j2') }}"
+    credenciales_avisar: Reiniciar derkyu-hosting
 
 - name: Unidad systemd
   ansible.builtin.template:
@@ -63,6 +63,12 @@
     name: derkyu-hosting.service
     enabled: "{{ derkyu_hosting_enabled }}"
     state: "{{ 'started' if derkyu_hosting_enabled else 'stopped' }}"
+
+# Las variables en claro de antes de systemd-creds
+- name: Quitar el .env viejo
+  ansible.builtin.file:
+    path: /etc/derkyu-hosting.env
+    state: absent
 
 # deploy-repo usa la misma prueba antes de dar una versión por buena
 - name: Comprobar que responde

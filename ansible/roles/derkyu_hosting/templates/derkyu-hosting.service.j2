@@ -14,11 +14,13 @@ WorkingDirectory={{ derkyu_hosting_root }}/current
 Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
 Environment=HOME=/var/lib/derkyuweb
-EnvironmentFile=/etc/derkyu-hosting.env
+# Usuario de la BD cifrado con systemd-creds (rol credenciales): systemd lo descifra en %d al
+# arrancar y credencial-env lo pasa al entorno antes de lanzar Next
+LoadCredentialEncrypted=derkyu-hosting.env:/etc/credstore.encrypted/derkyu-hosting.env
 # -H localhost y no 127.0.0.1 (escucha igual en 127.0.0.1, que es el localhost de /etc/hosts): el proxy.ts
 # reescribe con la URL que Next le da (http://localhost:<puerto>/...) y Next solo la trata como interna si
 # coincide con su origen, que sale de -H. Con 127.0.0.1 se hacía un proxy a sí mismo y redirigía en bucle (308).
-ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H localhost -p {{ derkyu_hosting_port }}
+ExecStart=/usr/local/bin/credencial-env derkyu-hosting.env /usr/bin/node node_modules/next/dist/bin/next start -H localhost -p {{ derkyu_hosting_port }}
 Restart=always
 RestartSec=5
 SuccessExitStatus=143
