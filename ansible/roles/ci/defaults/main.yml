@@ -6,13 +6,16 @@
 ci_owner: IsDerky
 
 # nombre: etiqueta del runner y argumento de deploy-repo; github: el repo.
-# Tienen que coincidir con los casos de files/deploy-repo.
+# Cada uno necesita su caso en files/deploy-repo o sus pasos en ci_pasos.
 ci_repos:
   - { nombre: oficina, github: oficina }
   - { nombre: asistente, github: asistente }
   - { nombre: roninfc, github: roninfc }
-  - { nombre: derkyu-hosting, github: derkyu-hosting }
-  - { nombre: derkyu-bot, github: derkyu-bot }
+
+# Pasos de despliegue de los repos sin caso en deploy-repo: nombre -> fichero
+# en el controlador. deploy-repo los carga con source tras traer el commit.
+#   mi-web: "{{ inventory_dir }}/files/deploy-repo/mi-web.sh"
+ci_pasos: {}
 
 # Los que ya no despliegan por aquí: se para el runner, se borra todo y se da
 # de baja en GitHub (runner y deploy key). Mismo formato que ci_repos, más

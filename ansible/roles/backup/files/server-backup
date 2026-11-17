@@ -16,7 +16,7 @@
 #   Manual:  systemctl start --no-block server-backup@sistema
 #   Seguir:  journalctl -fu server-backup@sistema
 #
-# Pterodactyl: los volúmenes de los clientes se copian como archivos desde el
+# Pterodactyl: los volúmenes de los servidores se copian como archivos desde el
 # host, sin ejecutar nada dentro de sus servidores. La copia es "como si se
 # fuera la luz" (crash-consistent); por eso se guardan varias versiones.
 # -E: el trap ERR (aviso por DM) también salta dentro de las funciones
@@ -35,7 +35,6 @@ export RESTIC_PACK_SIZE=64
 STAGE=/var/backups/server-backup # volcados que se suben junto al resto
 BENTO=/home/bentonime/apps/bentonime
 VAULT=/opt/vaultwarden/data # si existe, su BD se vuelca como la de Bentonime
-CTRLPANEL=/var/www/ctrlpanel # si existe, va la app y se vuelca su BD
 BDSERV=bd-servidores # contenedor con las bases de los servidores (rol bd_servidores)
 BDSERV_VOLCAR=/usr/local/sbin/bd-servidores-volcar # del mismo rol: vuelca los tres motores
 
@@ -49,6 +48,18 @@ if [ -f "$SISTEMA_EXTRA" ]; then
   while read -r p; do
     case "$p" in /*) if [ -d "$p" ]; then extra+=("$p"); fi ;; esac
   done <"$SISTEMA_EXTRA"
+fi
+
+# Apps Laravel con BD en el MariaDB local (backup_apps_laravel): «carpeta bd
+# [mínimo de tablas]» por línea. Va la carpeta sin cachés y el volcado de la BD.
+APPS_LARAVEL=/etc/server-backup/apps-laravel
+apps_dir=() apps_bd=() apps_min=()
+if [ -f "$APPS_LARAVEL" ]; then
+  while read -r d b m; do
+    case "$d" in /*) if [ -d "$d" ] && [ -n "$b" ]; then
+      apps_dir+=("$d"); apps_bd+=("$b"); apps_min+=("${m:-1}")
+    fi ;; esac
+  done <"$APPS_LARAVEL"
 fi
 
 # Copia local: un repo restic en el disco USB, con la misma contraseña
@@ -164,8 +175,7 @@ paths_sistema() {
   for f in "$BENTO/.env.production" "$BENTO/data/.stream-secret"; do
     if [ -e "$f" ]; then paths+=("$f"); fi
   done
-  if [ -d "$CTRLPANEL" ]; then paths+=("$CTRLPANEL"); fi
-  paths+=("${extra[@]}")
+  paths+=("${apps_dir[@]}" "${extra[@]}")
   # Métricas de Prometheus: se regeneran, y serían hasta 2 GB cada 6 h
   # Cachés de compilación de root: se regeneran solas
   excludes=(--exclude /root/.cache
@@ -177,10 +187,10 @@ paths_sistema() {
     --exclude /opt/honeypot/var
     --exclude /opt/monitoring/data/prometheus
     # La BD de Vaultwarden en uso: va el volcado de STAGE
-    --exclude "$VAULT/db.sqlite3*"
-    --exclude "$CTRLPANEL/node_modules"
-    --exclude "$CTRLPANEL/storage/logs"
-    --exclude "$CTRLPANEL/storage/framework/cache")
+    --exclude "$VAULT/db.sqlite3*")
+  for d in "${apps_dir[@]}"; do
+    excludes+=(--exclude "$d/node_modules" --exclude "$d/storage/logs" --exclude "$d/storage/framework/cache")
+  done
   # En las rutas de más, las SQLite van por su volcado de STAGE; .bun es caché
   for p in "${extra[@]}"; do
     excludes+=(--exclude "$p/.bun")
@@ -296,10 +306,12 @@ case "$mode" in
     fi
     step="BD del panel"
     mariadb-dump --single-transaction --routines --triggers --databases panel >"$STAGE/panel.sql"
-    if [ -n "$(mariadb -N -e "SHOW DATABASES LIKE 'ctrlpanel'")" ]; then
-      step="BD de CtrlPanel"
-      mariadb-dump --single-transaction --routines --triggers --databases ctrlpanel >"$STAGE/ctrlpanel.sql"
-    fi
+    for b in "${apps_bd[@]}"; do
+      if [ -n "$(mariadb -N -e "SHOW DATABASES LIKE '$b'")" ]; then
+        step="BD de $b"
+        mariadb-dump --single-transaction --routines --triggers --databases "$b" >"$STAGE/$b.sql"
+      fi
+    done
     step="BD de los servidores"
     if [ -x "$BDSERV_VOLCAR" ]; then
       # MariaDB, PostgreSQL y MongoDB (los que estén en marcha), rol bd_servidores
@@ -423,12 +435,15 @@ case "$mode" in
     tablas_panel=$(grep -c '^CREATE TABLE' "$dumps/panel.sql")
     [ "$tablas_panel" -gt 20 ]
 
-    if [ -f "$dumps/ctrlpanel.sql" ]; then
-      step="volcado de CtrlPanel"
-      tail -n 1 "$dumps/ctrlpanel.sql" | grep -q 'Dump completed'
-      tablas_ctrlpanel=$(grep -c '^CREATE TABLE' "$dumps/ctrlpanel.sql")
-      [ "$tablas_ctrlpanel" -gt 20 ]
-    fi
+    for i in "${!apps_bd[@]}"; do
+      b=${apps_bd[$i]}
+      if [ -f "$dumps/$b.sql" ]; then
+        step="volcado de $b"
+        tail -n 1 "$dumps/$b.sql" | grep -q 'Dump completed'
+        tablas=$(grep -c '^CREATE TABLE' "$dumps/$b.sql")
+        [ "$tablas" -ge "${apps_min[$i]}" ]
+      fi
+    done
 
     if [ -f "$dumps/bd-servidores.sql" ]; then
       step="volcado de las BD de los servidores"

@@ -8,5 +8,3 @@
     - bentonime
     - adguard
     - code_server
-    - role: homepage
-      when: homepage_host is defined

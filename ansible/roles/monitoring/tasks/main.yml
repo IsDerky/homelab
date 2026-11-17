@@ -69,6 +69,17 @@
       {{ monitoring_images.prometheus }} check rules /r.yml
   notify: Recargar prometheus
 
+- name: Reglas de más
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ monitoring_dir }}/prometheus/rules/{{ item | basename }}"
+    mode: "0644"
+    validate: >-
+      docker run --rm --user 0 -v %s:/r.yml:ro --entrypoint promtool
+      {{ monitoring_images.prometheus }} check rules /r.yml
+  loop: "{{ monitoring_reglas_extra }}"
+  notify: Recargar prometheus
+
 - name: Objetivos de disponibilidad
   ansible.builtin.template:
     src: slo.yml.j2
@@ -136,6 +147,13 @@
     src: dashboards/
     dest: "{{ monitoring_dir }}/grafana/dashboards/"
     mode: "0644"
+
+- name: Dashboards de más
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ monitoring_dir }}/grafana/dashboards/{{ item | basename }}"
+    mode: "0644"
+  loop: "{{ monitoring_dashboards_extra }}"
 
 - name: Exportador de ops-collect
   when: monitoring_ops_group | length > 0

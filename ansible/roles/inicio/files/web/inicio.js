@@ -9,7 +9,7 @@ const crear = (etiqueta, clase, texto) => {
   return e;
 };
 
-// iconos de serie para los widgets (trazo, como los del área de clientes)
+// iconos de serie para los widgets (de trazo)
 const ICONOS = {
   sai: '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4"/><path d="M11 9l-2 4h4l-2 4"/>',
   nube: '<path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/>',
