@@ -67,6 +67,7 @@ NODOS_DIR=/var/lib/server-backup/nodos
 NODOS_SISTEMA=/var/lib/server-backup/nodos-sistema # config de Wings y estado.json (nodo-export)
 NODOS_KEY=/root/.ssh/nodos-backup
 NODOS_KNOWN=/root/.ssh/nodos_known_hosts
+traidos=() # nodos traídos bien en esta pasada (pull_nodes): etiqueta nodo-<nombre> en la copia
 
 mode="${1:-}"
 step=inicio
@@ -198,6 +199,9 @@ paths_clientes() {
   if [ -d "$NODOS_SISTEMA" ]; then paths+=("$NODOS_SISTEMA"); fi
   excludes=()
   keep=(--keep-daily 7 --keep-weekly 4 --keep-monthly 3)
+  # Cada copia lleva nodo-<nombre> por los nodos traídos en esa pasada: al caducar
+  # se agrupa solo por equipo para que esas etiquetas no partan la retención
+  group_by=host
 }
 
 paths_nas() {
@@ -209,11 +213,36 @@ paths_nas() {
 # Copia un modo al repositorio actual (RESTIC_REPOSITORY) y caduca lo viejo
 copy() {
   tag=$1
+  group_by=host,tags
   "paths_$tag"
+  local etiquetas=(--tag "$tag")
+  for n in "${traidos[@]}"; do etiquetas+=(--tag "nodo-$n"); done
   step="subida ($destino)"
-  backup --tag "$tag" "${excludes[@]}" "${paths[@]}"
+  backup "${etiquetas[@]}" "${excludes[@]}" "${paths[@]}"
   step="caducar versiones antiguas ($destino)"
-  r forget --tag "$tag" --group-by host,tags "${keep[@]}"
+  r forget --tag "$tag" --group-by "$group_by" "${keep[@]}"
+}
+
+# Puntos de restauración de clientes que quedan tras caducar, para quien quiera
+# enseñarlos (p. ej. el panel): fecha y nodos de fuera que se trajeron en esa
+# pasada (los de este equipo van siempre). No para la copia si falla.
+escribir_puntos() {
+  r snapshots --tag clientes --json | python3 -c '
+import json, os, re, sys
+from datetime import datetime
+puntos = []
+for s in json.load(sys.stdin):
+    # restic da nanosegundos y a veces «Z»: fromisoformat de Python 3.10 no los entiende
+    t = datetime.fromisoformat(re.sub(r"\.\d+", "", s["time"]).replace("Z", "+00:00"))
+    puntos.append({"t": int(t.timestamp()), "id": s["short_id"],
+                   "nodos": sorted(x[5:] for x in s.get("tags") or [] if x.startswith("nodo-"))})
+puntos.sort(key=lambda p: -p["t"])
+ruta = sys.argv[1]
+with open(ruta + ".tmp", "w") as f:
+    json.dump({"generado": int(datetime.now().timestamp()), "puntos": puntos}, f)
+os.chmod(ruta + ".tmp", 0o644)
+os.replace(ruta + ".tmp", ruta)
+' "$ESTADO/clientes-puntos.json"
 }
 
 # Trae los volúmenes de cada nodo a NODOS_DIR/<nombre> y lo de nodo-export a
@@ -222,6 +251,7 @@ copy() {
 # que se trajo, avisa por DM y queda en ESTADO (nodo-<nombre>-traida), que
 # vigila Prometheus.
 pull_nodes() {
+  traidos=()
   [ -f "$NODOS_CONF" ] || return 0
   local nombre host rc started ssh_cmd
   ssh_cmd="ssh -i $NODOS_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$NODOS_KNOWN -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=30"
@@ -239,6 +269,7 @@ pull_nodes() {
     fi
     if [ "$rc" -eq 0 ] || [ "$rc" -eq 24 ]; then
       estado "nodo-$nombre" traida true "$(max_age nodo-)"
+      traidos+=("$nombre")
     else
       estado "nodo-$nombre" traida false "$(max_age nodo-)" "rsync salió con $rc"
       /usr/local/bin/discord-dm -t "❌ No se pudo traer $nombre" -c red \
@@ -302,6 +333,8 @@ case "$mode" in
     pull_nodes
     copy clientes
     estado clientes drive true "$(max_age clientes)"
+    step="lista de puntos"
+    escribir_puntos || echo "No se pudo escribir la lista de puntos de clientes" >&2
     local_copy clientes
     ;;
 

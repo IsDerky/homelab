@@ -16,6 +16,8 @@ Los volúmenes de los servidores de juego se copian como ficheros desde el host,
 
 Los nodos no guardan ni la contraseña de restic ni el acceso a Drive. Es el servidor de casa el que tira de ellos: en cada nodo, root tiene su clave con `restrict,command="rrsync -ro /var/lib/pterodactyl"`. Con ella no hay shell ni reenvíos, y solo se puede leer esa carpeta. Además de los volúmenes se trae la config de Wings y un JSON con el estado del sistema, que deja cada 6 h un timer del nodo. Si un nodo no responde, la copia sigue con los demás y avisa.
 
+Cada copia de `clientes` lleva la etiqueta `nodo-<nombre>` de los nodos que se trajeron bien en esa pasada, y al terminar se escribe `clientes-puntos.json` con los puntos que quedan tras caducar (fecha y nodos de cada uno). Con eso el panel puede enseñar desde qué fechas se puede restaurar un servidor sin leer el repo. Al caducar, `clientes` agrupa solo por equipo para que esas etiquetas no partan la retención.
+
 ## Copia local
 
 `sistema` y `clientes` hacen después la misma copia en un repo restic del disco USB, en un proceso aparte. Si el disco no está o falla, la copia de Drive ya está hecha y no se marca como fallida. La carcasa USB no deja leer el SMART, así que la salud de ese disco se comprueba con el `check --read-data` semanal.
