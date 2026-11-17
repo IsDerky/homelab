@@ -220,6 +220,24 @@
       register: monitoring_cambios_units
       notify: Recargar systemd
 
+- name: Histórico de RAM por servidor
+  when: monitoring_ram_historico
+  block:
+    - name: Script ram-servidores
+      ansible.builtin.copy:
+        src: ram-servidores
+        dest: /usr/local/bin/ram-servidores
+        mode: "0755"
+
+    - name: Unidades ram-servidores
+      ansible.builtin.template:
+        src: ram-servidores.{{ item }}.j2
+        dest: /etc/systemd/system/ram-servidores.{{ item }}
+        mode: "0644"
+      loop: [service, timer]
+      register: monitoring_ram_units
+      notify: Recargar systemd
+
 - name: Carpeta del colector textfile
   ansible.builtin.file:
     path: "{{ monitoring_textfile_dir }}"
@@ -264,7 +282,8 @@
        + (['systemd-textfile.timer'] if monitoring_systemd_units | length > 0 else [])
        + (['ops-exporter.service'] if monitoring_ops_group | length > 0 else [])
        + (['alert-dm.service'] if monitoring_alert_dm else [])
-       + (['cambios-recoger.timer'] if monitoring_cambios and not (ansible_check_mode and monitoring_cambios_units is changed) else []) }}
+       + (['cambios-recoger.timer'] if monitoring_cambios and not (ansible_check_mode and monitoring_cambios_units is changed) else [])
+       + (['ram-servidores.timer'] if monitoring_ram_historico and not (ansible_check_mode and monitoring_ram_units is changed) else []) }}
 
 - name: Esperar a que escuchen
   ansible.builtin.wait_for:

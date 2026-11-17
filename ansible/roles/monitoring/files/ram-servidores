@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Resumen diario de la RAM de cada servidor de juego, para guardarlo más allá
+de la retención de Prometheus.
+
+Pregunta a Prometheus por las últimas 24 h de contenedor_memoria_bytes (rol
+abuso) y añade una línea JSON por servidor a HISTORICO:
+  {"fecha": "2026-11-17", "servidor": "abcd1234", "nodo": "local",
+   "p50": ..., "p95": ..., "max": ..., "limite": ..., "muestras": ...}
+(bytes; nodo = etiqueta nodo de Prometheus o "local"). Si ya hay líneas de esa
+fecha no escribe nada: se puede lanzar dos veces el mismo día.
+
+Uso: ram-servidores [AAAA-MM-DD]   (por defecto, ayer en hora local)
+Variables: RAM_PROMETHEUS (http://127.0.0.1:9090), RAM_HISTORICO
+(/var/lib/ram-servidores/historico.jsonl).
+"""
+import datetime
+import json
+import os
+import sys
+import time
+import urllib.parse
+import urllib.request
+
+PROM = os.environ.get("RAM_PROMETHEUS", "http://127.0.0.1:9090")
+HISTORICO = os.environ.get("RAM_HISTORICO", "/var/lib/ram-servidores/historico.jsonl")
+
+
+def consulta(expr, momento):
+    url = f"{PROM}/api/v1/query?" + urllib.parse.urlencode({"query": expr, "time": momento})
+    with urllib.request.urlopen(url, timeout=30) as r:
+        datos = json.load(r)
+    if datos.get("status") != "success":
+        raise RuntimeError(f"Prometheus: {datos}")
+    r = {}
+    for fila in datos["data"]["result"]:
+        m = fila["metric"]
+        r[(m.get("servidor", ""), m.get("nodo", "local"))] = float(fila["value"][1])
+    return r
+
+
+def ya_hay(fecha):
+    try:
+        with open(HISTORICO) as f:
+            return any(json.loads(l).get("fecha") == fecha for l in f if l.strip())
+    except FileNotFoundError:
+        return False
+
+
+def resumen(fecha):
+    dia = datetime.date.fromisoformat(fecha)
+    # fin del día en hora local
+    fin = time.mktime((dia + datetime.timedelta(days=1)).timetuple())
+    m = "contenedor_memoria_bytes"
+    series = {
+        "p50": consulta(f"quantile_over_time(0.5, {m}[1d])", fin),
+        "p95": consulta(f"quantile_over_time(0.95, {m}[1d])", fin),
+        "max": consulta(f"max_over_time({m}[1d])", fin),
+        "muestras": consulta(f"count_over_time({m}[1d])", fin),
+        "limite": consulta("max_over_time(contenedor_memoria_limite_bytes[1d])", fin),
+    }
+    filas = []
+    for clave in sorted(series["max"]):
+        servidor, nodo = clave
+        if not servidor:
+            continue
+        fila = {"fecha": fecha, "servidor": servidor, "nodo": nodo}
+        for k, v in series.items():
+            if clave in v:
+                fila[k] = int(v[clave])
+        filas.append(fila)
+    return filas
+
+
+def main():
+    fecha = sys.argv[1] if len(sys.argv) > 1 else (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    if ya_hay(fecha):
+        print(f"{fecha}: ya está en {HISTORICO}")
+        return
+    filas = resumen(fecha)
+    os.makedirs(os.path.dirname(HISTORICO), exist_ok=True)
+    with open(HISTORICO, "a") as f:
+        for fila in filas:
+            f.write(json.dumps(fila, separators=(",", ":")) + "\n")
+    print(f"{fecha}: {len(filas)} servidores")
+
+
+if __name__ == "__main__":
+    main()
