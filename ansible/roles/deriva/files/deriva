@@ -52,14 +52,23 @@ traer "$REPO_CONFIG" "$DIR/config" || fallo "no se pudo traer el inventario"
   -p "$DIR/colecciones" >/dev/null || fallo "colecciones"
 
 cd "$DIR/codigo/ansible" || fallo "sin carpeta ansible"
-"$DIR/venv/bin/ansible-playbook" -i "$DIR/config/inventory.ini" playbooks/site.yml \
-  --check --limit "$LIMITE" --skip-tags "$SALTAR" -e ansible_connection=local > "$LOG" 2>&1
+# El repo de config puede traer roles y su propio site.yml, que va después
+export ANSIBLE_ROLES_PATH=$DIR/codigo/ansible/roles:$DIR/config/roles
+playbooks=("$DIR/codigo/ansible/playbooks/site.yml")
+[ -f "$DIR/config/playbooks/site.yml" ] && playbooks+=("$DIR/config/playbooks/site.yml")
+: > "$LOG"
+for p in "${playbooks[@]}"; do
+  "$DIR/venv/bin/ansible-playbook" -i "$DIR/config/inventory.ini" "$p" \
+    --check --limit "$LIMITE" --skip-tags "$SALTAR" -e ansible_connection=local >> "$LOG" 2>&1
+done
 
-recap=$(grep -E "^$LIMITE +:" "$LOG" | tail -1)
-cambios=$(sed -n 's/.* changed=\([0-9]*\).*/\1/p' <<<"$recap")
-fallidas=$(sed -n 's/.* failed=\([0-9]*\).*/\1/p' <<<"$recap")
-inalcanzable=$(sed -n 's/.* unreachable=\([0-9]*\).*/\1/p' <<<"$recap")
-[ -n "$cambios" ] || fallo "no hay resumen en $LOG"
+# Un resumen por playbook: se suman
+recaps=$(grep -E "^$LIMITE +:" "$LOG")
+[ "$(grep -c . <<<"$recaps")" -eq "${#playbooks[@]}" ] || fallo "falta algún resumen en $LOG"
+suma() { sed -n "s/.* $1=\([0-9]*\).*/\1/p" <<<"$recaps" | awk '{s += $1} END {print s + 0}'; }
+cambios=$(suma changed)
+fallidas=$(suma failed)
+inalcanzable=$(suma unreachable)
 
 # Qué tareas, para mirarlo sin leer el log entero (que tiene más detalle y es
 # solo de root). Solo nombres de tareas: legible para todos.

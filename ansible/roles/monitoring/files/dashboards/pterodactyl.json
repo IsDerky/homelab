@@ -41,7 +41,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "probe_success{job=\"tls\", nombre=~\"paidnode|n1|nodo2\"}",
+          "expr": "probe_success{job=\"tls\", instance=~\".+:8080/?\"}",
           "legendFormat": "{{nombre}}",
           "refId": "A"
         }

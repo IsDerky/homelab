@@ -1,10 +1,7 @@
 ---
-# Webs traídas de fuera. El vhost de hosting va en el rol nginx (nginx_sites).
+# Webs traídas de fuera. Sus vhosts van en el rol nginx (nginx_sites).
 - name: Webs
   hosts: homelab
   become: true
   roles:
     - roninfc
-    - derkyu_hosting
-    - role: ctrlpanel
-      when: ctrlpanel_server_name is defined

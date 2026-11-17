@@ -49,6 +49,38 @@
     group: root
     mode: "0755"
 
+- name: Repos que puede desplegar
+  ansible.builtin.copy:
+    content: |
+      # Lo escribe Ansible (ci_repos): nombre y repo de GitHub
+      {% for r in ci_repos %}
+      {{ r.nombre }} {{ r.github }}
+      {% endfor %}
+    dest: /etc/deploy-repo/repos
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Carpeta de pasos de más
+  ansible.builtin.file:
+    path: /etc/deploy-repo/pasos
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Pasos de despliegue de más
+  ansible.builtin.copy:
+    src: "{{ item.value }}"
+    dest: /etc/deploy-repo/pasos/{{ item.key }}.sh
+    owner: root
+    group: root
+    mode: "0644"
+    validate: bash -n %s
+  loop: "{{ ci_pasos | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
 - name: Clave de host de GitHub fijada
   ansible.builtin.copy:
     content: "{{ ci_github_host_key }}\n"

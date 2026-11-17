@@ -55,6 +55,13 @@ backup_remote_nodes: []
 #   - /var/lib/mi-app
 backup_sistema_extra: []
 
+# Apps Laravel con BD en el MariaDB local: la carpeta va al modo sistema sin
+# node_modules ni cachés, la BD se vuelca y el simulacro comprueba el volcado.
+#   - dir: /var/www/mi-app
+#     bd: miapp
+#     min_tablas: 10
+backup_apps_laravel: []
+
 # Secretos: definirlos con Ansible Vault. Solo se escriben si el fichero no
 # existe (máquina nueva); si ya está, el rol comprueba que coincide.
 backup_restic_password: ""

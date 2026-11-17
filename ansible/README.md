@@ -13,12 +13,11 @@ Roles para montar piezas del homelab:
 - `bentonime`: la parte de sistema de la app principal (usuario, unidad systemd, sudo mínimo para el deploy). El código lo despliega su CI.
 - `adguard`: AdGuard Home en Docker Compose como servicio systemd, con Unbound opcional (`playbooks/apps.yml`, junto con `bentonime`).
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
-- `inicio`: página de inicio propia, estática, con carpetas, widgets y el estado de cada web sacados de Prometheus (`playbooks/inicio.yml`). Sustituye a `homepage`.
+- `inicio`: página de inicio propia, estática, con carpetas, widgets y el estado de cada web sacados de Prometheus (`playbooks/inicio.yml`).
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
 - `caddy_webs`: Caddy delante de los servidores de webs (HTTPS sin puerto y dominios propios); lo configura el panel por la API (`playbooks/caddy-webs.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
-- `ctrlpanel`: la parte de sistema de CtrlPanel (Laravel) con usuario y pool de PHP-FPM propios, y su migración desde otra máquina por fases (`playbooks/migrar-ctrlpanel.yml`).
 - `ci`: runners de GitHub Actions en el servidor que solo pueden desplegar con `deploy-repo`, más sus deploy keys y el registro en GitHub (`playbooks/ci.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
@@ -143,6 +142,7 @@ La clave se genera en el servidor (`/root/.ssh/nodos-backup`) y la segunda jugad
 | `backup_modes` | sistema, clientes, mantenimiento, simulacro | Timers que se instalan. Hay también `nas` |
 | `backup_local_mount` | `""` | Disco para la copia local. Vacío = sin copia local |
 | `backup_remote_nodes` | `[]` | Nodos de los que traer los volúmenes (`nombre`, `host`) |
+| `backup_apps_laravel` | `[]` | `{dir, bd, min_tablas}`. La carpeta va al modo `sistema` sin `node_modules` ni cachés, la BD se vuelca y el simulacro comprueba que el volcado está entero |
 | `backup_restic_version` / `_sha256` | `0.19.1` | Sumas por arquitectura (`amd64`, `arm64`) |
 | `backup_rclone_version` / `_sha256` | `1.75.2` | |
 
@@ -277,7 +277,7 @@ Cada servicio que solo se usa desde casa tiene su propio nombre (`grafana.derkyu
 
 ```yaml
 nginx_lan_zone: derkyu.lol
-nginx_lan_ip: 192.168.1.50
+nginx_lan_ip: 192.168.1.10
 nginx_lan_names: [inicio, oficina, honeypot, grafana]
 ```
 
@@ -312,7 +312,7 @@ Con `adguard_unbound: true`, AdGuard deja de mandar las consultas a un DNS públ
 - El upstream está en `conf/AdGuardHome.yaml`, que es de AdGuard: el rol lo lee, cambia solo `upstream_dns` y `fallback_dns`, guarda copia del anterior y reinicia el contenedor. Como respaldo se queda con los upstream de antes (o `adguard_fallback_dns`), así que si Unbound se cae la casa sigue teniendo DNS.
 - Activarlo la primera vez recrea AdGuard (cambia de red): unos segundos sin DNS.
 - Que la LAN resuelve se comprueba desde un cliente permitido, no desde el servidor: con `allowed_clients`, AdGuard le responde REFUSED al propio servidor. Desde Windows: `Resolve-DnsName nlnetlabs.nl -Server <ip>` tiene que resolver y `dnssec-failed.org` tiene que fallar.
-- Unbound descarta las respuestas que apuntan a IPs privadas (protección contra DNS rebinding), así que un registro público como `oficina.derkyu.lol → 192.168.1.50` se queda sin respuesta. Los dominios de `adguard_unbound_private_domains` sí pueden devolverlas; el rol los pone en `unbound/lan.conf`, que se monta en `custom.conf.d/` de la imagen.
+- Unbound descarta las respuestas que apuntan a IPs privadas (protección contra DNS rebinding), así que un registro público como `oficina.derkyu.lol → 192.168.1.10` se queda sin respuesta. Los dominios de `adguard_unbound_private_domains` sí pueden devolverlas; el rol los pone en `unbound/lan.conf`, que se monta en `custom.conf.d/` de la imagen.
 
 | Variable | Por defecto | |
 |---|---|---|
@@ -353,22 +353,6 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 | `inicio_prometheus` | `http://127.0.0.1:9090` | Prometheus (el servicio solo tiene red a localhost) |
 | `inicio_dir` | `/var/www/inicio` | Dónde va la página |
 
-## Rol `homepage`
-
-Una página de inicio con [Homepage](https://gethomepage.dev): una tarjeta por servicio con su icono, un punto de estado y, arriba, la CPU, la memoria y el disco del servidor. Va en Docker Compose como servicio systemd, en `127.0.0.1:3010` (el 3000 es de AdGuard) y detrás de nginx.
-
-- **Iconos pixel-art propios** en `files/icons/`, con la paleta de la oficina. Salen de `files/iconos.py`: cada icono es un dibujo de 16×16 caracteres en el propio script, y `python3 iconos.py` regenera los SVG. Para uno nuevo, se añade el dibujo y se usa como `/icons/<nombre>.svg`.
-- **Estado de cada servicio con `siteMonitor`**, no con el socket de Docker: el socket es root en el servidor y una página web no lo necesita. El contenedor va con la red del host para que las comprobaciones salgan desde la IP de la LAN del servidor y pasen el `allow` de los vhosts.
-- La configuración (`services.yaml`, `settings.yaml`…) sale del inventario (`homepage_services`, `homepage_layout`) y Homepage la relee en cada petición: cambiarla no reinicia nada.
-
-| Variable | Por defecto | |
-|---|---|---|
-| `homepage_host` | `""` | Obligatoria. El nombre con el que se entra (Homepage rechaza otros `Host`) |
-| `homepage_services` | `[]` | Grupos y tarjetas, en el formato de `services.yaml` |
-| `homepage_layout` | `{}` | Columnas por grupo |
-| `homepage_title` | `Inicio` | |
-| `homepage_image` | `ghcr.io/gethomepage/homepage:v2.7.0` | |
-
 ## Rol `vaultwarden`
 
 [Vaultwarden](https://github.com/dani-garcia/vaultwarden) (servidor compatible con las apps de Bitwarden) en Docker Compose como servicio systemd, en `127.0.0.1:8086` y detrás de nginx. En mi caso solo se entra desde la LAN; fuera de casa las apps siguen funcionando con su copia local y sincronizan al volver.
@@ -393,7 +377,7 @@ Las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings:
 - Red del host escuchando solo en `bd_servidores_ip`. En la máquina del panel es la IP del host en la red de Wings (`pterodactyl0`, `172.18.0.1`); en un nodo de fuera, la IP del túnel de WireGuard: el panel llega por el túnel y los servidores del nodo también, porque es una IP de su propio host. No se publica nada con Docker, así que todo pasa por ufw: hacen falta reglas que abran los puertos desde la red de Wings por `pterodactyl0` y, en los nodos, desde el panel por `wg0`.
 - Usuario de sistema propio y contraseñas en ficheros. En MariaDB, `root` solo desde dentro del contenedor y el usuario del panel con `ALL PRIVILEGES ... WITH GRANT OPTION` (lo que pide Pterodactyl). En PostgreSQL el usuario del panel es el superusuario; `pg_hba` solo lo deja entrar desde `bd_servidores_panel_from`, y desde la red de Wings cada usuario solo entra a la base que se llama como él (`sameuser`). En MongoDB, `--auth` y el usuario del panel como `root`; cada servidor recibe un usuario con `readWrite` en su base. Los usuarios de administración se crean al inicializar cada motor: cambiar sus contraseñas después es a mano.
 - `bd-servidores-volcar <carpeta>` vuelca los motores que estén en marcha. En el servidor lo llama `server-backup sistema` (y el simulacro comprueba que cada volcado está entero); en los nodos, `nodo-export`, y la copia se lo trae con el resto.
-- En el panel: Admin → Databases, con la IP de arriba, el puerto de MariaDB y el usuario del panel, ligado al nodo. PostgreSQL y MongoDB los usa la extensión `derkyudatabases`.
+- En el panel: Admin → Databases, con la IP de arriba, el puerto de MariaDB y el usuario del panel, ligado al nodo. PostgreSQL y MongoDB los usa una extensión del panel.
 
 | Variable | Por defecto | |
 |---|---|---|
@@ -424,9 +408,9 @@ Las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings:
 
 ## Rol `caddy_webs`
 
-Caddy en los nodos donde se venden webs, para servirlas por HTTPS sin puerto: la dirección gratis (`<nombre>.web.<dominio>`) y los dominios propios del cliente. Va hacia el puerto principal de cada servidor.
+Caddy en los nodos con servidores de webs, para servirlas por HTTPS sin puerto: la dirección por defecto (`<nombre>.web.<dominio>`) y los dominios propios de cada web. Va hacia el puerto principal de cada servidor.
 
-- El rol no escribe rutas. La configuración la hace la extensión `derkyudomains` del panel: carga la del nodo entera con `POST /load` en cada cambio y cada hora, y Caddy la guarda y la recupera al arrancar (`--resume`). `inicial.json` solo vale para el primer arranque: deja la API escuchando en `caddy_webs_admin` y nada más.
+- El rol no escribe rutas. La configuración la hace una extensión del panel: carga la del nodo entera con `POST /load` en cada cambio y cada hora, y Caddy la guarda y la recupera al arrancar (`--resume`). `inicial.json` solo vale para el primer arranque: deja la API escuchando en `caddy_webs_admin` y nada más.
 - Red del host. La API escucha en la IP del túnel; hace falta una regla de ufw que la abra solo desde el panel por `wg0`. Público solo el 443 (regla de ufw en el inventario y, en la imagen de Oracle, también en `rules.v4`, que el rol añade). Fuera, en la Security List de Oracle, también hay que abrir el 443.
 - El 80 se queda para certbot (el cert de Wings), así que los certificados salen por TLS-ALPN en el 443 y `http://` no redirige. Son on-demand: antes de pedir uno, Caddy pregunta al panel si el dominio está dado de alta.
 - `data/` (certificados) y `config/` (última configuración) no los toca Ansible.
@@ -454,30 +438,6 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 | `roninfc_memory_max` | `1536M` | Next y Chrome juntos |
 | `roninfc_check_path` / `roninfc_check_timeout` | `/api/partidos` / `90` | |
 
-## Rol `ctrlpanel`
-
-[CtrlPanel](https://github.com/Ctrlpanel-gg/panel) es un panel de facturación por créditos para Pterodactyl. El rol monta solo la parte de sistema; el código y el `.env` (con `APP_KEY` y las claves de las pasarelas) se traen de donde estaba.
-
-- **Usuario y pool de PHP-FPM propios.** Comparte PHP-FPM con el panel de Pterodactyl, pero cada uno con su usuario: un fallo en uno no puede tocar los ficheros del otro. nginx (`www-data`) es lo único que habla con su socket.
-- **En loopback y detrás del túnel.** El vhost escucha en `127.0.0.1:8085` sin TLS. La IP real sale de `CF-Connecting-IP`, solo si la petición viene de la propia máquina, y PHP ve HTTPS por `fastcgi_param`.
-- **Cola y planificador en systemd**, con el usuario de la app y `ProtectSystem=strict` (solo puede escribir en `storage/` y `bootstrap/cache`). El planificador va con un timer y no con el cron de root, como estaba.
-- **Apagado por defecto** (`ctrlpanel_enabled: false`). El planificador cobra créditos y suspende servidores en Pterodactyl: con dos copias encendidas lo haría dos veces.
-- La BD se crea con el cliente `mariadb` por el socket de root, sin PyMySQL, y la contraseña va por stdin. En el `.env` solo toca la conexión a la BD y el nivel de log. Logs con logrotate (en el sitio anterior el log en debug llegó a 2 GB).
-- `server-backup sistema` vuelca su BD y se lleva la app (sin logs ni `node_modules`). El simulacro comprueba el volcado.
-- **Vigilado.** Con `ctrlpanel_textfile_dir`, un timer deja cada 5 min para node-exporter `ctrlpanel_failed_jobs`, los pagos en processing desde hace más de 30 min (`ctrlpanel_pagos_sin_confirmar`: el webhook de la pasarela no llega) y, si existe la tabla `derkyu_compras` del tema, las compras pagadas sin hacer o fallidas. Las alertas (rol `monitoring`) avisan si el planificador lleva más de 1 h sin ejecutarse, si falla 15 min seguidos, si aparecen trabajos fallidos nuevos, si un pago se queda sin confirmar o si una compra pagada se atasca o falla.
-
-`playbooks/migrar-ctrlpanel.yml` hace el traslado por fases con tags: `copia` (BD y app del origen al controlador), `instalar` (la monta con todo parado; se puede repetir), `corte` (mantenimiento en el origen, copia final, importar y encender), `volver` (deshace el corte) y `retirar` (apaga CtrlPanel en el origen). Sin tags no hace nada.
-
-| Variable | Por defecto | |
-|---|---|---|
-| `ctrlpanel_server_name` | `""` | Obligatoria |
-| `ctrlpanel_db_password` | `""` | Obligatoria. En el vault |
-| `ctrlpanel_enabled` | `false` | Cola y planificador |
-| `ctrlpanel_port` | `8085` | |
-| `ctrlpanel_nginx_user` | `www-data` | Solo atraviesa la carpeta (ACL) para servir `public/` |
-| `ctrlpanel_log_level` | `error` | |
-| `ctrlpanel_textfile_dir` | `""` | Colector textfile de node-exporter. Vacío = sin métricas |
-
 ## Rol `ci`
 
 Push a `main` → las comprobaciones corren en `ubuntu-latest` → el runner del servidor (uno por repo, con su nombre como etiqueta) ejecuta `sudo -n /usr/local/sbin/deploy-repo <repo> "$GITHUB_SHA"`. Los workflows comunes están en [IsDerky/ci](https://github.com/IsDerky/ci).
@@ -490,7 +450,8 @@ Push a `main` → las comprobaciones corren en `ubuntu-latest` → el runner del
 
 | Variable | Por defecto | |
 |---|---|---|
-| `ci_repos` | oficina, asistente, roninfc, derkyu-hosting, derkyu-bot | `{nombre, github}`. Tienen que coincidir con los casos de `deploy-repo` |
+| `ci_repos` | oficina, asistente, roninfc | `{nombre, github}`. Cada uno con su caso en `deploy-repo` o sus pasos en `ci_pasos` |
+| `ci_pasos` | `{}` | `nombre: fichero` del controlador con los pasos de despliegue de un repo sin caso propio. `deploy-repo` los carga con `source` tras traer el commit |
 | `ci_repos_retirados` | `[]` | Mismo formato, más `borrar` (lista de carpetas que dejó su despliegue) |
 | `ci_github` | `true` | Deploy keys y runners nuevos con `gh` |
 | `ci_runners_dir` | `/opt/actions-runner` | |
@@ -529,8 +490,6 @@ Pocas y solo de cosas graves. Lo demás (backups, certificados de este servidor,
 | `SinRespuestaHTTPS` | Una comprobación TLS falla durante 10 min (un reinicio de Wings tarda segundos y no cuenta) |
 | `CertificadoPorCaducar` | Un certificado de las comprobaciones TLS caduca en menos de 14 días. Certbot renueva a 30, así que a 14 algo ha fallado; el caso típico es Wings, que solo lee el certificado al arrancar |
 | `ContenidoRoto` | Una comprobación de contenido falla dos veces seguidas |
-| `PlanificadorParado` / `PlanificadorFallando` | El planificador de CtrlPanel (cobros y suspensiones) lleva más de 1 h sin ejecutarse, o falla 15 min seguidos |
-| `TrabajosFallidosCtrlPanel` | Hay trabajos fallidos nuevos en la cola de CtrlPanel en la última hora |
 
 **El SLO.** Cada comprobación HTTP tiene un objetivo de disponibilidad en 30 días (`monitoring_slo_target`, 99,5 % por defecto: unas 3,6 h de fallo al mes). Avisar en cuanto falla una comprobación sería ruido. Esperar a incumplir el objetivo sería avisar tarde. La alerta mira **a qué ritmo se gasta el margen**, en dos ventanas a la vez, como propone el libro de SRE de Google: a 14,4 veces el ritmo permitido, el margen del mes se acaba en unos 2 días. La ventana larga (1 h) evita que salte por un fallo suelto. La corta (5 min) hace que se apague en cuanto se arregla.
 
@@ -540,6 +499,7 @@ Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): 
 
 | Variable | Por defecto | |
 |---|---|---|
+| `monitoring_reglas_extra` / `monitoring_dashboards_extra` | `[]` | Ficheros del controlador con reglas de Prometheus y dashboards de Grafana de más (por ejemplo, del inventario privado) |
 | `monitoring_grafana_admin_password` | `""` | Obligatoria. En el vault |
 | `monitoring_grafana_root_url` | `http://127.0.0.1:3005/` | Si va detrás de nginx en un subdirectorio, la URL completa |
 | `monitoring_grafana_anonymous_viewer` | `false` | Ver sin iniciar sesión (rol Viewer) |
@@ -665,7 +625,7 @@ Que `site.yml` dé `changed=0` el día que se aplica no dice nada de una semana 
 
 | Variable | Por defecto | |
 |---|---|---|
-| `deriva_repo_codigo` / `deriva_repo_config` | `""` | Obligatorias. URL del código (https) y del inventario (SSH) |
+| `deriva_repo_codigo` / `deriva_repo_config` | `""` | Obligatorias. URL del código (https) y del inventario (SSH). Si el del inventario trae `playbooks/site.yml` (y `roles/`), también se comprueba, después del público |
 | `deriva_github_config` | `""` | `owner/repo` del inventario para dar de alta la deploy key. Vacío = a mano |
 | `deriva_skip_tags` | `[nodos]` | Lo que no se puede comprobar desde la propia máquina |
 | `deriva_calendario` | `*-*-* 03:15` | `OnCalendar` del timer |

@@ -1,5 +1,5 @@
 ---
-# Página de inicio propia (sustituye a Homepage): iconos cuadrados con el nombre
+# Página de inicio propia: iconos cuadrados con el nombre
 # debajo, carpetas que se abren encima y widgets con cifras de Prometheus.
 # La página es estática; los datos los escribe inicio-datos cada 30 s en
 # /run/inicio/datos.json con las consultas de aquí (el navegador nunca habla
@@ -38,7 +38,7 @@ inicio_iconos_dir: ""
 #     url: https://oficina.example.com/      # se abre en otra pestaña; sin url no es enlace (p. ej. el NAS)
 #     sonda: https://oficina.example.com/    # instance de probe_success para el punto verde/rojo
 #
-#   - carpeta: hosting
-#     nombre: Hosting
+#   - carpeta: juegos
+#     nombre: Juegos
 #     apps: [ ...apps como arriba... ]
 inicio_elementos: []

@@ -20,7 +20,6 @@ Aquí no hay IPs, dominios ni credenciales. La configuración está en [Ansible]
 | code-server | usuario sin privilegios, detrás de un proxy con TOTP | Cloudflare Tunnel |
 | AdGuard Home + Unbound | Docker Compose; Unbound resuelve desde los raíz y valida DNSSEC | Solo LAN (DNS y DoH) |
 | Vaultwarden | Docker Compose, usuario propio, solo loopback | Solo LAN |
-| Homepage | Docker Compose, iconos pixel-art propios | Solo LAN |
 | Prometheus, Alertmanager, Grafana | Docker Compose con la red del host, solo loopback | Grafana solo LAN |
 | Panel de estado y del honeypot | web estática + API local del bot | Solo LAN |
 | Honeypot Cowrie | Docker, aislado con iptables | Puertos 22 y 23 del router |

@@ -5,8 +5,8 @@ caddy_webs_image: caddy:2.10.2
 caddy_webs_mem: 256m
 
 # Dirección de la API de administración (IP:puerto). Obligatoria. En los nodos,
-# la IP del túnel: el panel le carga la configuración entera por ahí (extensión
-# derkyudomains) y nadie más la ve (ufw solo la abre desde el panel por wg0).
+# la IP del túnel: el panel le carga la configuración entera por ahí (una
+# extensión) y nadie más la ve (ufw solo la abre desde el panel por wg0).
 caddy_webs_admin: ""
 
 # Unidad que tiene que estar arriba antes (sin wg0 no existe la IP del admin)

@@ -87,6 +87,18 @@
     group: root
     mode: "0644"
 
+- name: Apps Laravel del modo sistema
+  ansible.builtin.copy:
+    content: |
+      # Lo escribe Ansible (backup_apps_laravel): carpeta, BD y mínimo de tablas
+      {% for app in backup_apps_laravel %}
+      {{ app.dir }} {{ app.bd }} {{ app.min_tablas | default(1) }}
+      {% endfor %}
+    dest: /etc/server-backup/apps-laravel
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Unidad server-backup@
   ansible.builtin.copy:
     src: server-backup@.service

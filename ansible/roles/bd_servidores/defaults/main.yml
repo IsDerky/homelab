@@ -14,8 +14,8 @@ bd_servidores_ip: ""
 # no hay IP a la que atarse)
 bd_servidores_after: ""
 
-# Usuario con el que el panel (Pterodactyl para MariaDB, la extensión
-# derkyudatabases para PostgreSQL y MongoDB) crea bases y usuarios
+# Usuario con el que el panel (Pterodactyl para MariaDB, una extensión
+# para PostgreSQL y MongoDB) crea bases y usuarios
 bd_servidores_panel_user: pterodactyl
 
 # Desde dónde puede entrar ese usuario en PostgreSQL (pg_hba). En la máquina

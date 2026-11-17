@@ -4,7 +4,7 @@ El VPS no se renueva. De todo lo que tenía solo se traen dos webs:
 
 | Web | Qué es | En el servidor |
 |---|---|---|
-| Estática | Vite (SPA), antes con `serve` en PM2 | nginx en `127.0.0.1:8084`, vhost `hosting-derkyu` |
+| Estática | Vite (SPA), antes con `serve` en PM2 | nginx en `127.0.0.1:8084`, vhost `web-estatica` |
 | Next.js | Next 15 + puppeteer, antes en PM2 como root | `roninfc.service` en `127.0.0.1:3051` |
 
 Lo demás (proxys viejos, una app de 2024, el panel del VPS, FTP, correo local) se deja morir sin copia. Ninguna de las dos webs usa base de datos, así que no hay datos que mover: solo código, y ese ya lo publica el CI.
@@ -23,14 +23,14 @@ Encender en el servidor y cambiar el DNS son pasos separados a propósito: la we
 1. CI en verde y la versión publicada igual al último commit de `main`:
    ```bash
    gh api repos/<usuario>/<repo>/commits/main --jq .sha
-   readlink -f /srv/roninfc/current   # o /var/www/hosting-derkyu
+   readlink -f /srv/roninfc/current   # o /var/www/web-estatica
    ```
 2. El servidor está como dice Ansible: `ansible-playbook playbooks/site.yml --check` sin cambios.
 3. Hay backup reciente del sistema (el vigilante no ha avisado).
 
 ## Corte de la web estática (primero: es la de menos riesgo)
 
-1. En el inventario, `enabled: true` en el vhost `hosting-derkyu` y:
+1. En el inventario, `enabled: true` en el vhost `web-estatica` y:
    ```bash
    ansible-playbook playbooks/nginx.yml
    ```
@@ -42,7 +42,7 @@ Encender en el servidor y cambiar el DNS son pasos separados a propósito: la we
 3. Comprobar:
    ```bash
    curl -sI https://<dominio>/          # 200
-   tail -f /var/log/nginx/hosting-derkyu.access.log   # llegan las visitas
+   tail -f /var/log/nginx/web-estatica.access.log   # llegan las visitas
    ```
 
 **Vuelta atrás**: quitar los Public Hostnames, volver a poner el registro A al VPS y `enabled: false` + `nginx.yml`.

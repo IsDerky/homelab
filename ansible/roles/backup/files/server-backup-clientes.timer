@@ -1,5 +1,5 @@
 [Unit]
-Description=Backup diario de Pterodactyl (volúmenes de clientes) a las 05:30
+Description=Backup diario de Pterodactyl (volúmenes de los servidores) a las 05:30
 
 [Timer]
 OnCalendar=*-*-* 05:30

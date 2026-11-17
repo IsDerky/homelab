@@ -1,6 +1,12 @@
 ---
 monitoring_dir: /opt/monitoring
 
+# Reglas de Prometheus y dashboards de Grafana de más, como ficheros del
+# controlador (p. ej. "{{ inventory_dir }}/files/monitoring/reglas/mias.yml").
+# Van junto a los del rol con el mismo nombre de fichero.
+monitoring_reglas_extra: []
+monitoring_dashboards_extra: []
+
 monitoring_images:
   prometheus: prom/prometheus:v3.15.1
   alertmanager: prom/alertmanager:v0.34.1
