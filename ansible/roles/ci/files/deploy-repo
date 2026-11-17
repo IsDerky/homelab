@@ -44,6 +44,9 @@ finish() {
   rm -f "$OBRAS/$REPO"
   if [[ $code -ne 0 ]]; then
     /usr/local/bin/discord-dm "Falló el despliegue de $REPO ${SHA:0:7} (fase: $phase). Mira el run en GitHub Actions." || true
+  else
+    # Para cambios-recoger (anotaciones de Grafana y avisos)
+    logger -t deploy-repo "Desplegado $REPO ${SHA:0:7}" || true
   fi
   exit "$code"
 }

@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""Qué ha cambiado en la máquina, para las anotaciones de Grafana y los avisos.
+
+Cada pasada mira lo nuevo desde la anterior y lo apunta en EVENTOS (una línea
+JSON por cambio: t, tipo, texto) y como anotación de Grafana con la etiqueta
+«cambio» (y el tipo). alert-dm lee EVENTOS para contar en cada aviso lo que
+cambió en las horas antes.
+
+Fuentes:
+  paquetes     /var/log/apt/history.log (apt a mano y las automáticas)
+  reinicio     cambio de boot_id
+  ansible      cada módulo de Ansible deja en el journal «ansible-<módulo>
+               Invoked with …»; se agrupan por pasada (sin setup)
+  despliegue   deploy-repo (logger -t deploy-repo al terminar bien)
+  config       commits del repo de config-git, si existe
+
+Variables (para pruebas): CAMBIOS_DIR, CAMBIOS_APT, CAMBIOS_BOOT_ID,
+CAMBIOS_BTIME (segundos), CAMBIOS_JOURNAL (fichero con la salida de journalctl
+-o json en vez de llamarlo), CAMBIOS_CONFIG_GIT, GRAFANA_URL, GRAFANA_USER,
+GRAFANA_PASS (sin URL no se anota en Grafana).
+"""
+import base64
+import json
+import os
+import re
+import subprocess
+import time
+import urllib.request
+from datetime import datetime
+
+DIR = os.environ.get("CAMBIOS_DIR", "/var/lib/cambios")
+EVENTOS = os.path.join(DIR, "eventos.jsonl")
+ESTADO = os.path.join(DIR, "estado.json")
+APT = os.environ.get("CAMBIOS_APT", "/var/log/apt/history.log")
+CONFIG_GIT = os.environ.get("CAMBIOS_CONFIG_GIT", "/var/lib/config-git")
+GRAFANA = os.environ.get("GRAFANA_URL", "").rstrip("/")
+GUARDAR_DIAS = 30
+# Ansible: sin módulos durante este rato se da la pasada por terminada
+ANSIBLE_QUIETO = 300
+# Lo que pasa Ansible en --check desde aquí (la deriva de cada noche) no cambia nada
+IGNORAR_UNIDADES = set(os.environ.get("CAMBIOS_IGNORAR_UNIDADES", "deriva.service").split(","))
+ANSIBLE_MODULO = re.compile(r"^ansible-(?:[\w]+\.)*?(\w+) Invoked with")
+
+
+def ahora():
+    return int(time.time())
+
+
+def lee_estado():
+    try:
+        with open(ESTADO) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def guarda(ruta, texto):
+    tmp = ruta + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(texto)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, ruta)
+
+
+# ───────── apt
+
+def paquetes(estado):
+    try:
+        st = os.stat(APT)
+    except OSError:
+        return []
+    pos = estado.get("apt", {})
+    inicio = pos.get("pos", 0) if pos.get("inodo") == st.st_ino and pos.get("pos", 0) <= st.st_size else 0
+    if "apt" not in estado:   # primera vez: no se cuenta lo de antes
+        inicio = st.st_size
+    with open(APT, encoding="utf-8", errors="replace") as f:
+        f.seek(inicio)
+        texto = f.read()
+        fin = f.tell()
+    eventos = []
+    # un bloque por operación; si el último no tiene End-Date todavía, se deja para la siguiente
+    for bloque in texto.split("\n\n"):
+        if "Start-Date:" not in bloque:
+            continue
+        if "End-Date:" not in bloque:
+            fin -= len(bloque.encode())
+            break
+        campos = dict(re.findall(r"^([A-Za-z-]+): (.*)$", bloque, re.M))
+        cuenta = {}
+        nombres = []
+        for clave, verbo in (("Upgrade", "actualizados"), ("Install", "instalados"), ("Remove", "quitados"), ("Purge", "quitados")):
+            if clave in campos:
+                pk = [p.split(":")[0].strip() for p in re.split(r"\),\s*", campos[clave]) if p.strip()]
+                cuenta[verbo] = cuenta.get(verbo, 0) + len(pk)
+                nombres += pk
+        if not cuenta:
+            continue
+        if "Requested-By" in campos:
+            quien = "a mano"
+        elif "Commandline" not in campos or "unattended" in campos["Commandline"]:
+            quien = "automáticas"
+        else:
+            quien = "root/Ansible"
+        try:
+            t = int(datetime.strptime(campos["End-Date"].split()[0] + " " + campos["End-Date"].split()[-1], "%Y-%m-%d %H:%M:%S").timestamp())
+        except (ValueError, IndexError):
+            t = ahora()
+        resumen = ", ".join(f"{n} {v}" for v, n in cuenta.items())
+        lista = ", ".join(nombres[:6]) + ("…" if len(nombres) > 6 else "")
+        eventos.append({"t": t, "tipo": "paquetes", "texto": f"Paquetes ({quien}): {resumen}: {lista}"})
+    estado["apt"] = {"inodo": st.st_ino, "pos": max(fin, inicio)}
+    return eventos
+
+
+# ───────── reinicio
+
+def reinicio(estado):
+    boot = os.environ.get("CAMBIOS_BOOT_ID") or open("/proc/sys/kernel/random/boot_id").read().strip()
+    anterior = estado.get("boot_id")
+    estado["boot_id"] = boot
+    if anterior is None or anterior == boot:
+        return []
+    btime = os.environ.get("CAMBIOS_BTIME")
+    if not btime:
+        btime = next(l.split()[1] for l in open("/proc/stat") if l.startswith("btime"))
+    return [{"t": int(btime), "tipo": "reinicio", "texto": "Reinicio de la máquina"}]
+
+
+# ───────── journal: Ansible y despliegues
+
+def journal(estado):
+    if os.environ.get("CAMBIOS_JOURNAL"):
+        lineas = open(os.environ["CAMBIOS_JOURNAL"]).read().splitlines()
+    else:
+        cmd = ["journalctl", "-o", "json", "--no-pager", "--output-fields=SYSLOG_IDENTIFIER,MESSAGE,_SYSTEMD_UNIT"]
+        cmd += ["--after-cursor", estado["cursor"]] if estado.get("cursor") else ["--since", "-5 min"]
+        lineas = subprocess.run(cmd, capture_output=True, text=True).stdout.splitlines()
+    eventos = []
+    run = estado.get("ansible")
+    for linea in lineas:
+        try:
+            e = json.loads(linea)
+        except ValueError:
+            continue
+        estado["cursor"] = e.get("__CURSOR", estado.get("cursor"))
+        ident = e.get("SYSLOG_IDENTIFIER") or ""
+        msg = e.get("MESSAGE") or ""
+        if isinstance(msg, list):   # journal da bytes como lista si no es UTF-8
+            msg = bytes(msg).decode("utf-8", "replace")
+        t = int(e.get("__REALTIME_TIMESTAMP", ahora() * 1_000_000)) // 1_000_000
+        # cada módulo deja «ansible-ansible.builtin.copy Invoked with …» (identificador python3.x);
+        # solo se usa el nombre del módulo, los argumentos no se guardan
+        m = ANSIBLE_MODULO.match(msg)
+        if m and m.group(1) != "setup" and e.get("_SYSTEMD_UNIT") not in IGNORAR_UNIDADES:
+            modulo = m.group(1)
+            if run and t - run["fin"] > ANSIBLE_QUIETO:
+                eventos.append(evento_ansible(run))
+                run = None
+            run = run or {"inicio": t, "fin": t, "n": 0, "modulos": {}}
+            run["fin"], run["n"] = t, run["n"] + 1
+            run["modulos"][modulo] = run["modulos"].get(modulo, 0) + 1
+        elif ident == "deploy-repo":
+            eventos.append({"t": t, "tipo": "despliegue", "texto": msg})
+    if run and ahora() - run["fin"] > ANSIBLE_QUIETO:
+        eventos.append(evento_ansible(run))
+        run = None
+    estado["ansible"] = run
+    return sorted(eventos, key=lambda e: e["t"])
+
+
+def evento_ansible(run):
+    mods = sorted(run["modulos"].items(), key=lambda x: -x[1])
+    lista = ", ".join(f"{m} ×{n}" for m, n in mods[:5])
+    dura = max(1, round((run["fin"] - run["inicio"]) / 60))
+    return {"t": run["inicio"], "tipo": "ansible", "texto": f"Ansible: {run['n']} tareas en ~{dura} min ({lista})"}
+
+
+# ───────── config-git
+
+def config(estado):
+    if not os.path.isdir(os.path.join(CONFIG_GIT, ".git")):
+        return []
+    head = subprocess.run(["git", "-C", CONFIG_GIT, "rev-parse", "-q", "--verify", "HEAD"], capture_output=True, text=True).stdout.strip()
+    anterior = estado.get("config_head")
+    estado["config_head"] = head or anterior
+    if not head or not anterior or head == anterior:
+        return []
+    log = subprocess.run(["git", "-C", CONFIG_GIT, "log", "--reverse", "--format=%H %ct", f"{anterior}..{head}"],
+                         capture_output=True, text=True).stdout.split("\n")
+    eventos = []
+    for l in filter(None, log):
+        sha, t = l.split()
+        ficheros = subprocess.run(["git", "-C", CONFIG_GIT, "show", "--name-only", "--format=", sha], capture_output=True, text=True).stdout.split()
+        nombres = [f.rsplit("/", 1)[-1].removesuffix(".json") for f in ficheros]
+        lista = ", ".join(nombres[:5]) + ("…" if len(nombres) > 5 else "")
+        eventos.append({"t": int(t), "tipo": "config", "texto": f"Config de los paneles ({len(ficheros)} ficheros): {lista}"})
+    return eventos
+
+
+# ───────── salida
+
+def anota(ev):
+    """Anotación en Grafana. False si no se pudo (se reintenta en la siguiente pasada)."""
+    if not GRAFANA:
+        return True
+    datos = json.dumps({"time": ev["t"] * 1000, "tags": ["cambio", ev["tipo"]], "text": ev["texto"]}).encode()
+    req = urllib.request.Request(f"{GRAFANA}/api/annotations", data=datos, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    if os.environ.get("GRAFANA_PASS"):
+        cred = base64.b64encode(f"{os.environ.get('GRAFANA_USER', 'admin')}:{os.environ['GRAFANA_PASS']}".encode()).decode()
+        req.add_header("Authorization", f"Basic {cred}")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return 200 <= r.status < 300
+    except OSError:
+        return False
+
+
+def main():
+    os.makedirs(DIR, mode=0o755, exist_ok=True)
+    estado = lee_estado()
+    nuevos = []
+    for fuente in (paquetes, reinicio, journal, config):
+        try:
+            nuevos += fuente(estado)
+        except Exception as e:   # una fuente rota no tapa las demás
+            print(f"cambios-recoger: {fuente.__name__}: {e}", flush=True)
+    nuevos.sort(key=lambda e: e["t"])
+
+    # eventos de los últimos 30 días + los nuevos
+    corte = ahora() - GUARDAR_DIAS * 86400
+    viejos = []
+    try:
+        with open(EVENTOS) as f:
+            viejos = [e for e in map(json.loads, filter(None, f.read().splitlines())) if e.get("t", 0) >= corte]
+    except (OSError, ValueError):
+        pass
+    guarda(EVENTOS, "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in viejos + nuevos))
+
+    pendientes = [e for e in estado.get("pendientes", []) + nuevos if not anota(e)]
+    estado["pendientes"] = pendientes[-50:]
+    guarda(ESTADO, json.dumps(estado))
+    for e in nuevos:
+        print(f"{e['tipo']}: {e['texto']}", flush=True)
+
+
+if __name__ == "__main__":
+    main()

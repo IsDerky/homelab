@@ -175,6 +175,32 @@
         - Recargar systemd
         - Reiniciar alert-dm
 
+- name: Qué ha cambiado (anotaciones de Grafana y avisos)
+  when: monitoring_cambios
+  block:
+    - name: Script cambios-recoger
+      ansible.builtin.copy:
+        src: cambios-recoger
+        dest: /usr/local/bin/cambios-recoger
+        mode: "0755"
+
+    - name: Contraseña de Grafana para las anotaciones
+      ansible.builtin.template:
+        src: cambios.env.j2
+        dest: /etc/cambios.env
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Unidades cambios-recoger
+      ansible.builtin.template:
+        src: cambios-recoger.{{ item }}.j2
+        dest: /etc/systemd/system/cambios-recoger.{{ item }}
+        mode: "0644"
+      loop: [service, timer]
+      notify: Recargar systemd
+
 - name: Carpeta del colector textfile
   ansible.builtin.file:
     path: "{{ monitoring_textfile_dir }}"
@@ -217,7 +243,8 @@
     {{ ['monitoring.service']
        + (['systemd-textfile.timer'] if monitoring_systemd_units | length > 0 else [])
        + (['ops-exporter.service'] if monitoring_ops_group | length > 0 else [])
-       + (['alert-dm.service'] if monitoring_alert_dm else []) }}
+       + (['alert-dm.service'] if monitoring_alert_dm else [])
+       + (['cambios-recoger.timer'] if monitoring_cambios else []) }}
 
 - name: Esperar a que escuchen
   ansible.builtin.wait_for:

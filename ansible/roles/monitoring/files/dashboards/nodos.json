@@ -37,7 +37,25 @@
     ]
   },
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "name": "Cambios",
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "iconColor": "rgba(255, 152, 48, 0.85)",
+        "target": {
+          "type": "tags",
+          "tags": [
+            "cambio"
+          ],
+          "matchAny": false,
+          "limit": 200
+        }
+      }
+    ]
   },
   "panels": [
     {
