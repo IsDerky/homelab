@@ -3,8 +3,11 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
 
+# Con daemon_reload propio: en webs.yml varios roles tienen «Recargar systemd» con el mismo nombre,
+# Ansible se queda con el del último rol y corría después de este reinicio (arrancaba con la unidad vieja)
 - name: Reiniciar derkyu-hosting
   ansible.builtin.systemd_service:
     name: derkyu-hosting.service
     state: restarted
+    daemon_reload: true
   when: derkyu_hosting_enabled
