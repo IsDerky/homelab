@@ -116,16 +116,16 @@ class CambiosTest(unittest.TestCase):
     def test_config_git(self):
         repo = os.path.join(self.d, "config")
         g = lambda *a: subprocess.run(["git", "-C", repo, *a], capture_output=True, check=True, text=True)
-        os.makedirs(os.path.join(repo, "ctrlpanel"))
+        os.makedirs(os.path.join(repo, "panel"))
         subprocess.run(["git", "init", "-q", repo], check=True)
         g("config", "user.email", "t@t"); g("config", "user.name", "t")
-        open(os.path.join(repo, "ctrlpanel", "productos.json"), "w").write("[]")
+        open(os.path.join(repo, "panel", "productos.json"), "w").write("[]")
         g("add", "-A"); g("commit", "-qm", "uno")
         cambios.CONFIG_GIT = repo
         estado = {}
         self.assertEqual(cambios.config(estado), [], "la primera vez solo apunta dónde está")
-        open(os.path.join(repo, "ctrlpanel", "productos.json"), "w").write("[1]")
-        open(os.path.join(repo, "ctrlpanel", "ajustes.json"), "w").write("{}")
+        open(os.path.join(repo, "panel", "productos.json"), "w").write("[1]")
+        open(os.path.join(repo, "panel", "ajustes.json"), "w").write("{}")
         g("add", "-A"); g("commit", "-qm", "dos")
         ev = cambios.config(estado)
         self.assertEqual(len(ev), 1)
