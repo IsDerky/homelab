@@ -30,6 +30,8 @@ Prometheus + Grafana ([rol `monitoring`](ansible.md#rol-monitoring)):
 - blackbox para comprobar las webs desde fuera del proceso y que los certificados no caduquen, Wings de los tres nodos incluido;
 - un exportador propio en Python que convierte el JSON del recolector y el estado de los backups en métricas.
 
+Los servidores de juego son de otras personas y no se entra en ellos, pero un contenedor que mina o escanea se nota desde fuera. El rol `abuso` mira cada minuto, en el servidor y en los nodos, el cgroup de cada contenedor (CPU y su límite) y la tabla de conexiones del kernel (`conntrack`): cuántas conexiones salen, a cuántos destinos distintos, cuántas se quedan en SYN sin respuesta y cuántas van a los puertos típicos de los pools de minería. Solo cuenta lo que sale del contenedor; los jugadores que entran no. Avisa con dos alertas: conexión a un pool sostenida 5 minutos y tráfico de escaneo o ataque sostenido 10. La CPU al límite sola no avisa, porque un servidor de juego puede ir así.
+
 Dashboards: el servidor, todos los servicios, la operación (disponibilidad y backups), los servidores de juego y los nodos de fuera (con reinicios y parches pendientes).
 
 Alertmanager solo avisa de lo que no cubre lo anterior: que la app falle lo bastante como para comerse su margen de error del mes (SLO del 99,5 %), disco o memoria a punto de acabarse en cualquier máquina, una copia local fallida o atrasada, un certificado a punto de caducar y que la propia monitorización deje de ver algo. Las reglas tienen tests con `promtool` en el CI.

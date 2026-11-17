@@ -186,3 +186,28 @@ groups:
           severity: warning
         annotations:
           summary: "ops-collect no actualiza el snapshot desde hace más de 30 min."
+
+      # Rol abuso: se mira solo desde el host (conntrack). Un pool de minería en
+      # sus puertos típicos casi nunca es legítimo; la CPU al límite sola no
+      # avisa (un servidor de juego puede ir así), se ve en Grafana.
+      - alert: ConexionAPoolDeMineria
+        expr: contenedor_conexiones_pool > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: >-
+            El servidor {{ $labels.servidor }} ({{ $labels.instance }}) lleva 5 min conectado a puertos típicos de pools
+            de minería ({{ $value }} conexiones). Mirar su CPU antes de actuar; no se entra en el servidor.
+
+      # Escaneo o ataque saliente: muchos destinos a la vez o muchos SYN sin
+      # respuesta, sostenido 10 min
+      - alert: TraficoSalienteAnomalo
+        expr: contenedor_destinos_distintos > 400 or contenedor_syn_sin_respuesta > 200
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: >-
+            El servidor {{ $labels.servidor }} ({{ $labels.instance }}) abre conexiones a muchísimos destinos o sin
+            respuesta desde hace 10 min (escaneo o ataque saliente).
