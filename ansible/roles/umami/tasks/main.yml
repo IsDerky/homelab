@@ -1,0 +1,86 @@
+---
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /etc/umami, mode: "0755"}
+    - {path: "{{ umami_dir }}", mode: "0755"}
+
+# Generados aquí la primera vez y nunca más: no pasan por Ansible ni por el vault
+- name: Secretos de Umami y de su base
+  ansible.builtin.shell: |
+    set -euo pipefail
+    umask 077
+    cd /etc/umami
+    [ -s db.clave ] || openssl rand -hex 24 > db.clave
+    if [ ! -s umami.env ]; then
+      printf 'DATABASE_URL=postgresql://umami:%s@db:5432/umami\nAPP_SECRET=%s\nTWO_FACTOR_ENCRYPTION_KEY=%s\n' \
+        "$(cat db.clave)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > umami.env
+      echo creado
+    fi
+    [ -s db.env ] || { printf 'POSTGRES_PASSWORD=%s\n' "$(cat db.clave)" > db.env; echo creado; }
+  args:
+    executable: /bin/bash
+  register: umami_secretos
+  changed_when: "'creado' in umami_secretos.stdout"
+  no_log: true
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ umami_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  register: umami_compose
+
+- name: Unidad
+  ansible.builtin.template:
+    src: umami.service.j2
+    dest: /etc/systemd/system/umami.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: umami_unidad
+
+- name: Script de puesta en marcha
+  ansible.builtin.copy:
+    src: umami-preparar
+    dest: /usr/local/sbin/umami-preparar
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: umami.service
+    enabled: true
+    state: "{{ 'restarted' if (umami_compose.changed or umami_unidad.changed) else 'started' }}"
+    daemon_reload: "{{ umami_unidad.changed }}"
+  when: not ansible_check_mode
+
+- name: Esperar a que responda
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ umami_port }}/api/heartbeat
+  register: umami_latido
+  until: umami_latido.status == 200
+  retries: 30
+  delay: 5
+  when: not ansible_check_mode
+
+- name: Contraseña propia y webs dadas de alta
+  ansible.builtin.command:
+    argv: "{{ ['/usr/local/sbin/umami-preparar', 'http://127.0.0.1:' ~ umami_port] + umami_args_sitios }}"
+  vars:
+    # Cada web como «Nombre=dominio»
+    umami_args_sitios: >-
+      {{ umami_sitios | map(attribute='nombre')
+         | zip(umami_sitios | map(attribute='dominio'))
+         | map('join', '=') | list }}
+  register: umami_preparar
+  changed_when: umami_preparar.stdout_lines | last == 'cambiado'
+  when: not ansible_check_mode

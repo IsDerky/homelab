@@ -1,0 +1,40 @@
+# {{ ansible_managed }}
+# Secretos en /etc/umami/umami.env y db.env, generados en la máquina (no pasan por Ansible)
+services:
+  umami:
+    image: {{ umami_image }}
+    restart: unless-stopped
+    init: true
+    env_file: /etc/umami/umami.env
+    environment:
+      TRACKER_SCRIPT_NAME: "{{ umami_script }}"
+      COLLECT_API_ENDPOINT: "{{ umami_recogida }}"
+      CLIENT_IP_HEADER: "{{ umami_cabecera_ip }}"
+      DISABLE_TELEMETRY: "1"
+      DISABLE_UPDATES: "1"
+    ports:
+      - "127.0.0.1:{{ umami_port }}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: {{ umami_mem }}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/heartbeat >/dev/null || curl -fs http://127.0.0.1:3000/api/heartbeat >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+  db:
+    image: {{ umami_postgres_image }}
+    restart: unless-stopped
+    env_file: /etc/umami/db.env
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+    volumes:
+      - ./db:/var/lib/postgresql/data
+    mem_limit: {{ umami_postgres_mem }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

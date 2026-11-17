@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: umami
+  namespace: isderky
+  description: Umami (analítica sin cookies) en Docker, solo en local; contraseña y webs dadas de alta solas
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []
