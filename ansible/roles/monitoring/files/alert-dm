@@ -37,7 +37,7 @@ def message(alert, status):
         color = "red" if labels.get("severity") == "critical" else "amber"
         title = f"🚨 {name}"
     args = [DISCORD_DM, "-t", title, "-c", color]
-    for key in ("servicio", "instance", "mountpoint"):
+    for key in ("servicio", "servidor", "instance", "mountpoint"):
         if labels.get(key):
             args += ["-f", f"{key.capitalize()}={labels[key]}"]
     args.append(notes.get("summary") or notes.get("description") or name)

@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Señales de abuso de los contenedores (CPU y conexiones, desde el host)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/abuso-contenedores
+Environment=ABUSO_SALIDA={{ abuso_textfile_dir }}/abuso.prom
+Environment=ABUSO_PUERTOS_POOL={{ abuso_puertos_pool | join(',') }}
+Nice=10
+TimeoutStartSec=50s
+PrivateTmp=yes
+ProtectHome=yes

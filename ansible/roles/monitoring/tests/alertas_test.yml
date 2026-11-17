@@ -306,6 +306,50 @@ tests:
             exp_annotations:
               summary: "1 compra(s) pagadas en CtrlPanel fallaron en la última hora; el dinero quedó como saldo (derkyu_compras)."
 
+  # Pool de minería: una conexión suelta de 2 min no avisa; 5 min seguidos sí
+  - interval: 1m
+    input_series:
+      - series: 'contenedor_conexiones_pool{instance="nodo-a", servidor="abcd1234"}'
+        values: "0x5 1 1 0x5 2x10"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ConexionAPoolDeMineria
+        exp_alerts: []
+      - eval_time: 19m
+        alertname: ConexionAPoolDeMineria
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: nodo-a
+              servidor: abcd1234
+            exp_annotations:
+              summary: >-
+                El servidor abcd1234 (nodo-a) lleva 5 min conectado a puertos típicos de pools de minería (2 conexiones).
+                Mirar su CPU antes de actuar; no se entra en el servidor.
+
+  # Tráfico saliente: un pico de destinos no avisa; 10 min de SYN sin respuesta sí
+  - interval: 1m
+    input_series:
+      - series: 'contenedor_destinos_distintos{instance="nodo-a", servidor="abcd1234"}'
+        values: "20x3 900x3 20x30"
+      - series: 'contenedor_syn_sin_respuesta{instance="nodo-a", servidor="abcd1234"}'
+        values: "0x15 500x20"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: TraficoSalienteAnomalo
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: TraficoSalienteAnomalo
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: nodo-a
+              servidor: abcd1234
+            exp_annotations:
+              summary: >-
+                El servidor abcd1234 (nodo-a) abre conexiones a muchísimos destinos o sin respuesta desde hace 10 min
+                (escaneo o ataque saliente).
+
   # El latido está siempre activo, sin depender de ninguna serie
   - interval: 1m
     input_series: []

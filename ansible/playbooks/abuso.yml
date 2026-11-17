@@ -1,0 +1,8 @@
+---
+# Señales de abuso de los contenedores de los servidores de juego, en todas las
+# máquinas con Wings (aquí y los nodos de fuera)
+- name: Abuso desde el host
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - abuso

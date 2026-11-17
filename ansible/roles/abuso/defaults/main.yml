@@ -1,0 +1,7 @@
+---
+# Señales de abuso de los contenedores de los servidores de juego (minería,
+# escaneos, ataques salientes) mirando solo desde el host: cgroup y conntrack.
+# Deja métricas en el textfile de node-exporter; las alertas están en el rol
+# monitoring (ConexionAPoolDeMineria, TraficoSalienteAnomalo).
+abuso_textfile_dir: /var/lib/node-exporter/textfile
+abuso_puertos_pool: [3333, 4444, 5555, 6666, 9999, 14433, 14444, 45560, 45700]

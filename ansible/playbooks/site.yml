@@ -41,6 +41,8 @@
   ansible.builtin.import_playbook: pterodactyl.yml
 - name: Bases de datos de los servidores
   ansible.builtin.import_playbook: bd-servidores.yml
+- name: Abuso desde el host
+  ansible.builtin.import_playbook: abuso.yml
 - name: Caddy de las webs
   ansible.builtin.import_playbook: caddy-webs.yml
 # nodos: necesita a todas las máquinas en la misma pasada (la deriva lo salta)
