@@ -169,8 +169,14 @@ case "$REPO" in
     rm -rf "$BUILD"
     install -d -o webbuild -g webbuild -m 755 "$BUILD"
     git archive "$SHA" | runuser -u webbuild -- tar -x -C "$BUILD"
+    # Id de la web en Umami (rol umami): las páginas estáticas lo fijan al compilar. Sale del
+    # EnvironmentFile de la unidad; sin él, la web va sin analítica.
+    UMAMI_ID=""
+    for f in $(systemctl show -P EnvironmentFiles derkyu-hosting 2>/dev/null | grep -o '/etc/umami/[^ ]*'); do
+      UMAMI_ID=$(sed -n 's/^UMAMI_WEBSITE_ID=//p' "$f" 2>/dev/null || true)
+    done
     runuser -u webbuild -- env HOME=/var/lib/webbuild COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-      npm_config_package_import_method=copy NEXT_TELEMETRY_DISABLED=1 bash -c \
+      npm_config_package_import_method=copy NEXT_TELEMETRY_DISABLED=1 UMAMI_WEBSITE_ID="$UMAMI_ID" bash -c \
       "cd '$BUILD' && corepack pnpm install --frozen-lockfile && corepack pnpm build"
     [ -f "$BUILD/.next/BUILD_ID" ] || { echo "La compilación no dejó .next/BUILD_ID" >&2; exit 1; }
     phase=instalar
