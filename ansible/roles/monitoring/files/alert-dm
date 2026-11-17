@@ -11,19 +11,51 @@ Variables de entorno:
   ALERT_DM_LISTEN  dirección y puerto (127.0.0.1:9851)
   DISCORD_DM       ruta de discord-dm (/usr/local/bin/discord-dm)
   OPS_PING         ruta de ops-ping (vacío = el latido no sale de aquí)
+  CAMBIOS          eventos de cambios-recoger: los de las horas antes del aviso
+                   salen en el DM («Cambios (2 h)»); vacío o sin fichero, nada
 """
 
 import json
 import os
+import re
 import subprocess
 import sys
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LISTEN = os.environ.get("ALERT_DM_LISTEN", "127.0.0.1:9851")
 DISCORD_DM = os.environ.get("DISCORD_DM", "/usr/local/bin/discord-dm")
 OPS_PING = os.environ.get("OPS_PING", "")
+CAMBIOS = os.environ.get("CAMBIOS", "/var/lib/cambios/eventos.jsonl")
+CAMBIOS_VENTANA = 2 * 3600
+CAMBIOS_MAX = 5
 LATIDO = "Watchdog"
 MAX_BODY = 1024 * 1024
+
+
+def cambios_antes(empieza):
+    """Líneas «HH:MM texto» de los cambios en las 2 h antes de que empezase la alerta (más recientes primero)."""
+    if not CAMBIOS or not os.path.exists(CAMBIOS):
+        return []
+    try:
+        # Alertmanager da nanosegundos y «Z»: fromisoformat de Python 3.10 no los entiende
+        t0 = datetime.fromisoformat(re.sub(r"\.\d+", "", empieza).replace("Z", "+00:00")).timestamp()
+    except (ValueError, TypeError):
+        return []
+    eventos = []
+    try:
+        with open(CAMBIOS) as f:
+            for linea in f:
+                try:
+                    e = json.loads(linea)
+                except ValueError:
+                    continue
+                if t0 - CAMBIOS_VENTANA <= e.get("t", 0) <= t0 + 60:
+                    eventos.append(e)
+    except OSError:
+        return []
+    eventos.sort(key=lambda e: -e["t"])
+    return [f"{datetime.fromtimestamp(e['t']).strftime('%H:%M')} {e['texto'][:150]}" for e in eventos[:CAMBIOS_MAX]]
 
 
 def message(alert, status):
@@ -40,6 +72,10 @@ def message(alert, status):
     for key in ("servicio", "servidor", "instance", "mountpoint"):
         if labels.get(key):
             args += ["-f", f"{key.capitalize()}={labels[key]}"]
+    if status != "resolved":
+        cambios = cambios_antes(alert.get("startsAt", ""))
+        if cambios:
+            args += ["-f", "Cambios (2 h)=" + "\n".join(cambios)]
     args.append(notes.get("summary") or notes.get("description") or name)
     return args
 

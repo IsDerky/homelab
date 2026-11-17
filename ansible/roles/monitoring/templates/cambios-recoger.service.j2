@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Qué ha cambiado (paquetes, reinicios, Ansible, despliegues, config) para Grafana y los avisos
+After=monitoring.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cambios-recoger
+# Contraseña de Grafana para las anotaciones (root, 0600)
+EnvironmentFile=/etc/cambios.env
+Nice=10
+TimeoutStartSec=60s
+PrivateTmp=yes
+ProtectHome=yes

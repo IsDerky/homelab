@@ -36,6 +36,10 @@ Dashboards: el servidor, todos los servicios, la operación (disponibilidad y ba
 
 Alertmanager solo avisa de lo que no cubre lo anterior: que la app falle lo bastante como para comerse su margen de error del mes (SLO del 99,5 %), disco o memoria a punto de acabarse en cualquier máquina, una copia local fallida o atrasada, un certificado a punto de caducar y que la propia monitorización deje de ver algo. Las reglas tienen tests con `promtool` en el CI.
 
+## Qué ha cambiado
+
+Lo primero que pregunto ante un aviso es «¿qué ha cambiado?». `cambios-recoger` lo apunta cada dos minutos desde varias fuentes: paquetes (el historial de apt, distinguiendo automáticas, a mano y root), reinicios (el `boot_id`), pasadas de Ansible (cada módulo deja una línea en el journal; se agrupan por pasada y se descarta la deriva nocturna en `--check`), despliegues (`deploy-repo` lo deja en el journal al terminar bien) y commits de la configuración en git. Cada cambio va a Grafana como anotación con la etiqueta `cambio` (todos los dashboards la enseñan) y a un fichero que lee `alert-dm`: cada aviso por DM lleva los cambios de las dos horas anteriores.
+
 ## Qué me avisa y qué no
 
 Solo lo que importa: servidor caído, backup fallido, alguien que inicia sesión, algo que caduca. Probé a avisar de anomalías en los logs y era ruido, así que el bot las aprende en silencio y me las cuenta solo si le pregunto. Los reinicios pendientes de los nodos tampoco avisan: se ven en el dashboard y reinicio cuando no corta partidas.

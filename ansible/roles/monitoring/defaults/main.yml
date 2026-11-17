@@ -96,6 +96,11 @@ monitoring_ops_group: ""
 # Alertas por DM con discord-dm (rol avisos). false = Alertmanager sin receptor.
 monitoring_alert_dm: true
 
+# cambios-recoger: paquetes, reinicios, pasadas de Ansible, despliegues y
+# commits de config-git como anotaciones de Grafana (etiqueta «cambio») y en
+# los avisos de alert-dm («Cambios (2 h)»)
+monitoring_cambios: true
+
 # La alerta Watchdog sale por ops-ping al vigilante externo (necesita el rol
 # avisos con avisos_watchdog_env). false = alert-dm la ignora.
 monitoring_latido_externo: false
