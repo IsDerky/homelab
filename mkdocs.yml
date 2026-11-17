@@ -45,9 +45,14 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
 
+# el generador del mapa vive junto a las páginas, pero no se publica
+exclude_docs: |
+  generar_mapa.py
+
 nav:
   - Inicio: index.md
   - Arquitectura: arquitectura.md
+  - Mapa (generado): mapa.md
   - Red y seguridad: red-y-seguridad.md
   - Backups: backups.md
   - Vigilancia: vigilancia.md

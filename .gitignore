@@ -5,4 +5,6 @@ __pycache__/
 # caché de ansible-lint
 .ansible/
 docs/ansible.md
+# lo genera el CI (docs/generar_mapa.py)
+docs/mapa.md
 site/

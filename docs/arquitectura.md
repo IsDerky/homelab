@@ -63,6 +63,8 @@ flowchart LR
     gh -->|jobs| runner
 ```
 
+Estos dos diagramas están hechos a mano. El de qué rol corre en cada máquina y qué tareas programadas tiene cada uno sale del código en cada build: [Mapa](mapa.md).
+
 ## Por dónde entra cada cosa
 
 **Webs públicas y el panel.** Entran por Cloudflare Tunnel: cloudflared abre la conexión desde el servidor y las peticiones llegan a nginx por loopback. El router no tiene abiertos ni el 80 ni el 443. Como todo llega desde `127.0.0.1`, nginx toma la IP real de `CF-Connecting-IP`, pero solo si la petición viene de la propia máquina. Así el límite de intentos de login del panel sigue siendo por persona. El paso de puertos abiertos al túnel está contado en el [runbook](runbook-panel-por-tunel.md).
