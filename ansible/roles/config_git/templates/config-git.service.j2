@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Configuración en git: exportar y subir si ha cambiado
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/config-git
+# Sin __pycache__ junto a los exportadores (Ansible lo vería como sobrante)
+Environment=PYTHONDONTWRITEBYTECODE=1
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=15min
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full

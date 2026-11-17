@@ -18,6 +18,10 @@ Los nodos no guardan ni la contraseña de restic ni el acceso a Drive. Es el ser
 
 Cada copia de `clientes` lleva la etiqueta `nodo-<nombre>` de los nodos que se trajeron bien en esa pasada, y al terminar se escribe `clientes-puntos.json` con los puntos que quedan tras caducar (fecha y nodos de cada uno). Con eso el panel puede enseñar desde qué fechas se puede restaurar un servidor sin leer el repo. Al caducar, `clientes` agrupa solo por equipo para que esas etiquetas no partan la retención.
 
+## Configuración en git
+
+Las copias guardan las bases de datos enteras, pero para saber *qué* cambió y cuándo (un ajuste, una plantilla de servidor) hace falta otra cosa. El rol `config_git` ejecuta cada hora unos exportadores que vuelcan la configuración de las aplicaciones a ficheros JSON ordenados y, si algo ha cambiado, hace commit y push a un repo privado. Los exportadores viven en el inventario (dicen qué hay instalado) y nunca escriben secretos: las claves de ajustes con pinta de secreto y los valores cifrados salen como `(secreto)`. La deploy key se genera en el servidor, es de escritura y solo vale para ese repo.
+
 ## Copia local
 
 `sistema` y `clientes` hacen después la misma copia en un repo restic del disco USB, en un proceso aparte. Si el disco no está o falla, la copia de Drive ya está hecha y no se marca como fallida. La carcasa USB no deja leer el SMART, así que la salud de ese disco se comprueba con el `check --read-data` semanal.

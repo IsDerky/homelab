@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Configuración en git cada hora
+
+[Timer]
+OnCalendar={{ config_git_calendario }}
+RandomizedDelaySec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

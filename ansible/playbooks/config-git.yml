@@ -1,0 +1,8 @@
+---
+# Configuración de las aplicaciones en git cada hora (fuera de site.yml como
+# deriva: da de alta la deploy key con gh desde el controlador).
+- name: Configuración en git
+  hosts: homelab
+  become: true
+  roles:
+    - config_git

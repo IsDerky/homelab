@@ -1,0 +1,51 @@
+#!/bin/bash
+# Configuración en git: ejecuta los exportadores de /etc/config-git/exportadores.d
+# (cada uno escribe en su carpeta del repo), hace commit si algo ha cambiado y
+# empuja. Un exportador que falla deja su carpeta como estaba y el resto sigue.
+# Si el push falla, lo pendiente sube en la siguiente pasada.
+#   Manual:  systemctl start config-git   ·   Ver:  journalctl -u config-git
+set -Eeuo pipefail
+
+# shellcheck source=/dev/null
+. /etc/config-git/config-git.env
+export GIT_SSH_COMMAND="ssh -i /etc/config-git/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/etc/config-git/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes"
+EXPORTADORES=/etc/config-git/exportadores.d
+
+if [ ! -d "$DIR/.git" ]; then
+  git init -q -b "$RAMA" "$DIR"
+  git -C "$DIR" remote add origin "$REPO"
+fi
+cd "$DIR"
+git remote set-url origin "$REPO"
+
+fallos=0
+for x in "$EXPORTADORES"/*; do
+  n=$(basename "$x")
+  if [[ $n == _* ]] || [ ! -f "$x" ] || [ ! -x "$x" ]; then continue; fi
+  tmp=$(mktemp -d)
+  if "$x" "$tmp/$n"; then
+    rm -rf "${DIR:?}/$n"
+    mv "$tmp/$n" "$DIR/$n"
+  else
+    echo "El exportador $n ha fallado: su carpeta se queda como estaba" >&2
+    fallos=$((fallos + 1))
+  fi
+  rm -rf "$tmp"
+done
+
+git add -A
+if ! git diff --cached --quiet; then
+  carpetas=$(git diff --cached --name-only | cut -d/ -f1 | sort -u | paste -sd, - | sed 's/,/, /g')
+  git -c user.name="$AUTOR" -c user.email="$CORREO" commit -q \
+    -m "Cambios en $carpetas" -m "$(git diff --cached --stat | tail -40)"
+  echo "Commit: $(git log --oneline -1)"
+else
+  echo "Sin cambios"
+fi
+
+# Siempre: si una pasada anterior no pudo empujar, sube ahora
+if git rev-parse -q --verify HEAD >/dev/null; then
+  git push -q origin "HEAD:$RAMA"
+fi
+
+exit $((fallos > 0))
