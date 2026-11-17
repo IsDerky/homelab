@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Deja Umami listo sin pasar por su web: la primera vez cambia la contraseña de
+fábrica del usuario admin por una aleatoria (en /etc/umami/admin-clave, 0600) y
+da de alta las webs; cada vez, escribe el id de cada web en
+/etc/umami/<dominio>.env (UMAMI_WEBSITE_ID=...) para que su servicio lo lea.
+
+Uso: umami-preparar <url> <nombre>=<dominio> ...
+Salida: «cambiado» o «igual» en la última línea (para Ansible).
+Para pruebas: UMAMI_ETC (carpeta en lugar de /etc/umami).
+"""
+import json
+import os
+import secrets
+import sys
+import urllib.error
+import urllib.request
+
+ETC = os.environ.get("UMAMI_ETC", "/etc/umami")
+FABRICA = ("admin", "umami")
+
+
+def pide(url, metodo="GET", datos=None, token=None):
+    req = urllib.request.Request(url, method=metodo, data=json.dumps(datos).encode() if datos is not None else None,
+                                 headers={"Content-Type": "application/json", "Accept": "application/json"})
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(req, timeout=20) as r:
+        cuerpo = r.read()
+        return json.loads(cuerpo) if cuerpo else {}
+
+
+def entra(base, usuario, clave):
+    try:
+        return pide(f"{base}/api/auth/login", "POST", {"username": usuario, "password": clave})["token"]
+    except urllib.error.HTTPError as e:
+        if e.code in (400, 401, 403):
+            return None
+        raise
+
+
+def guarda(ruta, texto, modo):
+    tmp = ruta + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(texto)
+    os.chmod(tmp, modo)
+    os.replace(tmp, ruta)
+
+
+def main():
+    base = sys.argv[1].rstrip("/")
+    sitios = [a.split("=", 1) for a in sys.argv[2:]]
+    cambiado = False
+    ruta_clave = os.path.join(ETC, "admin-clave")
+
+    clave = open(ruta_clave).read().strip() if os.path.exists(ruta_clave) else None
+    token = entra(base, "admin", clave) if clave else None
+    if not token:
+        token = entra(base, *FABRICA)
+        if not token:
+            sys.exit("No se puede entrar en Umami ni con la contraseña guardada ni con la de fábrica")
+        # primera vez: fuera la de fábrica (se guarda antes de cambiarla por si algo falla a medias)
+        nueva = secrets.token_urlsafe(24)
+        guarda(ruta_clave + ".nueva", nueva + "\n", 0o600)
+        pide(f"{base}/api/me/password", "POST", {"currentPassword": FABRICA[1], "newPassword": nueva}, token)
+        os.replace(ruta_clave + ".nueva", ruta_clave)
+        token = entra(base, "admin", nueva)
+        cambiado = True
+
+    lista = pide(f"{base}/api/websites?pageSize=200", token=token)
+    webs = {w["domain"]: w["id"] for w in (lista.get("data") if isinstance(lista, dict) else lista) or []}
+    for nombre, dominio in sitios:
+        if dominio not in webs:
+            webs[dominio] = pide(f"{base}/api/websites", "POST", {"name": nombre, "domain": dominio}, token)["id"]
+            cambiado = True
+        ruta = os.path.join(ETC, f"{dominio}.env")
+        linea = f"UMAMI_WEBSITE_ID={webs[dominio]}\n"
+        if not os.path.exists(ruta) or open(ruta).read() != linea:
+            guarda(ruta, linea, 0o644)
+            cambiado = True
+    print("cambiado" if cambiado else "igual")
+
+
+if __name__ == "__main__":
+    main()

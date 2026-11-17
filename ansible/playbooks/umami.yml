@@ -1,0 +1,7 @@
+---
+# Analítica de visitas sin cookies para las webs (en local; el panel solo por la LAN)
+- name: Umami
+  hosts: homelab
+  become: true
+  roles:
+    - umami

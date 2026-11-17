@@ -1,0 +1,25 @@
+---
+# Umami: analítica de visitas sin cookies (en lugar de Google Analytics). Corre
+# en local; las webs le reenvían por su propio origen el script y la recogida
+# (rutas de umami_script y umami_recogida), así no hace falta exponerlo y los
+# bloqueadores no lo cortan. El panel de Umami va solo por la LAN (vhost en el
+# inventario).
+umami_dir: /opt/umami
+# renovate: datasource=docker depName=ghcr.io/umami-software/umami
+umami_image: ghcr.io/umami-software/umami:3.4.1
+# renovate: datasource=docker depName=postgres
+umami_postgres_image: postgres:17.12-alpine
+umami_port: 3070
+umami_mem: 512m
+umami_postgres_mem: 256m
+
+# Nombres propios del script y de la recogida (los genéricos los bloquean las listas de anuncios)
+umami_script: v.js
+umami_recogida: /api/v
+
+# La IP real del visitante llega en esta cabecera (Cloudflare delante)
+umami_cabecera_ip: cf-connecting-ip
+
+# Webs que se dan de alta solas: el id de cada una queda en /etc/umami/<dominio>.env
+# (UMAMI_WEBSITE_ID=...) para que su servicio lo lea. [{nombre, dominio}]
+umami_sitios: []
