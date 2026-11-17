@@ -1,0 +1,121 @@
+---
+# Sube Wings a pterodactyl_wings_version un nodo cada vez: primero el grupo
+# wings_canario (el nodo con menos servidores), luego los demás nodos de fuera
+# y por último el servidor. En cada uno guarda el binario actual, descarga el
+# nuevo, reinicia y comprueba; si algo falla vuelve al anterior y se para todo.
+# Los servidores de juego siguen vivos: son contenedores y Wings se reengancha.
+#
+#   ansible-playbook playbooks/wings-etapas.yml --check            qué nodos cambiarían
+#   ansible-playbook playbooks/wings-etapas.yml --limit wings_canario
+#   ansible-playbook playbooks/wings-etapas.yml                    todos, canario primero
+#
+# El resto de playbooks ya no cambian la versión de Wings: solo lo instalan si
+# falta y avisan si va por detrás.
+- name: Wings por etapas
+  hosts: wings_canario:wings_remotos:homelab
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Estado antes de tocar Wings
+      ansible.builtin.shell: |
+        set -o pipefail
+        echo "$(docker ps -q | wc -l) $(systemctl show -p NRestarts --value wings.service) $(date +%s)"
+      args:
+        executable: /bin/bash
+      register: wings_etapas_antes
+      changed_when: false
+      check_mode: false
+
+    - name: Wings
+      ansible.builtin.include_role:
+        name: pterodactyl
+        tasks_from: wings
+        public: true
+      vars:
+        pterodactyl_wings_actualizar: true
+
+    - name: Reiniciar Wings ahora si ha cambiado
+      ansible.builtin.meta: flush_handlers
+
+    - name: Comprobar el Wings nuevo
+      when:
+        - not ansible_check_mode
+        - pterodactyl_wings_instalada.rc == 0
+        - not (pterodactyl_wings_al_dia | bool)
+      vars:
+        wings_etapas_contenedores: "{{ wings_etapas_antes.stdout.split()[0] | int }}"
+        wings_etapas_reinicios: "{{ wings_etapas_antes.stdout.split()[1] }}"
+        wings_etapas_desde: "{{ wings_etapas_antes.stdout.split()[2] }}"
+        wings_etapas_canario: "{{ inventory_hostname in (groups['wings_canario'] | default([])) }}"
+      block:
+        - name: Wings escucha
+          ansible.builtin.wait_for:
+            port: 8080
+            timeout: 90
+
+        - name: Dejarlo rodar un rato
+          ansible.builtin.pause:
+            seconds: >-
+              {{ (pterodactyl_wings_pausa_canario | int) if (wings_etapas_canario | bool)
+                 else (pterodactyl_wings_pausa_resto | int) }}
+
+        - name: Versión nueva en marcha
+          ansible.builtin.command: /usr/local/bin/wings version
+          register: wings_etapas_version
+          changed_when: false
+          failed_when: >-
+            wings_etapas_version.rc != 0 or not (wings_etapas_version.stdout_lines[0] | default(''))
+            is search('v' ~ (pterodactyl_wings_version | regex_escape) ~ '$')
+
+        - name: Activo, sin reinicios solos y con los mismos contenedores
+          ansible.builtin.shell: |
+            set -o pipefail
+            echo "$(systemctl is-active wings.service) $(systemctl show -p NRestarts --value wings.service) $(docker ps -q | wc -l)"
+          args:
+            executable: /bin/bash
+          register: wings_etapas_despues
+          changed_when: false
+          failed_when: >-
+            wings_etapas_despues.stdout.split()[0] != 'active'
+            or wings_etapas_despues.stdout.split()[1] != wings_etapas_reinicios
+            or (wings_etapas_despues.stdout.split()[2] | int) < (wings_etapas_contenedores | int)
+
+        # Sin token responde 401: la API está arriba y el certificado cargado
+        - name: La API responde
+          ansible.builtin.uri:
+            url: https://127.0.0.1:8080/api/system
+            validate_certs: false
+            status_code: 401
+
+        - name: Sin fatal ni panic en el journal desde el reinicio
+          ansible.builtin.shell: |
+            set -o pipefail
+            journalctl -u wings.service -S @{{ wings_etapas_desde }} -q --no-pager | grep -i -E 'fatal|panic' || true
+          args:
+            executable: /bin/bash
+          register: wings_etapas_journal
+          changed_when: false
+          failed_when: wings_etapas_journal.stdout | length > 0
+
+      rescue:
+        - name: Volver al binario anterior
+          ansible.builtin.copy:
+            src: /usr/local/bin/wings.anterior
+            dest: /usr/local/bin/wings
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0755"
+
+        - name: Reiniciar Wings con el anterior
+          ansible.builtin.systemd_service:
+            name: wings.service
+            state: restarted
+
+        - name: Parar aquí
+          ansible.builtin.fail:
+            msg: >-
+              Wings {{ pterodactyl_wings_version }} no pasó las comprobaciones en
+              {{ inventory_hostname }} ({{ ansible_failed_task.name }}). Vuelto al
+              binario anterior; los nodos que faltan no se han tocado.
