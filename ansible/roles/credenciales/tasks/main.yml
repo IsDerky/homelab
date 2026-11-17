@@ -1,0 +1,35 @@
+---
+# Herramientas para guardar secretos cifrados con systemd-creds (necesita systemd 250 o más).
+# Los demás roles las usan con tasks_from: guardar (ver tasks/guardar.yml).
+- name: Versión de systemd
+  ansible.builtin.command: systemctl --version
+  register: credenciales_systemd
+  changed_when: false
+  check_mode: false
+
+- name: Hace falta systemd 250 o más (systemd-creds)
+  ansible.builtin.assert:
+    that: (credenciales_systemd.stdout_lines[0].split()[1] | int) >= 250
+    fail_msg: "systemd-creds no existe en esta máquina ({{ credenciales_systemd.stdout_lines[0] }})."
+    quiet: true
+
+- name: Carpeta de credenciales cifradas
+  ansible.builtin.file:
+    path: /etc/credstore.encrypted
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Scripts
+  ansible.builtin.copy:
+    src: "{{ item.nombre }}"
+    dest: "{{ item.ruta }}/{{ item.nombre }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - { nombre: credencial-guardar, ruta: /usr/local/sbin }
+    - { nombre: credencial-env, ruta: /usr/local/bin }
+  loop_control:
+    label: "{{ item.nombre }}"

@@ -103,6 +103,8 @@
     - { key: REDIS_PREFIX, value: ctrlpanel_ }
   loop_control:
     label: "{{ item.key }}"
+  # el diff de lineinfile enseña las líneas vecinas del .env (contraseñas)
+  diff: false
   when: ctrlpanel_env.stat.exists and ctrlpanel_cache_redis
   notify:
     - Limpiar caché de config

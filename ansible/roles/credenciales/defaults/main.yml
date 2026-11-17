@@ -1,0 +1,5 @@
+---
+# Clave con la que cifra systemd-creds: host (fichero /var/lib/systemd/credential.secret, que no
+# entra en las copias de /etc), tpm2 o host+tpm2. Con TPM, un borrado del TPM (BIOS) deja los
+# servicios sin arrancar hasta volver a pasar Ansible: por eso host por defecto.
+credenciales_clave: host

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Para servicios que esperan variables de entorno: carga un fichero KEY=VALOR que systemd
+# ha descifrado en $CREDENTIALS_DIRECTORY (LoadCredentialEncrypted) y ejecuta el programa.
+# No evalúa nada como shell: cada línea es KEY=VALOR literal (comillas de los extremos fuera).
+#   ExecStart=/usr/local/bin/credencial-env <credencial> <programa> [args…]
+set -euo pipefail
+
+nombre=${1:?falta el nombre de la credencial}
+shift
+fichero=${CREDENTIALS_DIRECTORY:?sin CREDENTIALS_DIRECTORY: falta LoadCredentialEncrypted en la unidad}/$nombre
+
+while IFS= read -r linea || [ -n "$linea" ]; do
+  [[ $linea =~ ^[[:space:]]*(#|$) ]] && continue
+  [[ $linea =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || { echo "línea no válida en $nombre (se ignora)" >&2; continue; }
+  clave=${BASH_REMATCH[1]}
+  valor=${BASH_REMATCH[2]}
+  if [[ $valor =~ ^\"(.*)\"$ || $valor =~ ^\'(.*)\'$ ]]; then
+    valor=${BASH_REMATCH[1]}
+  fi
+  export "$clave=$valor"
+done <"$fichero"
+
+exec "$@"

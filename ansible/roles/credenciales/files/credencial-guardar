@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Guarda un secreto cifrado con systemd-creds en /etc/credstore.encrypted/<nombre>.
+# Lee el contenido por stdin (nunca en argumentos: se verían en ps).
+# Solo reescribe si cambia: descifra lo que hay y lo compara. Imprime «igual» o «cambiada».
+#   uso: printf '%s' "$secreto" | credencial-guardar <nombre> [clave]
+# clave = host (por defecto), tpm2 o host+tpm2 (ver systemd-creds --with-key).
+set -euo pipefail
+umask 077
+
+nombre=${1:?falta el nombre}
+clave=${2:-host}
+[[ $nombre =~ ^[A-Za-z0-9._-]+$ ]] || { echo "nombre no válido: $nombre" >&2; exit 2; }
+dir=/etc/credstore.encrypted
+destino=$dir/$nombre
+
+nuevo=$(mktemp)
+trap 'rm -f "$nuevo" "$destino.tmp"' EXIT
+cat >"$nuevo"
+
+install -d -m 0700 "$dir"
+if [ -f "$destino" ] && systemd-creds decrypt --name="$nombre" "$destino" - 2>/dev/null | cmp -s - "$nuevo"; then
+  echo igual
+  exit 0
+fi
+systemd-creds encrypt --with-key="$clave" --name="$nombre" "$nuevo" "$destino.tmp"
+chmod 0600 "$destino.tmp"
+mv -f "$destino.tmp" "$destino"
+echo cambiada
