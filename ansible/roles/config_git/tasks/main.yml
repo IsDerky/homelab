@@ -1,0 +1,123 @@
+---
+- name: Faltan datos
+  ansible.builtin.assert:
+    that:
+      - config_git_repo | length > 0
+    fail_msg: Define config_git_repo (y config_git_github para dar de alta la deploy key).
+    quiet: true
+
+- name: Paquetes
+  ansible.builtin.apt:
+    name: [git, python3]
+    state: present
+
+- name: Carpetas solo de root
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /etc/config-git
+    - /etc/config-git/exportadores.d
+    - "{{ config_git_dir }}"
+
+- name: Exportadores
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /etc/config-git/exportadores.d/
+    owner: root
+    group: root
+    mode: "0700"
+  loop: "{{ lookup('ansible.builtin.fileglob', config_git_exportadores + '/*', wantlist=True) }}"
+
+- name: Exportadores instalados
+  ansible.builtin.find:
+    paths: /etc/config-git/exportadores.d
+    file_type: any
+  register: config_git_instalados
+
+# Un exportador que ya no está en el inventario deja de ejecutarse
+- name: Quitar los que ya no están
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ config_git_instalados.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: (item.path | basename) not in (lookup('ansible.builtin.fileglob', config_git_exportadores + '/*', wantlist=True) | map('basename') | list)
+
+- name: GitHub conocido
+  ansible.builtin.copy:
+    content: "{{ config_git_github_host_key }}\n"
+    dest: /etc/config-git/known_hosts
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy key del repo
+  ansible.builtin.command: ssh-keygen -q -t ed25519 -N "" -C "config-git@{{ inventory_hostname }}" -f /etc/config-git/deploy_key
+  args:
+    creates: /etc/config-git/deploy_key
+
+- name: Leer la deploy key pública
+  ansible.builtin.slurp:
+    src: /etc/config-git/deploy_key.pub
+  register: config_git_pub
+  when: config_git_github | length > 0 and not ansible_check_mode
+
+# De escritura: es la que empuja. Las deploy keys solo valen para su repo.
+- name: Deploy key en GitHub (escritura, solo este repo)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if gh api "repos/{{ config_git_github }}/keys" --jq '.[].key' | grep -qxF "$CLAVE"; then
+      echo ya
+    else
+      gh api "repos/{{ config_git_github }}/keys" \
+        -f title="config-git ({{ inventory_hostname }})" -f key="$CLAVE" -F read_only=false >/dev/null
+      echo añadida
+    fi
+  args:
+    executable: /bin/bash
+  environment:
+    CLAVE: "{{ (config_git_pub.content | b64decode).split()[:2] | join(' ') }}"
+  register: config_git_key_github
+  changed_when: "'añadida' in config_git_key_github.stdout"
+  delegate_to: localhost
+  become: false
+  when: config_git_github | length > 0 and not ansible_check_mode
+
+- name: Script
+  ansible.builtin.copy:
+    src: config-git
+    dest: /usr/local/sbin/config-git
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configuración
+  ansible.builtin.template:
+    src: config-git.env.j2
+    dest: /etc/config-git/config-git.env
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Unidades
+  ansible.builtin.template:
+    src: config-git.{{ item }}.j2
+    dest: /etc/systemd/system/config-git.{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: config_git_units
+
+- name: Timer
+  ansible.builtin.systemd_service:
+    name: config-git.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ config_git_units.changed }}"
+  when: not (ansible_check_mode and config_git_units.changed)

@@ -1,0 +1,24 @@
+---
+# Configuración en git: cada hora los exportadores vuelcan la configuración de
+# las aplicaciones a ficheros legibles y, si algo ha cambiado, se hace commit y
+# push a un repo privado. Queda el historial de cada cambio y se puede volver a
+# cualquier versión de una pieza.
+
+# Repo destino (SSH). Obligatorio. Se le da una deploy key de escritura que se
+# genera aquí y solo sirve para ese repo.
+config_git_repo: ""
+# owner/repo en GitHub para dar de alta la deploy key con gh desde el
+# controlador. Vacío = la das de alta tú.
+config_git_github: ""
+config_git_github_host_key: github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+
+# Exportadores: cada ejecutable de esta carpeta recibe una ruta y escribe ahí lo
+# suyo (los que empiezan por _ son ayudas y no se ejecutan). Van en el repo del
+# inventario porque dicen qué hay instalado.
+config_git_exportadores: "{{ inventory_dir }}/files/config-git"
+
+config_git_dir: /var/lib/config-git
+config_git_rama: main
+config_git_autor: config-git
+config_git_correo: config-git@localhost
+config_git_calendario: "*-*-* *:07"
