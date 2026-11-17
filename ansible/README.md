@@ -22,7 +22,7 @@ Roles para montar piezas del homelab:
 - `ci`: runners de GitHub Actions en el servidor que solo pueden desplegar con `deploy-repo`, más sus deploy keys y el registro en GitHub (`playbooks/ci.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
-- `pterodactyl`: Wings (binario con versión fija, unidad y límites), live-restore de Docker y la cola y el planificador del panel (`playbooks/pterodactyl.yml`).
+- `pterodactyl`: Wings (binario con versión fija, unidad y límites), live-restore de Docker y la cola y el planificador del panel (`playbooks/pterodactyl.yml`). La versión de Wings solo cambia con `playbooks/wings-etapas.yml`: un nodo cada vez, empezando por el del grupo `wings_canario`, con comprobaciones tras cada reinicio y vuelta al binario anterior si alguna falla.
 - `actualizaciones`: parches de seguridad automáticos con unattended-upgrades en los nodos de fuera, sin reinicios y sin tocar Docker ni Wings (`playbooks/actualizaciones.yml`).
 - `wireguard`: túnel entre el servidor y los nodos de fuera, con las claves generadas en cada máquina (`playbooks/wireguard.yml`).
 - `node_exporter`: node-exporter suelto escuchando solo en la IP del túnel, para los nodos (también en `playbooks/wireguard.yml`).

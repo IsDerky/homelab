@@ -1,7 +1,50 @@
 ---
+- name: Versión de Wings instalada
+  ansible.builtin.command: /usr/local/bin/wings version
+  register: pterodactyl_wings_instalada
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Imprime «wings vv1.13.4»: basta con que la primera línea acabe en la versión.
+# Pendiente = instalado en otra versión y este playbook no puede subirlo.
+- name: ¿Wings va por detrás?
+  ansible.builtin.set_fact:
+    pterodactyl_wings_al_dia: >-
+      {{ pterodactyl_wings_instalada.rc == 0
+         and (pterodactyl_wings_instalada.stdout_lines[0] | default(''))
+             is search('v' ~ (pterodactyl_wings_version | regex_escape) ~ '$') }}
+    pterodactyl_wings_pendiente: >-
+      {{ pterodactyl_wings_instalada.rc == 0
+         and not (pterodactyl_wings_instalada.stdout_lines[0] | default(''))
+                 is search('v' ~ (pterodactyl_wings_version | regex_escape) ~ '$')
+         and not (pterodactyl_wings_actualizar | bool) }}
+
+# Para volver atrás si el nuevo no arranca bien (lo hace wings-etapas.yml)
+- name: Copia del binario anterior de Wings
+  ansible.builtin.copy:
+    src: /usr/local/bin/wings
+    dest: /usr/local/bin/wings.anterior
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - pterodactyl_wings_actualizar | bool
+    - pterodactyl_wings_instalada.rc == 0
+    - not (pterodactyl_wings_al_dia | bool)
+
+- name: Aviso de Wings por detrás
+  ansible.builtin.debug:
+    msg: >-
+      Instalado: {{ pterodactyl_wings_instalada.stdout_lines[0] }}. El rol pide
+      {{ pterodactyl_wings_version }}; se sube con playbooks/wings-etapas.yml.
+  when: pterodactyl_wings_pendiente | bool
+
 - name: Binario de Wings
+  when: not (pterodactyl_wings_pendiente | bool)
   ansible.builtin.get_url:
-    url: "https://github.com/pterodactyl/wings/releases/download/v{{ pterodactyl_wings_version }}/wings_linux_{{ pterodactyl_arch }}"
+    url: "{{ pterodactyl_wings_url }}"
     dest: /usr/local/bin/wings
     checksum: "sha256:{{ pterodactyl_wings_sha256[pterodactyl_arch] }}"
     owner: root
