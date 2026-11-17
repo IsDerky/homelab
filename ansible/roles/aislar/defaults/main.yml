@@ -1,0 +1,27 @@
+---
+# Aislamiento en red de los contenedores de los servidores de juego: sin
+# conexiones nuevas hacia redes privadas (LAN, VPN, metadatos de la nube, otros
+# contenedores por su IP interna). Internet, los puertos publicados y lo que
+# ufw deje del host siguen funcionando.
+
+# Puente de Docker de la red de Wings (docker.network.interface de su config)
+aislar_puente: pterodactyl0
+
+aislar_redes4:
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+  - 169.254.0.0/16
+  - 100.64.0.0/10
+aislar_redes6:
+  - fc00::/7
+  - fe80::/10
+
+# Excepciones: destino:proto:puerto (p. ej. "10.0.0.5:tcp:3306")
+aislar_permitir4: []
+aislar_permitir6: []
+
+# Cada cuánto se comprueba que sigue puesto (y se repone si no)
+aislar_intervalo: 5min
+
+aislar_textfile_dir: /var/lib/node-exporter/textfile
