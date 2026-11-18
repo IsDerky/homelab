@@ -36,6 +36,55 @@
     mode: "0644"
   notify: Reiniciar homeassistant
 
+- name: Paquetes de configuración
+  ansible.builtin.copy:
+    content: "# {{ ansible_managed }}\n{{ item.value }}\n"
+    dest: "{{ homeassistant_config_dir }}/packages/{{ item.key }}.yaml"
+    mode: "0644"
+  loop: "{{ homeassistant_packages | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Reiniciar homeassistant
+
+- name: Clave SSH
+  when: homeassistant_ssh_clave | bool
+  block:
+    - name: Carpeta de la clave
+      ansible.builtin.file:
+        path: "{{ homeassistant_config_dir }}/ssh"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    # Solo la primera vez: después se conserva (está en la copia)
+    - name: Generar la clave
+      ansible.builtin.command: >-
+        ssh-keygen -q -t ed25519 -N "" -C "home-assistant@{{ inventory_hostname }}"
+        -f {{ homeassistant_config_dir }}/ssh/id_ed25519
+      args:
+        creates: "{{ homeassistant_config_dir }}/ssh/id_ed25519"
+
+    - name: ¿Existe la clave?
+      ansible.builtin.stat:
+        path: "{{ homeassistant_config_dir }}/ssh/id_ed25519.pub"
+      register: homeassistant_ssh_pub
+
+    - name: Carpeta de la pública
+      ansible.builtin.file:
+        path: "{{ homeassistant_ssh_publica | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copia legible de la pública
+      ansible.builtin.copy:
+        src: "{{ homeassistant_config_dir }}/ssh/id_ed25519.pub"
+        dest: "{{ homeassistant_ssh_publica }}"
+        remote_src: true
+        mode: "0644"
+      # En seco, la primera vez aún no existe
+      when: homeassistant_ssh_pub.stat.exists
+
 - name: Compose
   ansible.builtin.template:
     src: compose.yaml.j2
