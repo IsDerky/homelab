@@ -1,0 +1,17 @@
+---
+- name: Recargar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Aplicar compose de homeassistant
+  ansible.builtin.command: docker compose up -d --remove-orphans
+  args:
+    chdir: "{{ homeassistant_dir }}"
+  changed_when: true
+  when: not ansible_check_mode
+
+# configuration.yaml solo se lee al arrancar
+- name: Reiniciar homeassistant
+  ansible.builtin.command: docker restart homeassistant
+  changed_when: true
+  when: not ansible_check_mode

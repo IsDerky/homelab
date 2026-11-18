@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: homeassistant
+  namespace: isderky
+  description: Home Assistant Container en Docker Compose con red del host, detrás de nginx y con la configuración fuera de /opt
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

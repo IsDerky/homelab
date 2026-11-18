@@ -36,6 +36,64 @@
     group: "{{ nas_user }}"
     mode: "0770"
 
+# Lectores: ACL de lectura en lo que ya hay (solo la primera vez, -R) y por
+# defecto para lo nuevo. El dueño y los permisos de Samba no cambian.
+- name: Herramientas de ACL
+  ansible.builtin.apt:
+    name: acl
+    state: present
+  when: nas_lectores | length > 0 or nas_carpetas_propias | length > 0
+
+- name: ¿Tienen ya los lectores su ACL?
+  ansible.builtin.shell: |
+    set -o pipefail
+    getfacl -p {{ nas_path }} | grep -qx 'user:{{ item }}:r-x' &&
+    getfacl -p {{ nas_path }} | grep -qx 'default:user:{{ item }}:r-x'
+  args:
+    executable: /bin/bash
+  loop: "{{ nas_lectores }}"
+  register: nas_lectores_acl
+  changed_when: false
+  failed_when: false
+
+- name: ACL de lectura para los lectores
+  ansible.builtin.command: >-
+    setfacl -R -m u:{{ item.item }}:rX -m d:u:{{ item.item }}:rX {{ nas_path }}
+  loop: "{{ nas_lectores_acl.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc != 0
+  changed_when: true
+
+# Carpeta propia: escribible por el usuario local y por Samba ({{ nas_user }}),
+# y lo que cree cualquiera de los dos lo puede cambiar el otro
+- name: Carpetas propias
+  ansible.builtin.file:
+    path: "{{ nas_path }}/{{ item.nombre }}"
+    state: directory
+    owner: "{{ nas_user }}"
+    group: "{{ nas_user }}"
+    mode: "2770"
+  loop: "{{ nas_carpetas_propias }}"
+  loop_control:
+    label: "{{ item.nombre }}"
+
+- name: ACL de las carpetas propias
+  ansible.posix.acl:
+    path: "{{ nas_path }}/{{ item.0.nombre }}"
+    entity: "{{ item.0.usuario if item.1.tipo == 'user' else nas_user }}"
+    etype: "{{ item.1.tipo }}"
+    permissions: rwX
+    default: "{{ item.1.defecto }}"
+    state: present
+  loop: >-
+    {{ nas_carpetas_propias | product([
+         {'tipo': 'user', 'defecto': false}, {'tipo': 'user', 'defecto': true},
+         {'tipo': 'group', 'defecto': false}, {'tipo': 'group', 'defecto': true}
+       ]) | list }}
+  loop_control:
+    label: "{{ item.0.nombre }} {{ item.1.tipo }}{{ ' (defecto)' if item.1.defecto else '' }}"
+
 - name: Configuración de Samba
   ansible.builtin.template:
     src: smb.conf.j2

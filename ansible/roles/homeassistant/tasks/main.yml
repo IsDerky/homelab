@@ -1,0 +1,73 @@
+---
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ homeassistant_dir }}", mode: "0755" }
+    # Tokens de las integraciones y claves locales de los aparatos
+    - { path: "{{ homeassistant_config_dir }}", mode: "0700" }
+    - { path: "{{ homeassistant_config_dir }}/packages", mode: "0755" }
+    - { path: "{{ homeassistant_config_dir }}/themes", mode: "0755" }
+  loop_control:
+    label: "{{ item.path }}"
+
+# La interfaz los reescribe: solo se crean vacíos la primera vez
+- name: Ficheros de la interfaz
+  ansible.builtin.copy:
+    content: "{{ item.contenido }}"
+    dest: "{{ homeassistant_config_dir }}/{{ item.nombre }}"
+    force: false
+    mode: "0644"
+  loop:
+    - { nombre: automations.yaml, contenido: "[]\n" }
+    - { nombre: scripts.yaml, contenido: "{}\n" }
+    - { nombre: scenes.yaml, contenido: "[]\n" }
+  loop_control:
+    label: "{{ item.nombre }}"
+
+- name: Configuración (configuration.yaml)
+  ansible.builtin.template:
+    src: configuration.yaml.j2
+    dest: "{{ homeassistant_config_dir }}/configuration.yaml"
+    mode: "0644"
+  notify: Reiniciar homeassistant
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ homeassistant_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de homeassistant
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: homeassistant.service.j2
+    dest: /etc/systemd/system/homeassistant.service
+    mode: "0644"
+  register: homeassistant_unit
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: homeassistant.service
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and homeassistant_unit.changed)
+
+# El primer arranque instala dependencias y tarda
+- name: Responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ homeassistant_port }}/manifest.json
+  register: homeassistant_check
+  until: homeassistant_check.status == 200
+  retries: 36
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode
