@@ -38,7 +38,8 @@
 
 - name: Paquetes de configuración
   ansible.builtin.copy:
-    content: "# {{ ansible_managed }}\n{{ item.value }}\n"
+    # ansible_managed solo existe en las plantillas
+    content: "# Lo escribe Ansible (homeassistant_packages): los cambios aquí se pierden\n{{ item.value }}\n"
     dest: "{{ homeassistant_config_dir }}/packages/{{ item.key }}.yaml"
     mode: "0644"
   loop: "{{ homeassistant_packages | dict2items }}"
