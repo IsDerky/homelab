@@ -47,6 +47,81 @@
     label: "{{ item.key }}"
   notify: Reiniciar homeassistant
 
+- name: Integraciones de la comunidad
+  when: homeassistant_custom_components | length > 0
+  block:
+    - name: Carpetas de integraciones y descargas
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ homeassistant_config_dir }}/custom_components"
+        - "{{ homeassistant_cache_dir }}"
+
+    - name: ¿Existe la carpeta de descargas?
+      ansible.builtin.stat:
+        path: "{{ homeassistant_cache_dir }}"
+      register: homeassistant_cache_stat
+
+    - name: Descargar (con la suma fijada)
+      # En seco, la primera vez la carpeta aún no existe y get_url falla
+      when: not ansible_check_mode or homeassistant_cache_stat.stat.exists
+      ansible.builtin.get_url:
+        url: "{{ item.url }}"
+        dest: "{{ homeassistant_cache_dir }}/{{ item.nombre }}-{{ item.version }}.tar.gz"
+        checksum: "sha256:{{ item.sha256 }}"
+        mode: "0644"
+      loop: "{{ homeassistant_custom_components }}"
+      loop_control:
+        label: "{{ item.nombre }} {{ item.version }}"
+
+    - name: Versión instalada
+      ansible.builtin.command: cat {{ homeassistant_config_dir }}/custom_components/{{ item.nombre }}/.version-ansible
+      loop: "{{ homeassistant_custom_components }}"
+      loop_control:
+        label: "{{ item.nombre }}"
+      register: homeassistant_cc_version
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    # Otra versión (o instalada a mano): se quita entera para no dejar ficheros viejos
+    - name: Quitar la versión anterior
+      ansible.builtin.file:
+        path: "{{ homeassistant_config_dir }}/custom_components/{{ item.item.nombre }}"
+        state: absent
+      loop: "{{ homeassistant_cc_version.results }}"
+      loop_control:
+        label: "{{ item.item.nombre }}"
+      when: item.stdout != item.item.version
+
+    # tar y no unarchive: hace falta el comodín para sacar solo custom_components/<nombre>
+    # sin saber el nombre de la carpeta raíz del tarball (cambia con el repo y la versión)
+    - name: Extraer custom_components/<nombre>  # noqa: command-instead-of-module
+      ansible.builtin.command: >-
+        tar -xzf {{ homeassistant_cache_dir }}/{{ item.item.nombre }}-{{ item.item.version }}.tar.gz
+        -C {{ homeassistant_config_dir }}/custom_components --strip-components=2
+        --wildcards '*/custom_components/{{ item.item.nombre }}'
+      args:
+        creates: "{{ homeassistant_config_dir }}/custom_components/{{ item.item.nombre }}/manifest.json"
+      loop: "{{ homeassistant_cc_version.results }}"
+      loop_control:
+        label: "{{ item.item.nombre }}"
+      when: item.stdout != item.item.version
+      notify: Reiniciar homeassistant
+
+    - name: Marcar la versión
+      ansible.builtin.copy:
+        content: "{{ item.version }}"
+        dest: "{{ homeassistant_config_dir }}/custom_components/{{ item.nombre }}/.version-ansible"
+        mode: "0644"
+      loop: "{{ homeassistant_custom_components }}"
+      loop_control:
+        label: "{{ item.nombre }}"
+      # En seco, la primera vez la carpeta aún no existe
+      when: not ansible_check_mode
+
 - name: Clave SSH
   when: homeassistant_ssh_clave | bool
   block:

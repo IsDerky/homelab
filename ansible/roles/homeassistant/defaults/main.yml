@@ -25,3 +25,12 @@ homeassistant_ssh_publica: /etc/homeassistant/id_ed25519.pub
 #   homeassistant_packages:
 #     luces: "{{ lookup('file', 'luces.yaml') }}"
 homeassistant_packages: {}
+
+# Integraciones de la comunidad, con versión y suma fijas (sin HACS). Se descargan
+# a /var/cache/homeassistant y se extrae solo custom_components/<nombre>:
+#   - nombre: tuya_local
+#     version: 2026.10.0
+#     url: https://github.com/make-all/tuya-local/archive/refs/tags/2026.10.0.tar.gz
+#     sha256: "..."
+homeassistant_custom_components: []
+homeassistant_cache_dir: /var/cache/homeassistant
