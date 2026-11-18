@@ -14,3 +14,14 @@ homeassistant_tz: Etc/UTC
 
 # Días de historial en la BD (recorder)
 homeassistant_recorder_dias: 10
+
+# Clave SSH propia (ed25519, sin frase) en <config>/ssh/id_ed25519, para
+# shell_command contra otras máquinas con orden forzada en el otro lado. La
+# pública se copia a homeassistant_ssh_publica, legible sin root.
+homeassistant_ssh_clave: false
+homeassistant_ssh_publica: /etc/homeassistant/id_ed25519.pub
+
+# Paquetes de configuración que lleva Ansible, en <config>/packages/<nombre>.yaml:
+#   homeassistant_packages:
+#     luces: "{{ lookup('file', 'luces.yaml') }}"
+homeassistant_packages: {}
