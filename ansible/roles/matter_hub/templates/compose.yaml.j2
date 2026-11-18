@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+services:
+  matter-hub:
+    image: {{ matter_hub_image }}
+    container_name: matter-hub
+    restart: unless-stopped
+    # Matter necesita la red del host: mDNS, IPv6 link-local y un puerto UDP por puente (5540...)
+    network_mode: host
+    env_file: matter-hub.env
+    volumes:
+      - {{ matter_hub_data_dir }}:/data
+    mem_limit: {{ matter_hub_mem }}
