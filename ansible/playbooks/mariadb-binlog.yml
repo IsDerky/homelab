@@ -1,0 +1,8 @@
+---
+# Binlogs del MariaDB de esta máquina (el de los paneles). Reinicia MariaDB la
+# primera vez.
+- name: Binlogs de MariaDB
+  hosts: homelab
+  become: true
+  roles:
+    - mariadb_binlog

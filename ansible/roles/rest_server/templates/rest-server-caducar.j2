@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Caduca y libera espacio en el repositorio de {{ rest_server_usuario }} desde esta máquina (quien sube no
+# puede borrar: rest-server va en --append-only) y comprueba una parte. Con la retención de cada etiqueta.
+set -euo pipefail
+export RESTIC_REPOSITORY={{ rest_server_dir }}/{{ rest_server_usuario }}
+export RESTIC_PASSWORD_FILE=/etc/rest-server/restic-pass
+export RESTIC_CACHE_DIR=/var/cache/restic
+[ -f "$RESTIC_REPOSITORY/config" ] || { echo "aún no hay repositorio en $RESTIC_REPOSITORY"; exit 0; }
+{% for etiqueta, opciones in rest_server_retencion.items() %}
+restic --retry-lock 2h forget --tag {{ etiqueta }} {{ opciones }}
+{% endfor %}
+restic --retry-lock 2h prune --max-unused 10%
+restic check --read-data-subset=5%
+# los ficheros nuevos de restic (root) tienen que poder seguir sirviéndose
+chown -R rest-server:rest-server {{ rest_server_dir }}

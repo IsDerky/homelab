@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: IsDerky
+  description: rest-server de restic en modo solo-añadir, con la caducidad hecha en local
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions: [jammy, noble]
+dependencies: []

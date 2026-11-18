@@ -169,6 +169,66 @@
       changed_when: false
       check_mode: false
 
+- name: Copia solo-añadir en un rest-server
+  when: backup_nodo_host | length > 0
+  vars:
+    backup_nodo_url: "rest:http://{{ backup_nodo_usuario }}:{{ backup_nodo_clave_http }}@{{ backup_nodo_host }}/{{ backup_nodo_usuario }}/"
+  block:
+    - name: Faltan los secretos del rest-server
+      ansible.builtin.assert:
+        that: [backup_nodo_clave_http | length > 0, backup_nodo_restic_clave | length > 0]
+        fail_msg: backup_nodo_clave_http y backup_nodo_restic_clave (vault)
+        quiet: true
+
+    # Su propia contraseña: la otra máquina la tiene para caducar
+    - name: Contraseña del repositorio del rest-server
+      ansible.builtin.copy:
+        content: "{{ backup_nodo_restic_clave }}"
+        dest: /root/.restic-pass-nodo
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Entorno de server-backup _nodo
+      ansible.builtin.copy:
+        content: |
+          RESTIC_REPOSITORY={{ backup_nodo_url }}
+          RESTIC_PASSWORD_FILE=/root/.restic-pass-nodo
+        dest: "{{ backup_nodo_env }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: ¿Existe ya el repositorio del rest-server?
+      ansible.builtin.command: restic cat config
+      environment:
+        RESTIC_REPOSITORY: "{{ backup_nodo_url }}"
+        RESTIC_PASSWORD_FILE: /root/.restic-pass-nodo
+        RESTIC_CACHE_DIR: /var/cache/restic
+      register: backup_nodo_config
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      no_log: true
+      when: not ansible_check_mode
+
+    - name: Crear el repositorio del rest-server
+      ansible.builtin.command: restic init
+      environment:
+        RESTIC_REPOSITORY: "{{ backup_nodo_url }}"
+        RESTIC_PASSWORD_FILE: /root/.restic-pass-nodo
+      when: not ansible_check_mode and backup_nodo_config.rc != 0
+      changed_when: true
+      no_log: true
+
+- name: Sin copia en rest-server
+  ansible.builtin.file:
+    path: "{{ backup_nodo_env }}"
+    state: absent
+  when: backup_nodo_host | length == 0
+
 - name: Nodos de Wings de fuera
   ansible.builtin.import_tasks: nodos.yml
   when: backup_remote_nodes | length > 0

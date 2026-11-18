@@ -1,0 +1,30 @@
+---
+# Destino de restic solo-añadir: quien sube copias no puede borrarlas ni
+# reescribirlas (si alguien toma la máquina de origen, las copias de aquí siguen).
+# Lo viejo se caduca aquí, con su propia contraseña del repositorio.
+rest_server_version: 0.14.0
+rest_server_sha256:
+  amd64: 4c9c95bc079a0334e81fad379b19dc5c3353c71c2c88d652cafce2081c2b1c66
+  arm64: cef139cbe8b27b16bda731d17f093b0aa466b8c60b136c12d78b6f2bff3daf22
+rest_server_asset_id:
+  amd64: 259766581
+  arm64: 259766546
+rest_server_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts.architecture] }}"
+
+# IP:puerto donde escucha (normalmente la del túnel; el cortafuegos, aparte)
+rest_server_listen: ""
+rest_server_dir: /var/lib/rest-server
+
+# Usuario de HTTP de quien sube (cada uno ve solo su repositorio: --private-repos,
+# en <dir>/<usuario>) y su contraseña
+rest_server_usuario: ""
+rest_server_clave: ""
+
+# Contraseña del repositorio, para caducar desde aquí. Distinta de la de otros
+# repositorios: quien tome esta máquina no descifra las demás copias.
+rest_server_restic_clave: ""
+
+# Retención por etiqueta: «etiqueta: opciones de restic forget»
+rest_server_retencion: {}
+#   sistema: --group-by host,tags --keep-within 7d --keep-weekly 4 --keep-monthly 12
+rest_server_caducar_cuando: Sun 05:30

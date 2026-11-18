@@ -25,6 +25,11 @@
   ansible.builtin.import_playbook: sai.yml
 - name: Disco USB
   ansible.builtin.import_playbook: storage.yml
+- name: Binlogs de MariaDB
+  ansible.builtin.import_playbook: mariadb-binlog.yml
+# antes que backup.yml: el servidor de copias crea ahí su repositorio
+- name: Copias solo-añadir (rest-server)
+  ansible.builtin.import_playbook: rest-server.yml
 - name: Backups
   ansible.builtin.import_playbook: backup.yml
 - name: NAS

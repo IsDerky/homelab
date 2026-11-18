@@ -65,4 +65,14 @@ backup_apps_laravel: []
 # Secretos: definirlos con Ansible Vault. Solo se escriben si el fichero no
 # existe (máquina nueva); si ya está, el rol comprueba que coincide.
 backup_restic_password: ""
+
+# Tercera copia (sistema y clientes) en un rest-server solo-añadir (rol
+# rest_server en otra máquina, normalmente por un túnel): IP:puerto, usuario de
+# HTTP y las dos contraseñas (vault). La del repositorio es distinta de la de
+# Drive y la tiene también la otra máquina, que es la que caduca. Vacío = sin ella.
+backup_nodo_host: ""
+backup_nodo_usuario: ""
+backup_nodo_clave_http: ""
+backup_nodo_restic_clave: ""
+backup_nodo_env: /etc/server-backup/nodo.env
 backup_rclone_conf: ""

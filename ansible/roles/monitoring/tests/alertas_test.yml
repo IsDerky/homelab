@@ -118,6 +118,22 @@ tests:
             exp_annotations:
               summary: "La copia local de sistema ha fallado (journalctl -u server-backup@sistema)."
 
+  # La del rest-server solo-añadir avisa igual que la local
+  - interval: 1m
+    input_series:
+      - series: 'ops_backup_run_success{modo="clientes", destino="nodo"}'
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BackupLocalFallido
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              modo: clientes
+              destino: nodo
+            exp_annotations:
+              summary: "La copia nodo de clientes ha fallado (journalctl -u server-backup@clientes)."
+
   # Atrasada: la del NAS sí avisa; la de sistema en Drive no (la vigila el
   # vigilante externo) aunque esté igual de atrasada
   - interval: 1m

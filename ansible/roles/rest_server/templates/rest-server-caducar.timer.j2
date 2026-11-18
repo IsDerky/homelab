@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Caducar el repositorio de rest-server cada semana
+
+[Timer]
+OnCalendar={{ rest_server_caducar_cuando }}
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

@@ -1,4 +1,10 @@
 ---
+# bunzip2 y unzip: sin ellos el binario nuevo saldría vacío
+- name: Paquetes para descomprimir
+  ansible.builtin.apt:
+    name: [bzip2, unzip]
+    state: present
+
 - name: Carpeta de descargas
   ansible.builtin.file:
     path: /var/cache/backup-binarios
@@ -15,7 +21,9 @@
   check_mode: false
 
 - name: Instalar restic {{ backup_restic_version }}
-  when: ("restic " ~ backup_restic_version ~ " ") not in backup_restic_actual.stdout | default('')
+  when:
+    - not ansible_check_mode
+    - ("restic " ~ backup_restic_version ~ " ") not in backup_restic_actual.stdout | default('')
   block:
     - name: Descargar restic
       ansible.builtin.get_url:
@@ -35,7 +43,7 @@
     # Se escribe al lado y se mueve: si algo falla a medias, el restic de antes sigue
     - name: Descomprimir restic
       ansible.builtin.shell: |
-        set -o pipefail
+        set -euo pipefail
         bunzip2 -c /var/cache/backup-binarios/restic_{{ backup_restic_version }}.bz2 > /usr/local/bin/.restic.nuevo
         chmod 0755 /usr/local/bin/.restic.nuevo
         /usr/local/bin/.restic.nuevo version | grep -qF "restic {{ backup_restic_version }} "
@@ -52,7 +60,9 @@
   check_mode: false
 
 - name: Instalar rclone {{ backup_rclone_version }}
-  when: ("rclone v" ~ backup_rclone_version ~ "\n") not in backup_rclone_actual.stdout | default('')
+  when:
+    - not ansible_check_mode
+    - ("rclone v" ~ backup_rclone_version ~ "\n") not in backup_rclone_actual.stdout | default('')
   block:
     - name: Descargar rclone
       ansible.builtin.get_url:
@@ -69,7 +79,7 @@
 
     - name: Descomprimir rclone
       ansible.builtin.shell: |
-        set -o pipefail
+        set -euo pipefail
         unzip -p /var/cache/backup-binarios/rclone_{{ backup_rclone_version }}.zip \
           'rclone-v{{ backup_rclone_version }}-linux-{{ backup_arch }}/rclone' > /usr/local/bin/.rclone.nuevo
         chmod 0755 /usr/local/bin/.rclone.nuevo

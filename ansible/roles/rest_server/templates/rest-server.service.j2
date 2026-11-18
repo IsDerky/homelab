@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+[Unit]
+Description=rest-server de restic (solo añadir)
+After=network-online.target wg-quick@wg0.service
+Wants=network-online.target
+
+[Service]
+User=rest-server
+Group=rest-server
+ExecStart=/usr/local/bin/rest-server --append-only --private-repos --listen {{ rest_server_listen }} --path {{ rest_server_dir }} --htpasswd-file /etc/rest-server/htpasswd
+Restart=on-failure
+RestartSec=10
+ProtectSystem=strict
+ReadWritePaths={{ rest_server_dir }}
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

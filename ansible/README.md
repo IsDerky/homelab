@@ -32,6 +32,8 @@ Roles para montar piezas del homelab:
 - `bbr`: control de congestión BBR y cola `fq`, aplicados en caliente (`playbooks/bbr.yml`).
 - `earlyoom`: mata antes de que la máquina se ahogue sin memoria, primero los servidores de juego y nunca antes las bases de datos, Wings ni el panel (`playbooks/earlyoom.yml`).
 - `zram`: swap comprimida en RAM con zram-tools, por delante de cualquier swap en disco (`playbooks/zram.yml`).
+- `mariadb_binlog`: binlogs de MariaDB para restaurar a cualquier minuto con el volcado de `server-backup` (`playbooks/mariadb-binlog.yml`).
+- `rest_server`: destino de restic en solo-añadir para una tercera copia que la máquina de origen no puede borrar; la caducidad se hace en local (`playbooks/rest-server.yml`).
 - `deriva`: cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en Grafana cuántas tareas cambiarían (`playbooks/deriva.yml`).
 
 ## Uso
@@ -103,6 +105,14 @@ Cada minuto, `earlyoom-contador` suma lo que ha matado (las líneas «sending SI
 
 Swap comprimida en RAM (zram-tools, zstd, el 25 % de la RAM por defecto) con prioridad por encima de la swap en disco, y `vm.page-cluster=0`. Antes de que earlyoom tenga que matar nada, lo menos usado se comprime en memoria en vez de ir a disco, y en máquinas sin swap da margen ante un pico. Algunos kernels de nube traen zram en `linux-modules-extra`: el rol lo instala para cada kernel instalado que no tenga el módulo, así que tras actualizar el kernel hay que volver a pasarlo antes de reiniciar.
 
+## Rol `mariadb_binlog`
+
+Activa los binlogs de MariaDB (`70-binlog.cnf`, después de `50-server.cnf`): formato ROW, `sync_binlog=1` (una transacción confirmada ya está en el disco) y 8 días de retención. Activarlo reinicia MariaDB una vez. Con ellos, el volcado de `server-backup` deja su posición y se puede volver a cualquier minuto (ver el rol `backup`).
+
+## Rol `rest_server`
+
+[rest-server](https://github.com/restic/rest-server) de restic con `--append-only` y `--private-repos`, escuchando solo en la IP que se le dé (la del túnel), con usuario y contraseña (bcrypt, generada con `htpasswd` leyendo la contraseña por stdin: no pasa por la línea de órdenes ni por la salida). Binario con versión y SHA-256 fijos. Una vez por semana, `rest-server-caducar` aplica aquí la retención de cada etiqueta (`rest_server_retencion`), libera espacio y comprueba un 5 % de los datos: lo hace con la contraseña del repositorio, que por eso es distinta de la de los otros repositorios. Probado en un contenedor: sin credenciales da 401, con ellas se crea el repositorio y se sube, `forget` desde fuera falla y la caducidad local sí borra.
+
 ## Rol `ufw`
 
 Pone las reglas, después las políticas por defecto y al final activa ufw, así que en una máquina nueva no hay ningún momento con todo cerrado y SSH sin abrir. Si ninguna regla abre `ufw_ssh_port`, el rol falla antes de tocar nada.
@@ -126,6 +136,12 @@ Instala `server-backup` y sus timers: `sistema` cada 6 h, `clientes` a diario, `
 Los secretos (`backup_restic_password` y `backup_rclone_conf`) van en Ansible Vault y solo se escriben si el fichero no existe, es decir, en una máquina nueva. Si ya existe no se toca: sobrescribir la contraseña de un repo que ya tiene datos lo dejaría sin poder abrirse, y rclone reescribe su config al renovar el token. A cambio, el rol comprueba que la contraseña del vault es la del servidor y, al final, que restic abre el repositorio de verdad (`restic cat config`, solo lectura).
 
 El script usa `discord-dm` y `ops-ping` para avisar; no los instala este rol.
+
+**Volver a un minuto concreto.** Con el rol `mariadb_binlog`, cada volcado de MariaDB del modo `sistema` apunta su posición en el binlog (`--master-data=2`), y la copia se lleva también los binlogs cerrados (el abierto se cierra antes con `FLUSH BINARY LOGS`). Para volver al minuto anterior a un error: restaurar el volcado y reaplicar con `mariadb-binlog --start-position=<la del volcado> --stop-datetime='<minuto>'` desde su fichero. Probado con la base de una app real: un cambio hecho después del volcado se conserva y un borrado hecho después del minuto elegido no.
+
+**Tercera copia en solo-añadir** (`backup_nodo_*`). Después de la local, `sistema` y `clientes` suben también a un rest-server en otra máquina (rol `rest_server`) que va con `--append-only`: desde aquí se puede subir pero no borrar ni reescribir, así que quien tomase esta máquina no podría llevarse las tres copias por delante. Esa copia no caduca desde aquí (`forget` está prohibido); la caduca la otra máquina con la misma retención. Su repositorio tiene una contraseña propia, distinta de la de Drive, porque la otra máquina también la necesita para caducar. Como la local, no avisa por DM: queda en el estado (`<modo>-nodo.json`) y la vigila Prometheus.
+
+**Binarios.** restic y rclone se descomprimen al lado y se comprueba su versión antes de sustituir los de antes, con `set -e`: si falta `bunzip2` o `unzip` (el rol los instala), la tarea falla en vez de dejar un binario vacío.
 
 **Bloqueos huérfanos.** Si restic muere a medias (un reinicio, falta de memoria) deja su bloqueo en el repositorio, y la copia siguiente se quedaría esperando las 6 h de `--retry-lock`. Antes del primer comando contra cada repositorio, el script mira los bloqueos: los de este equipo con el proceso muerto y más de 1 h los quita con `restic unlock`, que además nunca toca el de una copia en marcha. Los de otros equipos no los toca. Deja `restic_bloqueo_mas_viejo_segundos` y `restic_bloqueos_huerfanos` por destino en el textfile de node-exporter: restic refresca sus bloqueos cada 5 min, así que uno viejo es que algo va mal.
 
