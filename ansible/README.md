@@ -29,6 +29,8 @@ Roles para montar piezas del homelab:
 - `cuenta_ro`: cuenta SSH de solo lectura con la clave restringida y sudo solo para comandos de consulta con argumentos fijos (`playbooks/ssh.yml`).
 - `auditd`: registro forense sin alertas. Apunta los comandos de las sesiones de personas (no los de los servicios) y los cambios en cuentas, sudo, SSH, servicios, cron y módulos del kernel, y quién lee las credenciales trampa. Se consulta con `ausearch -k <clave> -i` (`playbooks/auditd.yml`).
 - `trampas`: ficheros con credenciales falsas (por ejemplo un `.git-credentials`) con un token por máquina. Solo los usaría alguien que ha entrado; el dominio al que apuntan avisa si llega uno (`playbooks/trampas.yml`). Leerlos no avisa, así que las copias y la deriva no dan falsos positivos.
+- `bbr`: control de congestión BBR y cola `fq`, aplicados en caliente (`playbooks/bbr.yml`).
+- `earlyoom`: mata antes de que la máquina se ahogue sin memoria, primero los servidores de juego y nunca antes las bases de datos, Wings ni el panel (`playbooks/earlyoom.yml`).
 - `deriva`: cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en Grafana cuántas tareas cambiarían (`playbooks/deriva.yml`).
 
 ## Uso
@@ -86,6 +88,14 @@ Una cuenta de solo lectura para consultar las máquinas sin entrar como admin. V
 - `adm` y `systemd-journal` para leer logs sin sudo. sudo solo para comandos de consulta con los argumentos escritos (`cuenta_ro_sudo_noexec`, con `NOEXEC` para que no lancen otros programas; `cuenta_ro_sudo_exec` para los que tienen que hacerlo, como `ufw status`, que llama a iptables). Se valida con `visudo -cf` antes de instalarlo.
 - Los nodos no se exponen para esto: su clave solo vale desde la IP del servidor en el túnel, y la cuenta del servidor solo puede reenviar al 22 de los nodos por el túnel (`permitopen` en la clave y `PermitOpen` en sshd). Se entra con `ssh -J`.
 
+## Rol `bbr`
+
+Control de congestión BBR y cola `fq` en todas las máquinas. Con cubic, una pérdida suelta (wifi del jugador, un trayecto largo) parte la ventana por la mitad; BBR mide ancho de banda y retardo en vez de reaccionar a cada pérdida, y `fq` le da el ritmo de envío. El sysctl solo afecta a las colas que se creen después, así que a la interfaz de salida se le cambia en caliente (con varias colas, una `mq` nueva crea sus hijas ya con `fq`).
+
+## Rol `earlyoom`
+
+El OOM del kernel llega tarde: antes de matar nada, la máquina se pasa minutos paginando y todo va a tirones, también lo importante. earlyoom actúa antes (por defecto con menos del 5 % libre) y elige por `oom_score`, que ya baja `OOMScoreAdjust` en las unidades críticas (rol `endurecimiento`). Además, `earlyoom_evitar` deja para el final las bases de datos, Wings, Docker, nginx, PHP-FPM, sshd y systemd, y `earlyoom_preferir` pone delante a los servidores de juego (`java`): si hay que matar algo, cae una partida y no el panel.
+
 ## Rol `ufw`
 
 Pone las reglas, después las políticas por defecto y al final activa ufw, así que en una máquina nueva no hay ningún momento con todo cerrado y SSH sin abrir. Si ninguna regla abre `ufw_ssh_port`, el rol falla antes de tocar nada.
@@ -109,6 +119,8 @@ Instala `server-backup` y sus timers: `sistema` cada 6 h, `clientes` a diario, `
 Los secretos (`backup_restic_password` y `backup_rclone_conf`) van en Ansible Vault y solo se escriben si el fichero no existe, es decir, en una máquina nueva. Si ya existe no se toca: sobrescribir la contraseña de un repo que ya tiene datos lo dejaría sin poder abrirse, y rclone reescribe su config al renovar el token. A cambio, el rol comprueba que la contraseña del vault es la del servidor y, al final, que restic abre el repositorio de verdad (`restic cat config`, solo lectura).
 
 El script usa `discord-dm` y `ops-ping` para avisar; no los instala este rol.
+
+**Bloqueos huérfanos.** Si restic muere a medias (un reinicio, falta de memoria) deja su bloqueo en el repositorio, y la copia siguiente se quedaría esperando las 6 h de `--retry-lock`. Antes del primer comando contra cada repositorio, el script mira los bloqueos: los de este equipo con el proceso muerto y más de 1 h los quita con `restic unlock`, que además nunca toca el de una copia en marcha. Los de otros equipos no los toca. Deja `restic_bloqueo_mas_viejo_segundos` y `restic_bloqueos_huerfanos` por destino en el textfile de node-exporter: restic refresca sus bloqueos cada 5 min, así que uno viejo es que algo va mal.
 
 restic y rclone son los binarios oficiales, con versión y SHA-256 fijos, en `/usr/local/bin`. Los paquetes de Ubuntu 24.04 se quedaban muy atrás (restic 0.16 y un rclone de 2022) y se desinstalan. El nuevo se escribe al lado, se comprueba que da la versión esperada y solo entonces sustituye al anterior. Los paquetes de apt se quitan al final, para que un backup que salte en medio no se quede sin restic. Para actualizar, se cambian versión y sumas en `defaults/main.yml`.
 
@@ -489,6 +501,7 @@ Pocas y solo de cosas graves. Lo demás (backups, certificados de este servidor,
 | `RecolectorParado` | El snapshot de `ops-collect` lleva más de 30 min sin actualizarse |
 | `SinRespuestaHTTPS` | Una comprobación TLS falla durante 10 min (un reinicio de Wings tarda segundos y no cuenta) |
 | `CertificadoPorCaducar` | Un certificado de las comprobaciones TLS caduca en menos de 14 días. Certbot renueva a 30, así que a 14 algo ha fallado; el caso típico es Wings, que solo lee el certificado al arrancar |
+| `CaducaPronto` | Algo de `monitoring_caducidades` caduca en menos de 30 días (lo que no se puede comprobar desde el servidor, como un certificado de SSH que vive en el PC) |
 | `ContenidoRoto` | Una comprobación de contenido falla dos veces seguidas |
 
 **El SLO.** Cada comprobación HTTP tiene un objetivo de disponibilidad en 30 días (`monitoring_slo_target`, 99,5 % por defecto: unas 3,6 h de fallo al mes). Avisar en cuanto falla una comprobación sería ruido. Esperar a incumplir el objetivo sería avisar tarde. La alerta mira **a qué ritmo se gasta el margen**, en dos ventanas a la vez, como propone el libro de SRE de Google: a 14,4 veces el ritmo permitido, el margen del mes se acaba en unos 2 días. La ventana larga (1 h) evita que salte por un fallo suelto. La corta (5 min) hace que se apague en cuanto se arregla.
@@ -509,6 +522,8 @@ Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): 
 | `monitoring_content_probes` | `[]` | `nombre`, `url`, `body_regex` y opcionalmente `timeout` (máx. 85s). Cada `monitoring_content_interval` (`15m`) |
 | `monitoring_remote_nodes` | `[]` | node-exporter de otras máquinas (`nombre`, `target`): job `nodos` |
 | `monitoring_systemd_units` | `[]` | Unidades cuyo estado exporta node_exporter (expresiones regulares) |
+| `monitoring_caducidades` | `[]` | `nombre` y `fecha` (`AAAA-MM-DD`): métrica `caducidad_timestamp_segundos` y alerta `CaducaPronto` |
+| `monitoring_bloqueo_cf_dominios` | `[]` | Dominios detrás de Cloudflare. Cada 15 min, `bloqueo-cloudflare` mira si la operadora corta su IP (https no conecta y http a esa IP no lleva `cf-ray`). Solo métricas `cloudflare_*` |
 | `monitoring_cadvisor` | `true` | Métricas por contenedor |
 | `monitoring_wings_local_node` | `local` | Nombre del nodo de Wings local en las métricas de servidores de juego |
 | `monitoring_ops_group` | `""` | Grupo que puede leer el snapshot. Vacío = sin ops-exporter |

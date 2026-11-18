@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# HELP caducidad_timestamp_segundos Cuándo caduca algo que no se puede comprobar desde aquí (monitoring_caducidades)
+# TYPE caducidad_timestamp_segundos gauge
+{% for c in monitoring_caducidades %}
+caducidad_timestamp_segundos{nombre="{{ c.nombre }}"} {{ (c.fecha | string | to_datetime('%Y-%m-%d')).strftime('%s') }}
+{% endfor %}

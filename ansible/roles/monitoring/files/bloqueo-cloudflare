@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# ¿Corta la operadora la IP de Cloudflare de estos dominios? Algunas operadoras
+# bloquean IPs de Cloudflare enteras por orden judicial, y con ellas caen webs
+# que no tienen nada que ver. Desde aquí se ve igual que lo vería cualquiera con
+# la misma operadora. Solo deja métricas, no avisa.
+#
+#   bloqueo-cloudflare dominio1 dominio2 ...
+#
+# El dominio se resuelve por DNS sobre HTTPS (el DNS local puede dar la IP de la
+# LAN). Si https no conecta y http a esa IP no lleva la cabecera cf-ray de
+# Cloudflare, es la página de la operadora: bloqueado.
+set -uo pipefail
+TEXTFILE=${TEXTFILE:-/var/lib/node-exporter/textfile}
+DOH=${DOH:-https://1.1.1.1/dns-query}
+
+lineas=()
+for d in "$@"; do
+  ip=$(curl -s --max-time 10 -H 'accept: application/dns-json' "$DOH?name=$d&type=A" |
+    jq -r '[.Answer[]? | select(.type == 1) | .data][0] // empty' 2>/dev/null)
+  if [ -z "$ip" ]; then
+    lineas+=("cloudflare_resuelve{dominio=\"$d\"} 0")
+    continue
+  fi
+  lineas+=("cloudflare_resuelve{dominio=\"$d\"} 1")
+  codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$d:443:$ip" "https://$d/")
+  https=0 bloqueado=0
+  if [ "$codigo" != 000 ]; then
+    https=1
+  elif ! curl -s -D - -o /dev/null --max-time 10 -H "Host: $d" "http://$ip/" | grep -qi '^cf-ray:'; then
+    bloqueado=1
+  fi
+  lineas+=("cloudflare_https_ok{dominio=\"$d\",ip=\"$ip\"} $https")
+  lineas+=("cloudflare_bloqueado{dominio=\"$d\",ip=\"$ip\"} $bloqueado")
+done
+
+tmp=$(mktemp "$TEXTFILE/.bloqueo-cloudflare.XXXXXX")
+{
+  echo "# HELP cloudflare_resuelve 1 si el dominio se ha podido resolver por DNS sobre HTTPS"
+  echo "# TYPE cloudflare_resuelve gauge"
+  echo "# HELP cloudflare_https_ok 1 si el dominio responde por https desde aquí"
+  echo "# TYPE cloudflare_https_ok gauge"
+  echo "# HELP cloudflare_bloqueado 1 si la operadora corta la IP de Cloudflare del dominio"
+  echo "# TYPE cloudflare_bloqueado gauge"
+  printf '%s\n' "${lineas[@]}"
+} >"$tmp"
+chmod 644 "$tmp"
+mv "$tmp" "$TEXTFILE/bloqueo-cloudflare.prom"

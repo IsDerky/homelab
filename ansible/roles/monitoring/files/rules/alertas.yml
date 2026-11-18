@@ -119,6 +119,15 @@ groups:
         annotations:
           summary: "El certificado de {{ $labels.nombre }} caduca en {{ $value | humanizeDuration }}."
 
+      # Lo que no se puede comprobar desde aquí (monitoring_caducidades)
+      - alert: CaducaPronto
+        expr: caducidad_timestamp_segundos - time() < 30 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.nombre }} caduca en {{ $value | humanizeDuration }}."
+
       # Comprobaciones de contenido: van cada 15 min, más que la ventana con la
       # que Prometheus busca el último valor (5 min), así que se mira con
       # last_over_time. Dos fallos seguidos.

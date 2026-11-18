@@ -156,9 +156,75 @@ notify_fail() {
 }
 trap notify_fail ERR
 
+# Bloqueos huérfanos: si restic muere a medias (reinicio, falta de memoria) deja
+# su bloqueo y las copias siguientes esperarían las 6 h de --retry-lock. Se
+# quitan los de este equipo con el proceso muerto y más de 1 h; los de otros
+# equipos no se tocan. Deja en el textfile la edad del bloqueo más viejo que
+# queda (restic refresca los suyos cada 5 min: uno viejo es que algo va mal).
+TEXTFILE=${TEXTFILE:-/var/lib/node-exporter/textfile}
+mirados=" "
+limpiar_bloqueos() {
+  local huerfanos
+  huerfanos=$(python3 - "$(hostname)" "$destino" "$TEXTFILE" "${BLOQUEO_HUERFANO_S:-3600}" <<'PY'
+import json, os, re, subprocess, sys, time
+from datetime import datetime
+host, destino, textfile, umbral = sys.argv[1:]
+
+def restic(*args):
+    return subprocess.run(["restic", "--no-lock", *args], capture_output=True, text=True, check=True).stdout
+
+ahora = time.time()
+huerfanos, mas_viejo = 0, 0
+for lock_id in restic("list", "locks").split():
+    try:
+        lock = json.loads(restic("cat", "lock", lock_id))
+    except (subprocess.CalledProcessError, ValueError):
+        continue  # lo ha soltado mientras tanto
+    # restic da nanosegundos; fromisoformat solo admite hasta microsegundos
+    t = datetime.fromisoformat(re.sub(r"(\.\d{6})\d+", r"\1", lock["time"]).replace("Z", "+00:00"))
+    edad = ahora - t.timestamp()
+    if lock.get("hostname") == host:
+        try:
+            with open(f"/proc/{lock.get('pid')}/comm") as f:
+                vivo = f.read().strip() == "restic"
+        except OSError:
+            vivo = False
+        if not vivo and edad > int(umbral):
+            huerfanos += 1
+            continue
+    mas_viejo = max(mas_viejo, edad)
+print(huerfanos)
+if os.path.isdir(textfile):
+    ruta = f"{textfile}/restic-bloqueos-{destino}.prom"
+    with open(ruta + ".tmp", "w") as f:
+        f.write("# HELP restic_bloqueo_mas_viejo_segundos Edad del bloqueo más viejo del repositorio sin contar los huérfanos\n"
+                "# TYPE restic_bloqueo_mas_viejo_segundos gauge\n"
+                f'restic_bloqueo_mas_viejo_segundos{{destino="{destino}"}} {int(mas_viejo)}\n'
+                "# HELP restic_bloqueos_huerfanos Bloqueos huérfanos encontrados en la última pasada\n"
+                "# TYPE restic_bloqueos_huerfanos gauge\n"
+                f'restic_bloqueos_huerfanos{{destino="{destino}"}} {huerfanos}\n')
+    os.chmod(ruta + ".tmp", 0o644)
+    os.replace(ruta + ".tmp", ruta)
+PY
+  )
+  if [ "$huerfanos" -gt 0 ]; then
+    echo "Quitando $huerfanos bloqueo(s) huérfano(s) de $destino"
+    # unlock solo quita los que restic da por muertos (proceso de este equipo
+    # que no existe o sin refrescar en 30 min): nunca el de una copia en marcha
+    restic unlock
+  fi
+}
+
 # Los modos pueden coincidir (p. ej. clientes aún subiendo cuando toca
 # sistema): restic espera a que el otro suelte el bloqueo en vez de fallar.
-r() { restic --retry-lock 6h "$@"; }
+# Antes del primer comando contra cada repositorio, los huérfanos fuera.
+r() {
+  if [[ $mirados != *" $RESTIC_REPOSITORY "* ]]; then
+    mirados+="$RESTIC_REPOSITORY "
+    limpiar_bloqueos || echo "No se pudieron revisar los bloqueos de $destino" >&2
+  fi
+  restic --retry-lock 6h "$@"
+}
 
 # `restic backup` sale con 3 si la copia se hizo pero algún archivo cambió o
 # desapareció mientras se leía (normal en servidores de juego en marcha).

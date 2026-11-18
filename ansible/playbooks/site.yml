@@ -7,6 +7,10 @@
   ansible.builtin.import_playbook: ssh.yml
 - name: Endurecimiento
   ansible.builtin.import_playbook: endurecimiento.yml
+- name: BBR y fq
+  ansible.builtin.import_playbook: bbr.yml
+- name: Antes de quedarse sin memoria (earlyoom)
+  ansible.builtin.import_playbook: earlyoom.yml
 - name: Actualizaciones automáticas
   ansible.builtin.import_playbook: actualizaciones.yml
 - name: Cortafuegos

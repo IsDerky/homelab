@@ -244,6 +244,30 @@
     state: directory
     mode: "0755"
 
+- name: Caducidades a vigilar
+  ansible.builtin.template:
+    src: caducidades.prom.j2
+    dest: "{{ monitoring_textfile_dir }}/caducidades.prom"
+    mode: "0644"
+
+- name: Sonda del bloqueo de Cloudflare
+  when: monitoring_bloqueo_cf_dominios | length > 0
+  block:
+    - name: Script bloqueo-cloudflare
+      ansible.builtin.copy:
+        src: bloqueo-cloudflare
+        dest: /usr/local/bin/bloqueo-cloudflare
+        mode: "0755"
+
+    - name: Unidades bloqueo-cloudflare
+      ansible.builtin.template:
+        src: bloqueo-cloudflare.{{ item }}.j2
+        dest: /etc/systemd/system/bloqueo-cloudflare.{{ item }}
+        mode: "0644"
+      loop: [service, timer]
+      register: monitoring_cf_units
+      notify: Recargar systemd
+
 - name: Estado de unidades systemd
   when: monitoring_systemd_units | length > 0
   block:
@@ -283,7 +307,9 @@
        + (['ops-exporter.service'] if monitoring_ops_group | length > 0 else [])
        + (['alert-dm.service'] if monitoring_alert_dm else [])
        + (['cambios-recoger.timer'] if monitoring_cambios and not (ansible_check_mode and monitoring_cambios_units is changed) else [])
-       + (['ram-servidores.timer'] if monitoring_ram_historico and not (ansible_check_mode and monitoring_ram_units is changed) else []) }}
+       + (['ram-servidores.timer'] if monitoring_ram_historico and not (ansible_check_mode and monitoring_ram_units is changed) else [])
+       + (['bloqueo-cloudflare.timer'] if monitoring_bloqueo_cf_dominios | length > 0
+          and not (ansible_check_mode and monitoring_cf_units is changed) else []) }}
 
 - name: Esperar a que escuchen
   ansible.builtin.wait_for:

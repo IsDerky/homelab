@@ -1,0 +1,34 @@
+---
+# earlyoom mata un proceso antes de que la máquina se quede sin memoria y se
+# arrastre (el OOM del kernel llega tarde, con todo ya paginando). Elige por
+# oom_score, que ya baja OOMScoreAdjust (rol endurecimiento) en lo importante.
+
+# Actúa cuando la memoria libre baja de este % (y la swap libre del suyo; sin
+# swap solo cuenta la memoria). El segundo valor es el % al que pasa a SIGKILL.
+earlyoom_memoria: "5,2"
+earlyoom_swap: "10,5"
+
+# Principios de nombre de proceso (expresión regular) que solo mata si no queda nada
+# más: bases de datos, Wings, Docker, el servidor web, sshd y systemd
+earlyoom_evitar:
+  - mariadbd
+  - mysqld
+  - postgres
+  - mongod
+  - wings
+  - dockerd
+  - containerd
+  - containerd-shim.*
+  - nginx
+  - php-fpm.*
+  - sshd
+  - systemd.*
+  - cloudflared
+  - wg-quick
+
+# Los primeros candidatos: los servidores de juego
+earlyoom_preferir:
+  - java
+
+# Cada cuánto deja en el journal cómo va la memoria (s); 0 = nunca
+earlyoom_informe: 3600

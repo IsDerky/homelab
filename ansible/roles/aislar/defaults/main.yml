@@ -21,6 +21,13 @@ aislar_redes6:
 aislar_permitir4: []
 aislar_permitir6: []
 
+# Puertos cortados también hacia Internet: proto:puerto. El 25 es correo
+# saliente directo (spam desde un servidor comprometido y la IP en listas
+# negras); el correo legítimo va por 465/587 con usuario. Donde el proveedor ya
+# lo corta no cambia nada.
+aislar_cortar_salida:
+  - tcp:25
+
 # Cada cuánto se comprueba que sigue puesto (y se repone si no)
 aislar_intervalo: 5min
 

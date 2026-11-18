@@ -1,0 +1,49 @@
+---
+- name: Cargar el módulo al arrancar
+  ansible.builtin.copy:
+    content: "tcp_{{ bbr_congestion }}\n"
+    dest: /etc/modules-load.d/bbr.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Módulo cargado
+  community.general.modprobe:
+    name: tcp_{{ bbr_congestion }}
+    state: present
+
+- name: Sysctl
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/60-bbr.conf
+    sysctl_set: true
+    reload: false
+  loop: >-
+    {{ ([{'key': 'net.core.default_qdisc', 'value': bbr_qdisc}] if bbr_qdisc else [])
+       + [{'key': 'net.ipv4.tcp_congestion_control', 'value': bbr_congestion}] }}
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+
+- name: Cola de la interfaz de salida
+  when: bbr_qdisc | length > 0 and bbr_cola_en_caliente
+  vars:
+    bbr_if: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    # las colas que no son la raíz mq: con varias colas, una por cada una
+    bbr_hojas: "{{ bbr_cola.stdout_lines | reject('match', '^qdisc mq ') | list }}"
+  block:
+    - name: Cola actual
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, "{{ bbr_if }}"]
+      register: bbr_cola
+      check_mode: false
+      changed_when: false
+
+    # Una mq nueva crea sus hijas con default_qdisc, que ya es la nueva
+    - name: Poner {{ bbr_qdisc }}
+      ansible.builtin.command:
+        argv: >-
+          {{ ['tc', 'qdisc', 'replace', 'dev', bbr_if, 'root']
+             + (['handle', '1:', 'mq'] if bbr_cola.stdout.startswith('qdisc mq ') else [bbr_qdisc]) }}
+      when: bbr_hojas | reject('match', '^qdisc ' ~ bbr_qdisc ~ ' ') | list | length > 0
+      changed_when: true

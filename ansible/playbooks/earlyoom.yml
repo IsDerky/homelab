@@ -1,0 +1,6 @@
+---
+- name: Antes de quedarse sin memoria (earlyoom)
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - earlyoom

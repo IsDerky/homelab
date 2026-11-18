@@ -1,0 +1,6 @@
+---
+- name: BBR y fq
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - bbr
