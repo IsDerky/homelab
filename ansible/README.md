@@ -427,6 +427,7 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 | `homeassistant_recorder_dias` | `10` | Días de historial |
 | `homeassistant_ssh_clave` | `false` | Genera una clave ed25519 propia en `<config>/ssh` para `shell_command` contra otras máquinas (con orden forzada en el otro lado) y deja la pública en `homeassistant_ssh_publica` |
 | `homeassistant_packages` | `{}` | `{nombre: YAML}` que van a `<config>/packages/<nombre>.yaml` y reinician Home Assistant al cambiar |
+| `homeassistant_custom_components` | `[]` | Integraciones de la comunidad sin HACS: `{nombre, version, url, sha256}`. Se descarga el tarball con su suma, se extrae solo `custom_components/<nombre>` y, al cambiar de versión, se quita la anterior entera |
 
 ## Rol `bd_servidores`
 
