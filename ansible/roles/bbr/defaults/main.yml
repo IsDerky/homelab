@@ -1,0 +1,11 @@
+---
+# Control de congestión TCP y cola de salida. BBR aguanta mejor que cubic las
+# pérdidas sueltas de una línea doméstica o de un trayecto largo, y fq le da el
+# ritmo de envío (pacing).
+bbr_congestion: bbr
+# Vacío = no se toca la cola (en un contenedor default_qdisc no existe)
+bbr_qdisc: fq
+
+# Con el sysctl la cola nueva solo la cogen las interfaces que se creen después:
+# a la de la ruta por defecto se le pone ya, sin reiniciar
+bbr_cola_en_caliente: true

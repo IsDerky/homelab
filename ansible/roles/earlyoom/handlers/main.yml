@@ -1,0 +1,7 @@
+---
+# en seco, en una máquina sin earlyoom, la unidad todavía no existe
+- name: Reiniciar earlyoom
+  ansible.builtin.systemd_service:
+    name: earlyoom
+    state: restarted
+  when: not (ansible_check_mode and earlyoom_paquete.changed)

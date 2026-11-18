@@ -1,0 +1,31 @@
+---
+- name: Paquete
+  ansible.builtin.apt:
+    name: earlyoom
+    state: present
+  register: earlyoom_paquete
+
+# La unidad pasa $EARLYOOM_ARGS partido por espacios y sin quitar comillas:
+# las expresiones van sin comillas ni espacios (ni $, por si se expande)
+- name: Opciones
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol earlyoom)
+      EARLYOOM_ARGS="{{ earlyoom_args | join(' ') }}"
+    dest: /etc/default/earlyoom
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    earlyoom_args: >-
+      {{ ['-m', earlyoom_memoria, '-s', earlyoom_swap, '-r', earlyoom_informe,
+          '--avoid', '^(' ~ earlyoom_evitar | join('|') ~ ')']
+         + (['--prefer', '^(' ~ earlyoom_preferir | join('|') ~ ')'] if earlyoom_preferir else []) }}
+  notify: Reiniciar earlyoom
+
+- name: En marcha
+  ansible.builtin.systemd_service:
+    name: earlyoom
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and earlyoom_paquete.changed)

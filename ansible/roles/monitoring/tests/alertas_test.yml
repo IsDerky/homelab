@@ -185,6 +185,23 @@ tests:
             exp_annotations:
               summary: "El certificado de n1 caduca en 9d 22h 50m 0s."
 
+  # Caducidad a mano: a 20 días avisa; a 40 no
+  - interval: 1m
+    input_series:
+      - series: 'caducidad_timestamp_segundos{nombre="Certificado SSH"}'
+        values: "1728000x80"
+      - series: 'caducidad_timestamp_segundos{nombre="Otra"}'
+        values: "3456000x80"
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: CaducaPronto
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              nombre: Certificado SSH
+            exp_annotations:
+              summary: "Certificado SSH caduca en 19d 22h 50m 0s."
+
   # Contenido: dos fallos seguidos (cada 15 min) avisan; uno suelto no
   - interval: 15m
     input_series:

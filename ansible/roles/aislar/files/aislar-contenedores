@@ -4,7 +4,8 @@
 # metadatos de la nube ni otros contenedores por su IP interna). Siguen
 # pudiendo salir a Internet, entrar por sus puertos publicados (también desde
 # otro contenedor del nodo, por la IP pública: DNAT) y usar el host por lo que
-# deje ufw (las bases de datos).
+# deje ufw (las bases de datos). Algunos puertos (CORTAR, p. ej. el 25 del
+# correo directo) tampoco salen a Internet.
 #
 # Cadena AISLAR (IPv4 e IPv6) colgada de DOCKER-USER con -i <puente>. Sin
 # br_netfilter el tráfico entre contenedores del mismo puente no pasa por
@@ -16,6 +17,7 @@
 #   PUENTE=pterodactyl0
 #   REDES4="10.0.0.0/8 ..."   REDES6="fc00::/7 fe80::/10"
 #   PERMITIR4="10.0.0.5:tcp:3306 ..."   PERMITIR6=""   (destino:proto:puerto)
+#   CORTAR="tcp:25"   (proto:puerto, a cualquier destino)
 #   TEXTFILE=/var/lib/node-exporter/textfile
 set -euo pipefail
 CONF=${AISLAR_CONF:-/etc/aislar-contenedores.conf}
@@ -24,6 +26,7 @@ REDES4="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 100.64.0.0/10"
 REDES6="fc00::/7 fe80::/10"
 PERMITIR4=""
 PERMITIR6=""
+CORTAR=""
 TEXTFILE=/var/lib/node-exporter/textfile
 # shellcheck disable=SC1090
 [ -f "$CONF" ] && . "$CONF"
@@ -41,6 +44,11 @@ reglas() { # familia → reglas de la cadena, en formato de iptables -S
   for p in $permitir; do
     d=${p%:*:*}; proto=${p#"$d":}; puerto=${proto#*:}; proto=${proto%%:*}
     echo "-A AISLAR -d $d -p $proto -m $proto --dport $puerto -j RETURN"
+  done
+  for p in $CORTAR; do
+    proto=${p%%:*}; puerto=${p#*:}
+    echo "-A AISLAR -p $proto -m $proto --dport $puerto -m limit --limit 6/min -j LOG --log-prefix \"aislar: \""
+    echo "-A AISLAR -p $proto -m $proto --dport $puerto -j DROP"
   done
   for d in $redes; do
     echo "-A AISLAR -d $d -m limit --limit 6/min -j LOG --log-prefix \"aislar: \""
@@ -96,7 +104,7 @@ if [ -d "$TEXTFILE" ]; then
     echo "# HELP aislar_contenedores_activo 1 si la cadena AISLAR y br_netfilter están puestos"
     echo "# TYPE aislar_contenedores_activo gauge"
     echo "aislar_contenedores_activo $estado"
-    echo "# HELP aislar_contenedores_cortados_total Paquetes de contenedores cortados hacia redes privadas"
+    echo "# HELP aislar_contenedores_cortados_total Paquetes de contenedores cortados (redes privadas y puertos de CORTAR)"
     echo "# TYPE aislar_contenedores_cortados_total counter"
     echo "aislar_contenedores_cortados_total $cortados"
   } >"$tmp"

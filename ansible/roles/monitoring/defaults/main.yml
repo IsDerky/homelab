@@ -113,6 +113,16 @@ monitoring_cambios: true
 monitoring_ram_historico: true
 monitoring_ram_historico_fichero: /var/lib/ram-servidores/historico.jsonl
 
+# Caducidades que no se pueden comprobar desde aquí (un certificado de SSH que
+# vive en otro equipo, una licencia...). Avisa 30 días antes.
+#   - nombre: Certificado SSH del portátil
+#     fecha: "2027-01-31"
+monitoring_caducidades: []
+
+# Dominios detrás de Cloudflare para ver si la operadora corta su IP (solo
+# métricas cloudflare_*, sin aviso). Vacío = sin sonda.
+monitoring_bloqueo_cf_dominios: []
+
 # La alerta Watchdog sale por ops-ping al vigilante externo (necesita el rol
 # avisos con avisos_watchdog_env). false = alert-dm la ignora.
 monitoring_latido_externo: false

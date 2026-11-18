@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Sonda del bloqueo de IPs de Cloudflare cada 15 min
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Sonda del bloqueo de IPs de Cloudflare por la operadora
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=TEXTFILE={{ monitoring_textfile_dir }}
+ExecStart=/usr/local/bin/bloqueo-cloudflare {{ monitoring_bloqueo_cf_dominios | join(' ') }}
+# root: la carpeta del textfile es de root 0755 (DynamicUser no podría escribir)
+ReadWritePaths={{ monitoring_textfile_dir }}
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+TimeoutStartSec=5min
