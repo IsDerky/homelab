@@ -1,0 +1,38 @@
+---
+- name: ¿Hay MariaDB?
+  ansible.builtin.stat:
+    path: /etc/mysql/mariadb.conf.d
+  register: mariadb_binlog_conf_d
+
+- name: Sin MariaDB no hay nada que hacer
+  ansible.builtin.meta: end_host
+  when: not mariadb_binlog_conf_d.stat.exists
+
+# 70-: después de 50-server.cnf, que no lo pise
+- name: Configuración de los binlogs
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol mariadb_binlog)
+      [mariadb]
+      server_id        = {{ mariadb_binlog_server_id }}
+      log_bin          = {{ mariadb_binlog_nombre }}
+      binlog_format    = ROW
+      expire_logs_days = {{ mariadb_binlog_dias }}
+      max_binlog_size  = {{ mariadb_binlog_max }}
+      sync_binlog      = {{ mariadb_binlog_sync }}
+    dest: /etc/mysql/mariadb.conf.d/70-binlog.cnf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reiniciar mariadb
+
+- name: Aplicar ya
+  ansible.builtin.meta: flush_handlers
+
+- name: Binlogs activos
+  ansible.builtin.command: mariadb -N -B -e "SELECT @@log_bin, @@binlog_format"
+  register: mariadb_binlog_estado
+  changed_when: false
+  check_mode: false
+  failed_when: mariadb_binlog_estado.stdout.split() != ['1', 'ROW']
+  when: not ansible_check_mode

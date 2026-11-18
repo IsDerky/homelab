@@ -1,0 +1,11 @@
+---
+# Binlogs de MariaDB para volver a cualquier minuto: el volcado de server-backup
+# guarda la posición (--master-data=2) y se reaplica el binlog desde ahí hasta
+# justo antes del error. Activarlo reinicia MariaDB una vez.
+mariadb_binlog_nombre: mariadb-bin
+mariadb_binlog_dias: 8
+mariadb_binlog_max: 100M
+mariadb_binlog_server_id: 1
+# 1 = cada transacción confirmada está ya en el binlog del disco (no se pierde
+# en un corte de luz); para bases pequeñas no se nota
+mariadb_binlog_sync: 1

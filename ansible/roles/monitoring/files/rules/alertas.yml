@@ -79,12 +79,12 @@ groups:
       # un hash mismatch en memoria con el disco bien), así que se manda al journal. Los fallos de
       # Drive ya avisan por DM desde el propio script.
       - alert: BackupLocalFallido
-        expr: ops_backup_run_success{destino="local"} == 0
+        expr: ops_backup_run_success{destino=~"local|nodo"} == 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "La copia local de {{ $labels.modo }} ha fallado (journalctl -u server-backup@{{ $labels.modo }})."
+          summary: "La copia {{ $labels.destino }} de {{ $labels.modo }} ha fallado (journalctl -u server-backup@{{ $labels.modo }})."
 
       # Demasiado tiempo sin una copia buena (el máximo lo pone el script por
       # modo). Sistema y clientes en Drive ya los vigila el vigilante externo.

@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: IsDerky
+  description: Binlogs de MariaDB para restaurar a cualquier minuto
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions: [jammy, noble]
+dependencies: []

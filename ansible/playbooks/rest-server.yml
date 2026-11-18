@@ -1,0 +1,9 @@
+---
+# Destino de restic solo-añadir en el nodo que lo tenga (rest_server_activo en
+# su host_vars). Antes que backup.yml: el servidor de copias crea ahí su repo.
+- name: Copias solo-añadir (rest-server)
+  hosts: wings_remotos
+  become: true
+  roles:
+    - role: rest_server
+      when: rest_server_activo | default(false) | bool

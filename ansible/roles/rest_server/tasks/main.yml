@@ -1,0 +1,152 @@
+---
+- name: Faltan datos
+  ansible.builtin.assert:
+    that:
+      - rest_server_listen | length > 0
+      - rest_server_usuario | length > 0
+      - rest_server_clave | length > 0
+      - rest_server_restic_clave | length > 0
+    fail_msg: rest_server_listen, rest_server_usuario, rest_server_clave y rest_server_restic_clave
+    quiet: true
+
+- name: Paquetes (htpasswd con bcrypt)
+  ansible.builtin.apt:
+    name: apache2-utils
+    state: present
+
+# restic para caducar desde aquí (el mismo binario fijado del rol backup)
+- name: Binarios de restic
+  ansible.builtin.include_role:
+    name: backup
+    tasks_from: binarios
+
+- name: Usuario rest-server (sin shell ni contraseña)
+  ansible.builtin.user:
+    name: rest-server
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ rest_server_dir }}"
+    create_home: false
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.ruta }}"
+    state: directory
+    owner: "{{ item.dueno }}"
+    group: rest-server
+    mode: "{{ item.modo }}"
+  loop:
+    - { ruta: "{{ rest_server_dir }}", dueno: rest-server, modo: "0750" }
+    - { ruta: /etc/rest-server, dueno: root, modo: "0750" }
+
+- name: Versión instalada
+  ansible.builtin.command: /usr/local/bin/rest-server --version
+  register: rest_server_actual
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Instalar rest-server {{ rest_server_version }}
+  when:
+    - not ansible_check_mode
+    - ("rest-server " ~ rest_server_version) not in rest_server_actual.stdout | default('')
+  block:
+    - name: Descargar
+      ansible.builtin.get_url:
+        url: "https://api.github.com/repos/restic/rest-server/releases/assets/{{ rest_server_asset_id[rest_server_arch] }}"
+        headers:
+          Accept: application/octet-stream
+        dest: /var/cache/backup-binarios/rest-server_{{ rest_server_version }}.tar.gz
+        checksum: "sha256:{{ rest_server_sha256[rest_server_arch] }}"
+        mode: "0600"
+        timeout: 120
+      register: rest_server_descarga
+      until: rest_server_descarga is succeeded
+      retries: 3
+      delay: 30
+
+    - name: Descomprimir
+      ansible.builtin.shell: |
+        set -euo pipefail
+        tar -xzf /var/cache/backup-binarios/rest-server_{{ rest_server_version }}.tar.gz -O \
+          rest-server_{{ rest_server_version }}_linux_{{ rest_server_arch }}/rest-server > /usr/local/bin/.rest-server.nuevo
+        chmod 0755 /usr/local/bin/.rest-server.nuevo
+        /usr/local/bin/.rest-server.nuevo --version | grep -qF "rest-server {{ rest_server_version }}"
+        mv /usr/local/bin/.rest-server.nuevo /usr/local/bin/rest-server
+      args:
+        executable: /bin/bash
+      changed_when: true
+      notify: Reiniciar rest-server
+
+# La contraseña entra por stdin (no se ve en la lista de procesos); -v comprueba la que hay
+- name: ¿La contraseña de HTTP es la del inventario?
+  ansible.builtin.command:
+    argv: [htpasswd, -vi, /etc/rest-server/htpasswd, "{{ rest_server_usuario }}"]
+    stdin: "{{ rest_server_clave }}"
+  register: rest_server_htpasswd
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Contraseña de HTTP (bcrypt)
+  ansible.builtin.command:
+    argv: [htpasswd, -iBc, /etc/rest-server/htpasswd, "{{ rest_server_usuario }}"]
+    stdin: "{{ rest_server_clave }}"
+  when: rest_server_htpasswd.rc != 0
+  changed_when: true
+  no_log: true
+  notify: Reiniciar rest-server
+
+- name: Permisos del htpasswd
+  ansible.builtin.file:
+    path: /etc/rest-server/htpasswd
+    owner: root
+    group: rest-server
+    mode: "0640"
+  when: not (ansible_check_mode and rest_server_htpasswd.rc != 0)
+
+- name: Contraseña del repositorio (para caducar)
+  ansible.builtin.copy:
+    content: "{{ rest_server_restic_clave }}"
+    dest: /etc/rest-server/restic-pass
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Unidades
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [rest-server.service, rest-server-caducar.service, rest-server-caducar.timer]
+  notify: Reiniciar rest-server
+
+- name: Script de caducar
+  ansible.builtin.template:
+    src: rest-server-caducar.j2
+    dest: /usr/local/sbin/rest-server-caducar
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: En marcha
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: [rest-server.service, rest-server-caducar.timer]
+  when: not ansible_check_mode
+
+- name: Responde
+  ansible.builtin.uri:
+    url: "http://{{ rest_server_listen }}/"
+    status_code: [401, 404, 405]
+  when: not ansible_check_mode

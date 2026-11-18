@@ -66,6 +66,11 @@ fi
 LOCAL_MOUNT=/srv/backup-local
 LOCAL_REPO=$LOCAL_MOUNT/restic
 
+# Tercera copia en un rest-server solo-añadir (rol rest_server en otra máquina):
+# aquí solo se sube, no se puede borrar; lo viejo se caduca allí. Con su propia
+# contraseña del repositorio. Sin fichero = sin esta copia.
+NODO_ENV=/etc/server-backup/nodo.env
+
 # Un JSON por modo y destino con el último resultado (lo lee ops-exporter)
 ESTADO=/var/lib/server-backup/estado
 
@@ -149,7 +154,7 @@ notify_fail() {
   fi
   # La copia local no avisa por DM: la vigila Prometheus (avisa una vez, no en
   # cada intento fallido si el disco está desconectado)
-  [ "$mode" = _local ] && return
+  case "$mode" in _local | _nodo) return ;; esac
   /usr/local/bin/discord-dm -t "❌ Backup fallido ($mode)" -c red \
     -f "Paso=$step" -f "Equipo=$(hostname)" \
     "Revisa \`journalctl -u server-backup@$mode\`." || true
@@ -361,6 +366,11 @@ local_copy() {
   "$0" _local "$1" || true
 }
 
+# Igual para el rest-server solo-añadir, si está configurado
+nodo_copy() {
+  if [ -f "$NODO_ENV" ]; then "$0" _nodo "$1" || true; fi
+}
+
 case "$mode" in
   sistema)
     install -d -m 700 "$STAGE"
@@ -370,14 +380,36 @@ case "$mode" in
       step="BD de Vaultwarden"
       sqlite3 "$VAULT/db.sqlite3" ".backup '$STAGE/vaultwarden.db'"
     fi
+    # Con binlogs (rol mariadb_binlog) cada volcado apunta su posición en el
+    # binlog (comentario CHANGE MASTER): restaurar el volcado y reaplicar desde
+    # ahí hasta el minuto que se quiera
+    volcar=(mariadb-dump --single-transaction --routines --triggers)
+    binlog=$(mariadb -N -B -e "SELECT @@log_bin")
+    if [ "$binlog" = 1 ]; then volcar+=(--master-data=2); fi
     step="BD del panel"
-    mariadb-dump --single-transaction --routines --triggers --databases panel >"$STAGE/panel.sql"
+    "${volcar[@]}" --databases panel >"$STAGE/panel.sql"
     for b in "${apps_bd[@]}"; do
       if [ -n "$(mariadb -N -e "SHOW DATABASES LIKE '$b'")" ]; then
         step="BD de $b"
-        mariadb-dump --single-transaction --routines --triggers --databases "$b" >"$STAGE/$b.sql"
+        "${volcar[@]}" --databases "$b" >"$STAGE/$b.sql"
       fi
     done
+    # Los binlogs cerrados van con la copia (el que está abierto se cierra
+    # antes): con la copia de fuera también se puede volver a un minuto
+    if [ "$binlog" = 1 ]; then
+      step="binlogs de MariaDB"
+      mariadb -e "FLUSH BINARY LOGS"
+      dir=$(dirname "$(mariadb -N -B -e "SELECT @@log_bin_basename")")
+      install -d -m 700 "$STAGE/binlog"
+      mariadb -N -B -e "SHOW BINARY LOGS" | awk '{print $1}' | head -n -1 >"$STAGE/binlog/.lista"
+      rsync -a --files-from="$STAGE/binlog/.lista" "$dir/" "$STAGE/binlog/"
+      # --delete no borra con --files-from: fuera los que MariaDB ya caducó
+      for f in "$STAGE"/binlog/*; do
+        if [ -e "$f" ] && ! grep -qxF "$(basename "$f")" "$STAGE/binlog/.lista"; then rm -f "$f"; fi
+      done
+    else
+      rm -rf "$STAGE/binlog"
+    fi
     step="BD de los servidores"
     if [ -x "$BDSERV_VOLCAR" ]; then
       # MariaDB, PostgreSQL y MongoDB (los que estén en marcha), rol bd_servidores
@@ -404,6 +436,7 @@ case "$mode" in
     estado sistema drive true "$(max_age sistema)"
     # Mismos volcados que acaban de subir a Drive
     local_copy sistema
+    nodo_copy sistema
     ;;
 
   clientes)
@@ -414,6 +447,22 @@ case "$mode" in
     step="lista de puntos"
     escribir_puntos || echo "No se pudo escribir la lista de puntos de clientes" >&2
     local_copy clientes
+    nodo_copy clientes
+    ;;
+
+  # Interno: server-backup _nodo <modo>. Solo sube: el rest-server no deja
+  # borrar (ni forget), así que la retención la aplica la otra máquina.
+  _nodo)
+    tag="${2:?Uso: server-backup _nodo sistema|clientes}"
+    destino=nodo
+    set -a
+    # shellcheck disable=SC1090
+    . "$NODO_ENV"
+    set +a
+    "paths_$tag"
+    step="subida (nodo)"
+    backup --tag "$tag" "${excludes[@]}" "${paths[@]}"
+    estado "$tag" nodo true "$(max_age "$tag")"
     ;;
 
   nas)

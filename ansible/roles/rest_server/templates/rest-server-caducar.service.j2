@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Caducar y comprobar el repositorio de rest-server
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/rest-server-caducar
+Nice=10
+IOSchedulingClass=idle
