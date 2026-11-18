@@ -1,0 +1,65 @@
+---
+- name: Falta el token de Home Assistant
+  ansible.builtin.assert:
+    that: matter_hub_ha_token | length > 0
+    fail_msg: Define matter_hub_ha_token (token de larga duración de Home Assistant, en el vault).
+    quiet: true
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ matter_hub_dir }}", mode: "0755" }
+    # Claves de los emparejamientos (fabrics) con cada controlador
+    - { path: "{{ matter_hub_data_dir }}", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Entorno (con el token)
+  ansible.builtin.template:
+    src: matter-hub.env.j2
+    dest: "{{ matter_hub_dir }}/matter-hub.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Aplicar compose de matter-hub
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ matter_hub_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de matter-hub
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: matter-hub.service.j2
+    dest: /etc/systemd/system/matter-hub.service
+    mode: "0644"
+  register: matter_hub_unit
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: matter-hub.service
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and matter_hub_unit.changed)
+
+- name: Responde la interfaz
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ matter_hub_http_port }}/
+  register: matter_hub_check
+  until: matter_hub_check.status == 200
+  retries: 24
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode

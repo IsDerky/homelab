@@ -1,0 +1,7 @@
+---
+- name: Matter Hub
+  hosts: homelab
+  become: true
+  roles:
+    - role: matter_hub
+      when: matter_hub_activo | default(false)

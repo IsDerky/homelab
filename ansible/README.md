@@ -16,6 +16,7 @@ Roles para montar piezas del homelab:
 - `inicio`: página de inicio propia, estática, con carpetas, widgets y el estado de cada web sacados de Prometheus (`playbooks/inicio.yml`).
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
 - `homeassistant`: Home Assistant en Docker Compose con la red del host, detrás de nginx y sin abrir su puerto (`playbooks/homeassistant.yml`).
+- `matter_hub`: puente Matter que publica entidades de Home Assistant para Alexa, Google o Apple, con la interfaz solo en localhost (`playbooks/matter-hub.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
 - `caddy_webs`: Caddy delante de los servidores de webs (HTTPS sin puerto y dominios propios); lo configura el panel por la API (`playbooks/caddy-webs.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
@@ -428,6 +429,23 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 | `homeassistant_ssh_clave` | `false` | Genera una clave ed25519 propia en `<config>/ssh` para `shell_command` contra otras máquinas (con orden forzada en el otro lado) y deja la pública en `homeassistant_ssh_publica` |
 | `homeassistant_packages` | `{}` | `{nombre: YAML}` que van a `<config>/packages/<nombre>.yaml` y reinician Home Assistant al cambiar |
 | `homeassistant_custom_components` | `[]` | Integraciones de la comunidad sin HACS: `{nombre, version, url, sha256}`. Se descarga el tarball con su suma, se extrae solo `custom_components/<nombre>` y, al cambiar de versión, se quita la anterior entera |
+
+## Rol `matter_hub`
+
+[Home Assistant Matter Hub](https://github.com/RiDDiX/home-assistant-matter-hub) (la continuación mantenida del proyecto original) en Docker Compose como servicio systemd. Publica entidades de Home Assistant como uno o varios puentes Matter, así que un altavoz como un Echo las controla en local, sin la skill de cada fabricante.
+
+- Red del host: Matter usa mDNS, IPv6 link-local y un puerto UDP por puente (desde el 5540; Alexa solo empareja bien en el 5540). Ese puerto hay que abrirlo en ufw para la LAN, en IPv4 y en `fe80::/10`.
+- La interfaz web (8482) solo hace falta para crear el puente y ver el código de emparejamiento. No tiene más protección que una lista blanca de IP: por defecto solo `127.0.0.1`, y se entra con `ssh -L 8482:127.0.0.1:8482`.
+- El token de Home Assistant va en un fichero de entorno solo para root.
+- `/var/lib/matter-hub` guarda las claves de los emparejamientos: si se pierde, hay que volver a emparejar en cada controlador. Va en la copia (`backup_sistema_extra`).
+
+| Variable | Por defecto | |
+|---|---|---|
+| `matter_hub_ha_token` | `""` | Obligatoria. Token de larga duración de Home Assistant, en el vault |
+| `matter_hub_ha_url` | `http://127.0.0.1:8123/` | |
+| `matter_hub_image` | `ghcr.io/riddix/home-assistant-matter-hub:2.0.60` | |
+| `matter_hub_http_whitelist` | `127.0.0.1` | Una IP o CIDR para la interfaz web |
+| `matter_hub_data_dir` | `/var/lib/matter-hub` | |
 
 ## Rol `bd_servidores`
 

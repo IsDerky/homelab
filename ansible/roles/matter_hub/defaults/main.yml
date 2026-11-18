@@ -1,0 +1,19 @@
+---
+# Home Assistant Matter Hub (https://github.com/RiDDiX/home-assistant-matter-hub):
+# publica entidades de Home Assistant como un puente Matter (Alexa, Google, Apple).
+matter_hub_dir: /opt/matter-hub
+# Datos (puentes, emparejamientos con cada controlador): van en la copia
+matter_hub_data_dir: /var/lib/matter-hub
+matter_hub_image: ghcr.io/riddix/home-assistant-matter-hub:2.0.60
+
+# Home Assistant y un token de larga duración (en el vault)
+matter_hub_ha_url: http://127.0.0.1:8123/
+matter_hub_ha_token: ""
+
+# Interfaz web: solo para crear el puente y ver el código de emparejamiento.
+# Con red del host escucha en todas las interfaces; la lista blanca la deja
+# solo para localhost (se entra por túnel SSH) y ufw no abre el puerto.
+matter_hub_http_port: 8482
+matter_hub_http_whitelist: 127.0.0.1
+matter_hub_log_level: info
+matter_hub_mem: 512m

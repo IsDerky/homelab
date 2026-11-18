@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: matter_hub
+  namespace: isderky
+  description: Home Assistant Matter Hub en Docker Compose con red del host, para publicar entidades de Home Assistant como puente Matter
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []
