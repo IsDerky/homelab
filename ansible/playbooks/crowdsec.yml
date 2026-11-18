@@ -6,3 +6,19 @@
   roles:
     - role: crowdsec
       when: crowdsec_activo | default(false) | bool
+
+# Las máquinas de crowdsec_bouncers_remotos: solo el bouncer, contra la API de
+# la de arriba. Va en la misma pasada: la clave la lee la jugada anterior.
+- name: Bouncers de CrowdSec en los nodos
+  hosts: wings_remotos
+  become: true
+  vars:
+    crowdsec_servidor: "{{ groups['homelab'] | first }}"
+    crowdsec_bouncer_nombre: "{{ inventory_hostname }}"
+    crowdsec_clave: "{{ hostvars[crowdsec_servidor].crowdsec_claves_remotas[crowdsec_bouncer_nombre] | default('') }}"
+  tasks:
+    - name: Bouncer remoto
+      ansible.builtin.include_role:
+        name: crowdsec
+        tasks_from: bouncer_remoto
+      when: crowdsec_bouncer_nombre in hostvars[crowdsec_servidor].crowdsec_bouncers_remotos | default([])

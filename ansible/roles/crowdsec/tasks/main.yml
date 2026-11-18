@@ -1,32 +1,6 @@
 ---
-# force: false: solo se descarga si falta, para no marcar cambios cada vez
-- name: Clave del repositorio de CrowdSec
-  ansible.builtin.get_url:
-    url: https://packagecloud.io/crowdsec/crowdsec/gpgkey
-    dest: /etc/apt/keyrings/crowdsec.asc
-    mode: "0644"
-    force: false
-
-- name: Repositorio de CrowdSec
-  ansible.builtin.copy:
-    content: "deb [signed-by=/etc/apt/keyrings/crowdsec.asc] https://packagecloud.io/crowdsec/crowdsec/any any main\n"
-    dest: /etc/apt/sources.list.d/crowdsec.list
-    owner: root
-    group: root
-    mode: "0644"
-  register: crowdsec_repo
-
-# Ubuntu trae una versión muy vieja en universe
-- name: Preferir el repositorio de CrowdSec
-  ansible.builtin.copy:
-    content: |
-      Package: crowdsec*
-      Pin: origin packagecloud.io
-      Pin-Priority: 900
-    dest: /etc/apt/preferences.d/crowdsec
-    owner: root
-    group: root
-    mode: "0644"
+- name: Repositorio
+  ansible.builtin.import_tasks: repo.yml
 
 # Antes del paquete: al instalarse arranca CrowdSec, y con el puerto de serie
 # ocupado (Wings) dpkg lo deja a medio configurar. .local: CrowdSec lo mezcla
@@ -44,7 +18,7 @@
     content: |
       api:
         server:
-          listen_uri: 127.0.0.1:{{ crowdsec_lapi_port }}
+          listen_uri: {{ crowdsec_lapi_listen }}:{{ crowdsec_lapi_port }}
     dest: /etc/crowdsec/config.yaml.local
     owner: root
     group: root
@@ -129,6 +103,10 @@
     state: started
   loop: [crowdsec, crowdsec-firewall-bouncer]
   when: not (ansible_check_mode and crowdsec_nuevo)
+
+- name: Bouncers de otras máquinas
+  ansible.builtin.import_tasks: bouncers_remotos.yml
+  when: crowdsec_bouncers_remotos | length > 0
 
 - name: Aplicar cambios pendientes
   ansible.builtin.meta: flush_handlers

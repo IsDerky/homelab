@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Cuenta los procesos que ha matado earlyoom (líneas «sending SIGTERM/SIGKILL to
+# process» de su journal) y lo deja en el textfile de node-exporter: un total
+# que no se pierde al rotar el journal y cuándo fue la última y a quién. Va por
+# el journal y no por -N porque earlyoom 1.6 (Ubuntu 22.04) no lo tiene.
+set -euo pipefail
+TEXTFILE=${TEXTFILE:-/var/lib/node-exporter/textfile}
+ESTADO=${ESTADO:-/var/lib/earlyoom-contador}
+install -d -m 755 "$ESTADO"
+
+total=$(cat "$ESTADO/total" 2>/dev/null || echo 0)
+ultima=$(cat "$ESTADO/ultima" 2>/dev/null || echo "0 -")
+desde=()
+if [ -s "$ESTADO/cursor" ]; then desde=(--after-cursor "$(cat "$ESTADO/cursor")"); fi
+
+# Solo lo que escribe earlyoom (su salida), no los mensajes de systemd sobre la unidad
+salida=$(journalctl -u earlyoom _TRANSPORT=stdout --no-pager -o short-unix --show-cursor "${desde[@]}" 2>/dev/null || true)
+cursor=$(sed -n 's/^-- cursor: //p' <<<"$salida" | tail -1)
+while read -r t resto; do
+  case "$resto" in
+    *"sending SIGTERM to process"* | *"sending SIGKILL to process"*)
+      total=$((total + 1))
+      nombre=$(grep -oP '"\K[^"]+(?=")' <<<"$resto" | head -1)
+      ultima="${t%.*} ${nombre:--}"
+      ;;
+  esac
+done < <(grep -v '^-- ' <<<"$salida" || true)
+
+echo "$total" >"$ESTADO/total"
+echo "$ultima" >"$ESTADO/ultima"
+if [ -n "$cursor" ]; then echo "$cursor" >"$ESTADO/cursor"; fi
+
+read -r cuando proceso <<<"$ultima"
+tmp=$(mktemp "$TEXTFILE/.earlyoom.XXXXXX")
+{
+  echo "# HELP earlyoom_muertes_total Procesos que ha matado earlyoom"
+  echo "# TYPE earlyoom_muertes_total counter"
+  echo "earlyoom_muertes_total $total"
+  echo "# HELP earlyoom_ultima_muerte_timestamp_segundos Cuándo mató earlyoom por última vez y a qué proceso (0 = nunca)"
+  echo "# TYPE earlyoom_ultima_muerte_timestamp_segundos gauge"
+  echo "earlyoom_ultima_muerte_timestamp_segundos{proceso=\"$proceso\"} $cuando"
+} >"$tmp"
+chmod 644 "$tmp"
+mv "$tmp" "$TEXTFILE/earlyoom.prom"

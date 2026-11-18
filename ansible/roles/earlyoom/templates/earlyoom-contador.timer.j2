@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Cuenta lo que ha matado earlyoom cada minuto
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

@@ -119,6 +119,10 @@ monitoring_ram_historico_fichero: /var/lib/ram-servidores/historico.jsonl
 #     fecha: "2027-01-31"
 monitoring_caducidades: []
 
+# Precio del kWh (€, con impuestos) para el coste de la luz: métrica
+# luz_precio_kwh_euros, que multiplica los vatios del SAI. Vacío = sin métrica.
+monitoring_precio_kwh: ""
+
 # Dominios detrás de Cloudflare para ver si la operadora corta su IP (solo
 # métricas cloudflare_*, sin aviso). Vacío = sin sonda.
 monitoring_bloqueo_cf_dominios: []

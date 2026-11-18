@@ -1,0 +1,19 @@
+---
+# Swap comprimida en RAM (zram-tools). Antes de que earlyoom tenga que matar
+# algo, lo menos usado se comprime en memoria (zstd, ~3:1) en vez de ir a disco.
+zram_algoritmo: zstd
+
+# Tamaño del dispositivo en % de la RAM (lo que ocupa sin comprimir)
+zram_porcentaje: 25
+
+# Por encima de cualquier swap en disco: se usa primero
+zram_prioridad: 100
+
+# Con zram no compensa leer páginas de más por adelantado
+zram_sysctl:
+  vm.page-cluster: 0
+
+# Algunos kernels de proveedores de nube traen zram en linux-modules-extra. Se
+# instala para todos los kernels instalados; tras actualizar el kernel hay que
+# volver a pasar el rol antes de reiniciar.
+zram_modulos_extra: true

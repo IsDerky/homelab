@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Cuenta lo que ha matado earlyoom (textfile de node-exporter)
+
+[Service]
+Type=oneshot
+Environment=TEXTFILE={{ earlyoom_textfile_dir }}
+ExecStart=/usr/local/sbin/earlyoom-contador
+LogLevelMax=warning

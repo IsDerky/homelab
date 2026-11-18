@@ -32,3 +32,7 @@ earlyoom_preferir:
 
 # Cada cuánto deja en el journal cómo va la memoria (s); 0 = nunca
 earlyoom_informe: 3600
+
+# Contador de lo que mata (earlyoom_muertes_total) en el textfile de
+# node-exporter, cada minuto. Vacío = sin contador.
+earlyoom_textfile_dir: /var/lib/node-exporter/textfile
