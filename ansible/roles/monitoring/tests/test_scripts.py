@@ -148,6 +148,8 @@ class ExporterTest(unittest.TestCase):
                 json.dump({"ok": True, "at": 3000, "last_ok_at": 3000, "max_age_s": 108000}, f)
             with open(os.path.join(d, "roto-local.json"), "w") as f:
                 f.write("{roto")
+            with open(os.path.join(d, "clientes-puntos.json"), "w") as f:
+                json.dump({"generado": 3000, "puntos": [{"t": 2900, "id": "abcd1234", "nodos": []}]}, f)
             s = samples(exporter.render("/no/existe.json", d))
         # El snapshot no se lee, pero el estado de los backups sale igual
         self.assertEqual(s["ops_snapshot_up"], 0)
@@ -155,6 +157,8 @@ class ExporterTest(unittest.TestCase):
         self.assertEqual(s['ops_backup_run_last_success_timestamp_seconds{destino="local",modo="sistema"}'], 1000)
         self.assertEqual(s['ops_backup_run_success{destino="drive",modo="nas"}'], 1)
         self.assertFalse(any("roto" in k for k in s))
+        # la lista de puntos no es una ejecución: no cuenta como copia fallida
+        self.assertFalse(any('destino="puntos"' in k for k in s))
 
     def test_snapshot_vacio(self):
         self.assertEqual(samples(exporter.collect({}).render()), {"ops_snapshot_up": 1})

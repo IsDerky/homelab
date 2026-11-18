@@ -243,6 +243,9 @@ def backup_state(m, directory):
                 run = json.load(f)
         except (OSError, ValueError):
             continue
+        # en la carpeta hay otros JSON que no son ejecuciones (p. ej. la lista de puntos de restauración)
+        if not isinstance(run, dict) or "ok" not in run:
+            continue
         labels = {"modo": mode, "destino": dest}
         m.add("ops_backup_run_success", "1 si la última ejecución fue bien", 1 if run.get("ok") else 0, labels)
         m.add("ops_backup_run_timestamp_seconds", "Cuándo fue la última ejecución", run.get("at"), labels)
