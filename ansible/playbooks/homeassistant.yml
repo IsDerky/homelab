@@ -1,0 +1,7 @@
+---
+- name: Home Assistant
+  hosts: homelab
+  become: true
+  roles:
+    - role: homeassistant
+      when: homeassistant_activo | default(false)

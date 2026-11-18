@@ -44,6 +44,8 @@
   ansible.builtin.import_playbook: inicio.yml
 - name: Vaultwarden
   ansible.builtin.import_playbook: vaultwarden.yml
+- name: Home Assistant
+  ansible.builtin.import_playbook: homeassistant.yml
 # antes de las webs: dejan leído el id de su web en Umami
 - name: Analítica (Umami)
   ansible.builtin.import_playbook: umami.yml

@@ -15,6 +15,7 @@ Roles para montar piezas del homelab:
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
 - `inicio`: página de inicio propia, estática, con carpetas, widgets y el estado de cada web sacados de Prometheus (`playbooks/inicio.yml`).
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
+- `homeassistant`: Home Assistant en Docker Compose con la red del host, detrás de nginx y sin abrir su puerto (`playbooks/homeassistant.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
 - `caddy_webs`: Caddy delante de los servidores de webs (HTTPS sin puerto y dominios propios); lo configura el panel por la API (`playbooks/caddy-webs.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
@@ -215,6 +216,8 @@ Una carpeta compartida por Samba para la LAN:
 - Un usuario de sistema sin shell. La contraseña de Samba sale del vault y solo se pone al crearlo. Para cambiarla: `smbpasswd <usuario>` en el servidor y actualizar el vault.
 - Con `nas_require_mount` (por defecto) se niega a seguir si la carpeta no está montada. Si no, sería una carpeta vacía en el disco del sistema y los archivos acabarían ahí.
 - La configuración se valida con `testparm` antes de instalarla.
+- `nas_lectores`: usuarios locales que pueden leer todo el NAS sin entrar por Samba. Van por ACL (la primera vez con `-R` sobre lo que ya hay, y por defecto para lo nuevo), sin cambiar dueño ni permisos.
+- `nas_carpetas_propias` (`{ nombre, usuario }`): subcarpetas donde escriben a la vez ese usuario local y Samba, y cada uno puede cambiar o borrar lo del otro (ACL por defecto). Sirve para pasar ficheros entre una máquina de la LAN y un usuario del servidor sin darle escritura en el resto.
 
 ## Rol `fail2ban`
 
@@ -405,6 +408,23 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 | `vaultwarden_signups_allowed` | `false` | |
 | `vaultwarden_port` | `8086` | |
 | `vaultwarden_image` | `vaultwarden/server:1.37.5` | |
+
+## Rol `homeassistant`
+
+[Home Assistant](https://www.home-assistant.io/) en Docker Compose como servicio systemd, para controlar en local lo que antes pasaba por la nube de cada fabricante.
+
+- Con la red del host: el descubrimiento (SSDP, mDNS), el Wake on LAN por broadcast y el control local de aparatos no funcionan bien detrás del NAT de Docker. Docker no publica nada y el puerto no se abre en ufw: se entra por nginx.
+- Desde la 2026.8 el bloque `http:` de `configuration.yaml` ya no vale y el proxy de confianza se configura en la interfaz (Ajustes → Sistema → Red, con `127.0.0.1` y `::1`). Hasta entonces, todo lo que llega por nginx devuelve 400; el primer alta se hace con un túnel SSH a `127.0.0.1:8123`.
+- `configuration.yaml` solo tiene lo que no tiene pantalla (paquetes, temas, días de historial) y carga `packages/` para lo que se quiera llevar en Ansible. Integraciones, usuarios y red viven en `.storage`, que gestiona la interfaz.
+- La configuración va en `/var/lib/homeassistant` (fuera de `/opt`) para que `server-backup sistema` la copie y vuelque la BD del historial con `sqlite3 .backup` (ver `backup_sistema_extra` en el rol `backup`).
+
+| Variable | Por defecto | |
+|---|---|---|
+| `homeassistant_image` | `ghcr.io/home-assistant/home-assistant:2026.11.2` | |
+| `homeassistant_config_dir` | `/var/lib/homeassistant` | Configuración y datos |
+| `homeassistant_tz` | `Etc/UTC` | |
+| `homeassistant_mem` | `1g` | Tope de memoria del contenedor |
+| `homeassistant_recorder_dias` | `10` | Días de historial |
 
 ## Rol `bd_servidores`
 

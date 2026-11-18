@@ -11,3 +11,9 @@ nas_password: ""
 # Dónde escucha (además de loopback) y desde dónde se puede entrar
 nas_interfaces: []
 nas_hosts_allow: []
+
+# Usuarios locales que pueden leer todo el NAS (ACL, también lo que se cree después)
+nas_lectores: []
+# Subcarpetas escribibles por un usuario local además de por Samba:
+#   - { nombre: intercambio, usuario: alguien }
+nas_carpetas_propias: []

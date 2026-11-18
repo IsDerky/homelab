@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+# Lo de la interfaz (integraciones, usuarios, red, proxy de confianza) vive en
+# .storage. Aquí solo lo que no tiene pantalla; lo de Ansible va en packages/.
+homeassistant:
+  packages: !include_dir_named packages
+
+default_config:
+
+frontend:
+  themes: !include_dir_merge_named themes
+
+recorder:
+  purge_keep_days: {{ homeassistant_recorder_dias }}
+
+# Los edita la interfaz
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml

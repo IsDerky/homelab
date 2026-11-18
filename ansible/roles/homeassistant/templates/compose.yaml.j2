@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# La configuración y los datos están en {{ homeassistant_config_dir }}: los
+# gestiona Home Assistant salvo configuration.yaml, y van en la copia.
+services:
+  homeassistant:
+    image: {{ homeassistant_image }}
+    container_name: homeassistant
+    restart: unless-stopped
+    # Red del host: descubrimiento (SSDP, mDNS), Wake on LAN por broadcast y
+    # control local de aparatos. Docker no publica nada; ufw no abre el puerto.
+    network_mode: host
+    environment:
+      TZ: {{ homeassistant_tz }}
+    volumes:
+      - {{ homeassistant_config_dir }}:/config
+      - /etc/localtime:/etc/localtime:ro
+    mem_limit: {{ homeassistant_mem }}
