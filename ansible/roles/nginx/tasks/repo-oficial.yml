@@ -1,0 +1,106 @@
+---
+# nginx de nginx.org en vez del de la distribución. Sirve para tener un parche
+# de seguridad el día que sale, sin esperar a que la distribución lo empaquete.
+# Se queda el nginx.conf que ya hay (dpkg con confold), así que no cambian el
+# usuario (www-data), el pid ni los include de sites-enabled.
+- name: Clave de nginx.org
+  ansible.builtin.get_url:
+    url: https://nginx.org/keys/nginx_signing.key
+    dest: /etc/apt/keyrings/nginx.asc
+    mode: "0644"
+    force: false
+
+- name: Repositorio de nginx.org
+  ansible.builtin.copy:
+    content: >-
+      deb [signed-by=/etc/apt/keyrings/nginx.asc]
+      https://nginx.org/packages/{{ (nginx_repo_oficial == 'mainline') | ternary('mainline/', '') }}{{ ansible_distribution | lower }}
+      {{ ansible_distribution_release }} nginx
+    dest: /etc/apt/sources.list.d/nginx.list
+    owner: root
+    group: root
+    mode: "0644"
+  register: nginx_repo
+
+# Sin esto, la versión de la distribución puede ganar si sube de número
+- name: Preferir el repositorio de nginx.org
+  ansible.builtin.copy:
+    content: |
+      Package: nginx*
+      Pin: origin nginx.org
+      Pin-Priority: 900
+    dest: /etc/apt/preferences.d/nginx
+    owner: root
+    group: root
+    mode: "0644"
+
+# unattended-upgrades solo actualiza los orígenes de la distribución: sin esto
+# los parches siguientes de nginx.org no se instalarían solos
+- name: Actualizaciones automáticas también de nginx.org
+  ansible.builtin.copy:
+    content: |
+      // Gestionado por Ansible (rol nginx)
+      Unattended-Upgrade::Origins-Pattern {
+        "origin=nginx,codename=${distro_codename}";
+      };
+    dest: /etc/apt/apt.conf.d/52nginx-oficial
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Versión de nginx instalada
+  ansible.builtin.command: dpkg-query -W -f=${Version} nginx
+  register: nginx_version_instalada
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Solo si el instalado no es de nginx.org (sus versiones acaban en ~<release>).
+# apt quita nginx-common de la distribución y el paquete nuevo pisa
+# nginx.conf (usuario nginx, sin sites-enabled) y su logrotate aunque se pida
+# confold: se guarda la config de antes y se devuelve tal cual.
+- name: Cambio al nginx de nginx.org
+  when: >-
+    nginx_repo is changed
+    or ('~' ~ ansible_distribution_release) not in nginx_version_instalada.stdout
+  block:
+    - name: Copia de la config de nginx de la distribución
+      ansible.builtin.shell: >-
+        mkdir -m 0700 {{ nginx_repo_oficial_copia }}
+        && cp -a /etc/nginx {{ nginx_repo_oficial_copia }}/nginx
+        && cp -a /etc/logrotate.d/nginx {{ nginx_repo_oficial_copia }}/logrotate
+      args:
+        creates: "{{ nginx_repo_oficial_copia }}"
+
+    - name: Cambiar al nginx de nginx.org
+      ansible.builtin.apt:
+        name: nginx
+        state: latest # noqa package-latest
+        update_cache: true
+        dpkg_options: force-confdef,force-confold
+
+    - name: Devolver la config de antes
+      ansible.builtin.shell: >-
+        cp -a {{ nginx_repo_oficial_copia }}/nginx/. /etc/nginx/
+        && cp -a {{ nginx_repo_oficial_copia }}/logrotate /etc/logrotate.d/nginx
+        && rm -f /etc/nginx/conf.d/default.conf /etc/nginx/*.dpkg-dist
+        && nginx -t
+      changed_when: true
+      when: not ansible_check_mode
+
+    # Reiniciar, no recargar: el proceso maestro arrancó con el nginx.conf del
+    # paquete
+    - name: Reiniciar nginx con la config de antes
+      ansible.builtin.systemd_service:
+        name: nginx.service
+        state: restarted
+      when: not ansible_check_mode
+
+# El paquete de nginx.org trae un server de ejemplo en el 80
+- name: Sin el server de ejemplo de nginx.org
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/default.conf
+    state: absent
+  notify:
+    - Comprobar nginx
+    - Recargar nginx

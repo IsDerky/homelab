@@ -9,6 +9,14 @@
 #       host: web.example.com
 nginx_sites: []
 
+# Instalar nginx desde nginx.org: "stable" o "mainline". Vacío = el de la
+# distribución. Útil cuando un parche de seguridad tarda en llegar a la
+# distribución; los siguientes se instalan solos con unattended-upgrades.
+nginx_repo_oficial: ""
+# Copia de /etc/nginx y del logrotate antes del cambio (se hace una sola vez;
+# sirve también para volver al paquete de la distribución)
+nginx_repo_oficial_copia: /root/nginx-antes-repo-oficial
+
 # Por defecto, files/nginx junto al inventario (los vhosts son de cada servidor)
 nginx_sites_dir: "{{ inventory_dir }}/files/nginx"
 
