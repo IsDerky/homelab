@@ -55,6 +55,7 @@
   register: nas_lectores_acl
   changed_when: false
   failed_when: false
+  check_mode: false # solo lee: así el modo en seco dice si las pondría
 
 - name: ACL de lectura para los lectores
   ansible.builtin.command: >-
@@ -77,6 +78,7 @@
   loop: "{{ nas_carpetas_propias }}"
   loop_control:
     label: "{{ item.nombre }}"
+  register: nas_carpetas
 
 - name: ACL de las carpetas propias
   ansible.posix.acl:
@@ -93,6 +95,11 @@
        ]) | list }}
   loop_control:
     label: "{{ item.0.nombre }} {{ item.1.tipo }}{{ ' (defecto)' if item.1.defecto else '' }}"
+  # En seco, una carpeta que aún no existe no tiene ACL que mirar
+  when: >-
+    not (ansible_check_mode and
+         (nas_carpetas.results | selectattr('item.nombre', 'equalto', item.0.nombre)
+          | map(attribute='changed') | first))
 
 - name: Configuración de Samba
   ansible.builtin.template:
