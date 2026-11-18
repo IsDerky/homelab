@@ -185,6 +185,27 @@ tests:
             exp_annotations:
               summary: "El certificado de n1 caduca en 9d 22h 50m 0s."
 
+  # Bloqueo de Cloudflare: 30 min seguidos avisa; una pasada suelta no
+  - interval: 1m
+    input_series:
+      - series: 'cloudflare_bloqueado{dominio="web.invalid", ip="198.51.100.7"}'
+        values: "0x29 1x60"
+      - series: 'cloudflare_bloqueado{dominio="otra.invalid", ip="198.51.100.8"}'
+        values: "0x14 1x14 0x14 1x14 0x30"
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: CloudflareBloqueado
+        exp_alerts: []
+      - eval_time: 75m
+        alertname: CloudflareBloqueado
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              dominio: web.invalid
+              ip: 198.51.100.7
+            exp_annotations:
+              summary: "La operadora bloquea web.invalid (IP de Cloudflare 198.51.100.7) desde hace 30 min: con esa operadora no se llega a la web."
+
   # Caducidad a mano: a 20 días avisa; a 40 no
   - interval: 1m
     input_series:

@@ -250,6 +250,17 @@
     dest: "{{ monitoring_textfile_dir }}/caducidades.prom"
     mode: "0644"
 
+- name: Precio de la luz
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (monitoring_precio_kwh)
+      # HELP luz_precio_kwh_euros Precio del kWh con impuestos
+      # TYPE luz_precio_kwh_euros gauge
+      luz_precio_kwh_euros {{ monitoring_precio_kwh }}
+    dest: "{{ monitoring_textfile_dir }}/luz.prom"
+    mode: "0644"
+  when: monitoring_precio_kwh | string | length > 0
+
 - name: Sonda del bloqueo de Cloudflare
   when: monitoring_bloqueo_cf_dominios | length > 0
   block:

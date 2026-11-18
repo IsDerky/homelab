@@ -119,6 +119,17 @@ groups:
         annotations:
           summary: "El certificado de {{ $labels.nombre }} caduca en {{ $value | humanizeDuration }}."
 
+      # La operadora corta la IP de Cloudflare de una web propia (sonda
+      # bloqueo-cloudflare, cada 15 min): quien tenga esa operadora no llega.
+      # 30 min = dos pasadas seguidas.
+      - alert: CloudflareBloqueado
+        expr: cloudflare_bloqueado == 1
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "La operadora bloquea {{ $labels.dominio }} (IP de Cloudflare {{ $labels.ip }}) desde hace 30 min: con esa operadora no se llega a la web."
+
       # Lo que no se puede comprobar desde aquí (monitoring_caducidades)
       - alert: CaducaPronto
         expr: caducidad_timestamp_segundos - time() < 30 * 86400

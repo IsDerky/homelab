@@ -20,9 +20,21 @@ crowdsec_acquis: []
 # honeypot en la misma máquina siga viendo a quien llega).
 crowdsec_bouncer_chains: [INPUT]
 
-# API local (loopback): la usan cscli y el bouncer. La de serie, 8080, es la
-# de Wings.
+# API local: la usan cscli y el bouncer. La de serie, 8080, es la de Wings.
 crowdsec_lapi_port: 8080
+
+# Dónde escucha la API. 0.0.0.0 si otras máquinas tiran de ella
+# (crowdsec_bouncers_remotos); entonces el cortafuegos tiene que dejar el
+# puerto solo a esas máquinas.
+crowdsec_lapi_listen: 127.0.0.1
+
+# Máquinas del inventario sin CrowdSec propio que bloquean con las decisiones
+# de esta (honeypot, Wings, lista de la comunidad): cada una con su bouncer.
+# Van en la segunda jugada de playbooks/crowdsec.yml, en la misma pasada.
+crowdsec_bouncers_remotos: []
+
+# En esas máquinas: la API de esta, normalmente por un túnel (IP:puerto)
+crowdsec_lapi_remota: ""
 
 # Métricas de Prometheus de CrowdSec (solo loopback)
 crowdsec_prometheus_port: 6060

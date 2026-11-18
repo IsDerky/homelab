@@ -1,0 +1,59 @@
+---
+# Otras máquinas (sin CrowdSec propio) bloquean con las decisiones de esta: cada
+# una con su bouncer y su clave. La clave se genera aquí, va directa a un
+# fichero de root y Ansible la lee para llevarla a la otra máquina en la misma
+# pasada (tasks/bouncer_remoto.yml): nunca sale en la salida.
+- name: Bouncers dados de alta
+  ansible.builtin.command: cscli bouncers list -o json
+  register: crowdsec_bouncers_lista
+  changed_when: false
+  check_mode: false
+  when: not (ansible_check_mode and crowdsec_nuevo)
+
+- name: Carpeta de las claves
+  ansible.builtin.file:
+    path: /etc/crowdsec/bouncers-remotos
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: ¿Tiene clave cada uno?
+  ansible.builtin.stat:
+    path: /etc/crowdsec/bouncers-remotos/{{ item }}.key
+  loop: "{{ crowdsec_bouncers_remotos }}"
+  register: crowdsec_claves_ficheros
+
+# Si falta el alta o el fichero, se rehace: la clave de un alta vieja no se
+# puede volver a leer
+- name: Alta de los que faltan
+  ansible.builtin.shell: |
+    set -eu
+    cscli bouncers delete {{ item.item }} >/dev/null 2>&1 || true
+    umask 077
+    cscli bouncers add {{ item.item }} -o raw > /etc/crowdsec/bouncers-remotos/{{ item.item }}.key
+  loop: "{{ crowdsec_claves_ficheros.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not ansible_check_mode
+    - not item.stat.exists or item.item not in crowdsec_dados_de_alta
+  vars:
+    crowdsec_dados_de_alta: "{{ crowdsec_bouncers_lista.stdout | default('[]', true) | from_json | default([], true) | map(attribute='name') | list }}"
+  changed_when: true
+
+- name: Leer las claves
+  ansible.builtin.slurp:
+    path: /etc/crowdsec/bouncers-remotos/{{ item }}.key
+  loop: "{{ crowdsec_bouncers_remotos }}"
+  register: crowdsec_claves_leidas
+  failed_when: false
+  no_log: true
+
+- name: Claves para la jugada de las otras máquinas
+  ansible.builtin.set_fact:
+    crowdsec_claves_remotas: >-
+      {{ dict(crowdsec_claves_leidas.results | selectattr('content', 'defined')
+         | map(attribute='item') | zip(crowdsec_claves_leidas.results | selectattr('content', 'defined')
+         | map(attribute='content') | map('b64decode') | map('trim'))) }}
+  no_log: true

@@ -31,6 +31,7 @@ Roles para montar piezas del homelab:
 - `trampas`: ficheros con credenciales falsas (por ejemplo un `.git-credentials`) con un token por máquina. Solo los usaría alguien que ha entrado; el dominio al que apuntan avisa si llega uno (`playbooks/trampas.yml`). Leerlos no avisa, así que las copias y la deriva no dan falsos positivos.
 - `bbr`: control de congestión BBR y cola `fq`, aplicados en caliente (`playbooks/bbr.yml`).
 - `earlyoom`: mata antes de que la máquina se ahogue sin memoria, primero los servidores de juego y nunca antes las bases de datos, Wings ni el panel (`playbooks/earlyoom.yml`).
+- `zram`: swap comprimida en RAM con zram-tools, por delante de cualquier swap en disco (`playbooks/zram.yml`).
 - `deriva`: cada noche el servidor se pasa `site.yml` en `--check` contra sí mismo y deja en Grafana cuántas tareas cambiarían (`playbooks/deriva.yml`).
 
 ## Uso
@@ -95,6 +96,12 @@ Control de congestión BBR y cola `fq` en todas las máquinas. Con cubic, una p�
 ## Rol `earlyoom`
 
 El OOM del kernel llega tarde: antes de matar nada, la máquina se pasa minutos paginando y todo va a tirones, también lo importante. earlyoom actúa antes (por defecto con menos del 5 % libre) y elige por `oom_score`, que ya baja `OOMScoreAdjust` en las unidades críticas (rol `endurecimiento`). Además, `earlyoom_evitar` deja para el final las bases de datos, Wings, Docker, nginx, PHP-FPM, sshd y systemd, y `earlyoom_preferir` pone delante a los servidores de juego (`java`): si hay que matar algo, cae una partida y no el panel.
+
+Cada minuto, `earlyoom-contador` suma lo que ha matado (las líneas «sending SIGTERM/SIGKILL to process» de su journal, solo las que escribe el propio earlyoom) y deja en el textfile de node-exporter `earlyoom_muertes_total` y `earlyoom_ultima_muerte_timestamp_segundos{proceso}`. Va por el journal y no por `-N` porque earlyoom 1.6 (Ubuntu 22.04) no lo tiene. Un dashboard puede marcar cada muerte con `changes(earlyoom_ultima_muerte_timestamp_segundos[2m]) > 0`.
+
+## Rol `zram`
+
+Swap comprimida en RAM (zram-tools, zstd, el 25 % de la RAM por defecto) con prioridad por encima de la swap en disco, y `vm.page-cluster=0`. Antes de que earlyoom tenga que matar nada, lo menos usado se comprime en memoria en vez de ir a disco, y en máquinas sin swap da margen ante un pico. Algunos kernels de nube traen zram en `linux-modules-extra`: el rol lo instala para cada kernel instalado que no tenga el módulo, así que tras actualizar el kernel hay que volver a pasarlo antes de reiniciar.
 
 ## Rol `ufw`
 
@@ -230,6 +237,7 @@ fail2ban banea a quien ya te está atacando. CrowdSec además comparte lo que ve
 - **Puerto de la API local** (`crowdsec_lapi_port`): la de serie es el 8080, el mismo que Wings. Va en `config.yaml.local` antes de instalar el paquete, que arranca CrowdSec al instalarse; después se ajusta la URL de cscli y la del bouncer.
 - Métricas en `127.0.0.1:6060` (`monitoring_crowdsec_port` en el rol `monitoring`): fila "CrowdSec" en el dashboard de operación. No avisa por DM; si deja de responder, salta `ObjetivoCaido`.
 - Se activa con `crowdsec_activo: true` en el inventario.
+- **Otras máquinas sin CrowdSec propio** (`crowdsec_bouncers_remotos`): bloquean con las decisiones de esta (honeypot, Wings y la lista de la comunidad) con solo el bouncer de iptables, contra la API por el túnel (`crowdsec_lapi_remota`). La API pasa a escuchar en todas las interfaces (`crowdsec_lapi_listen: 0.0.0.0`) y el cortafuegos deja el puerto solo a esas máquinas. Cada una tiene su bouncer y su clave: se genera aquí con `cscli bouncers add`, va directa a un fichero de root y Ansible la lleva a la otra máquina en la misma pasada (segunda jugada de `playbooks/crowdsec.yml`) sin que salga en la salida. Allí va en `crowdsec-firewall-bouncer.yaml.local`, que las actualizaciones del paquete no pisan. Probado con dos contenedores: una decisión en uno acaba en el ipset del otro, y la clave no aparece ni con `-vvv`.
 
 Probado en un contenedor 24.04 con systemd: en seco sobre limpio, dos pasadas (la segunda `changed=0`) y logs de mentira de Wings y Cowrie que acaban en un baneo dentro del ipset.
 
@@ -501,6 +509,7 @@ Pocas y solo de cosas graves. Lo demás (backups, certificados de este servidor,
 | `RecolectorParado` | El snapshot de `ops-collect` lleva más de 30 min sin actualizarse |
 | `SinRespuestaHTTPS` | Una comprobación TLS falla durante 10 min (un reinicio de Wings tarda segundos y no cuenta) |
 | `CertificadoPorCaducar` | Un certificado de las comprobaciones TLS caduca en menos de 14 días. Certbot renueva a 30, así que a 14 algo ha fallado; el caso típico es Wings, que solo lee el certificado al arrancar |
+| `CloudflareBloqueado` | La sonda `bloqueo-cloudflare` ve 30 min seguidos la IP de Cloudflare de una web propia cortada por la operadora |
 | `CaducaPronto` | Algo de `monitoring_caducidades` caduca en menos de 30 días (lo que no se puede comprobar desde el servidor, como un certificado de SSH que vive en el PC) |
 | `ContenidoRoto` | Una comprobación de contenido falla dos veces seguidas |
 
@@ -523,7 +532,8 @@ Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): 
 | `monitoring_remote_nodes` | `[]` | node-exporter de otras máquinas (`nombre`, `target`): job `nodos` |
 | `monitoring_systemd_units` | `[]` | Unidades cuyo estado exporta node_exporter (expresiones regulares) |
 | `monitoring_caducidades` | `[]` | `nombre` y `fecha` (`AAAA-MM-DD`): métrica `caducidad_timestamp_segundos` y alerta `CaducaPronto` |
-| `monitoring_bloqueo_cf_dominios` | `[]` | Dominios detrás de Cloudflare. Cada 15 min, `bloqueo-cloudflare` mira si la operadora corta su IP (https no conecta y http a esa IP no lleva `cf-ray`). Solo métricas `cloudflare_*` |
+| `monitoring_bloqueo_cf_dominios` | `[]` | Dominios detrás de Cloudflare. Cada 15 min, `bloqueo-cloudflare` mira si la operadora corta su IP (https no conecta y http a esa IP no lleva `cf-ray`). Métricas `cloudflare_*` y alerta `CloudflareBloqueado` |
+| `monitoring_precio_kwh` | `""` | Precio del kWh con impuestos: métrica `luz_precio_kwh_euros` para calcular el coste de la luz con los vatios del SAI |
 | `monitoring_cadvisor` | `true` | Métricas por contenedor |
 | `monitoring_wings_local_node` | `local` | Nombre del nodo de Wings local en las métricas de servidores de juego |
 | `monitoring_ops_group` | `""` | Grupo que puede leer el snapshot. Vacío = sin ops-exporter |

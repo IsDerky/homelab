@@ -11,6 +11,8 @@
   ansible.builtin.import_playbook: bbr.yml
 - name: Antes de quedarse sin memoria (earlyoom)
   ansible.builtin.import_playbook: earlyoom.yml
+- name: Swap comprimida en RAM (zram)
+  ansible.builtin.import_playbook: zram.yml
 - name: Actualizaciones automáticas
   ansible.builtin.import_playbook: actualizaciones.yml
 - name: Cortafuegos

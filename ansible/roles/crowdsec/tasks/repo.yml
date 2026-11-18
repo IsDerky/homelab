@@ -1,0 +1,29 @@
+---
+# force: false: solo se descarga si falta, para no marcar cambios cada vez
+- name: Clave del repositorio de CrowdSec
+  ansible.builtin.get_url:
+    url: https://packagecloud.io/crowdsec/crowdsec/gpgkey
+    dest: /etc/apt/keyrings/crowdsec.asc
+    mode: "0644"
+    force: false
+
+- name: Repositorio de CrowdSec
+  ansible.builtin.copy:
+    content: "deb [signed-by=/etc/apt/keyrings/crowdsec.asc] https://packagecloud.io/crowdsec/crowdsec/any any main\n"
+    dest: /etc/apt/sources.list.d/crowdsec.list
+    owner: root
+    group: root
+    mode: "0644"
+  register: crowdsec_repo
+
+# Ubuntu trae una versión muy vieja en universe
+- name: Preferir el repositorio de CrowdSec
+  ansible.builtin.copy:
+    content: |
+      Package: crowdsec*
+      Pin: origin packagecloud.io
+      Pin-Priority: 900
+    dest: /etc/apt/preferences.d/crowdsec
+    owner: root
+    group: root
+    mode: "0644"

@@ -1,0 +1,6 @@
+---
+- name: Swap comprimida en RAM (zram)
+  hosts: homelab:wings_remotos
+  become: true
+  roles:
+    - zram

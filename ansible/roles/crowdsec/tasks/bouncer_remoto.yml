@@ -1,0 +1,63 @@
+---
+# En una máquina sin CrowdSec: solo el bouncer de iptables, contra la API de la
+# máquina que sí lo tiene (crowdsec_lapi_remota, por un túnel). La clave la deja
+# en hostvars esa máquina en la misma pasada (tasks/bouncers_remotos.yml).
+- name: Repositorio
+  ansible.builtin.import_tasks: repo.yml
+
+- name: Bouncer de iptables
+  ansible.builtin.apt:
+    name: crowdsec-firewall-bouncer-iptables
+    state: present
+    update_cache: "{{ crowdsec_repo is changed }}"
+  register: crowdsec_bouncer_pkg
+  when: not (ansible_check_mode and crowdsec_repo.changed)
+
+- name: La clave se ha leído en esta pasada
+  ansible.builtin.assert:
+    that: crowdsec_clave | length > 0
+    fail_msg: >-
+      No hay clave para {{ crowdsec_bouncer_nombre }}: va en la misma pasada que
+      {{ crowdsec_servidor }}, con {{ crowdsec_bouncer_nombre }} en sus crowdsec_bouncers_remotos
+    quiet: true
+  when: not ansible_check_mode
+
+# .local: el bouncer lo mezcla con su yaml y las actualizaciones no lo pisan
+- name: API remota y cadenas
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol crowdsec, bouncer remoto)
+      api_url: http://{{ crowdsec_lapi_remota }}/
+      api_key: {{ crowdsec_clave }}
+      iptables_chains:
+      {% for c in crowdsec_bouncer_chains %}
+        - {{ c }}
+      {% endfor %}
+    dest: /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml.local
+    owner: root
+    group: root
+    mode: "0600"
+  when: not ansible_check_mode or crowdsec_clave | length > 0
+  no_log: true
+  notify: Reiniciar el bouncer
+
+- name: En marcha
+  ansible.builtin.systemd_service:
+    name: crowdsec-firewall-bouncer
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and (crowdsec_repo.changed or crowdsec_bouncer_pkg.changed))
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: El bouncer está en iptables
+  ansible.builtin.shell: set -o pipefail && iptables-save | grep -c -i crowdsec
+  args:
+    executable: /bin/bash
+  register: crowdsec_iptables
+  until: crowdsec_iptables.rc == 0
+  retries: 6
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode

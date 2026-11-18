@@ -29,3 +29,32 @@
     enabled: true
     state: started
   when: not (ansible_check_mode and earlyoom_paquete.changed)
+
+- name: Contador de muertes
+  when: earlyoom_textfile_dir | length > 0
+  block:
+    - name: Script earlyoom-contador
+      ansible.builtin.copy:
+        src: earlyoom-contador
+        dest: /usr/local/sbin/earlyoom-contador
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Unidades earlyoom-contador
+      ansible.builtin.template:
+        src: earlyoom-contador.{{ item }}.j2
+        dest: /etc/systemd/system/earlyoom-contador.{{ item }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [service, timer]
+      register: earlyoom_contador_unidades
+
+    - name: Timer earlyoom-contador
+      ansible.builtin.systemd_service:
+        name: earlyoom-contador.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ earlyoom_contador_unidades.changed }}"
+      when: not (ansible_check_mode and earlyoom_contador_unidades.changed)

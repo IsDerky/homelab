@@ -1,0 +1,58 @@
+---
+- name: Kernels instalados sin el módulo zram
+  ansible.builtin.shell: |
+    set -o pipefail
+    for d in /lib/modules/*/; do
+      k=$(basename "$d")
+      [ -f "$d/modules.dep" ] || continue
+      grep -q '/zram.ko' "$d/modules.dep" "$d/modules.builtin" 2>/dev/null || echo "$k"
+    done
+  args:
+    executable: /bin/bash
+  register: zram_sin_modulo
+  changed_when: false
+  check_mode: false
+  when: zram_modulos_extra
+
+- name: Módulos extra de esos kernels
+  ansible.builtin.apt:
+    name: "{{ zram_sin_modulo.stdout_lines | map('regex_replace', '^', 'linux-modules-extra-') | list }}"
+    state: present
+  when: zram_modulos_extra and zram_sin_modulo.stdout_lines | length > 0
+
+- name: Paquete
+  ansible.builtin.apt:
+    name: zram-tools
+    state: present
+  register: zram_paquete
+
+- name: Configuración
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol zram)
+      ALGO={{ zram_algoritmo }}
+      PERCENT={{ zram_porcentaje }}
+      PRIORITY={{ zram_prioridad }}
+    dest: /etc/default/zramswap
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reiniciar zramswap
+
+- name: Sysctl
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/60-zram.conf
+    sysctl_set: true
+    reload: false
+  loop: "{{ zram_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+
+- name: En marcha
+  ansible.builtin.systemd_service:
+    name: zramswap
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and zram_paquete.changed)
