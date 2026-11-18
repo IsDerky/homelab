@@ -1,4 +1,8 @@
 ---
+- name: Repositorio de nginx.org
+  ansible.builtin.import_tasks: repo-oficial.yml
+  when: nginx_repo_oficial | length > 0
+
 - name: Paquetes
   ansible.builtin.apt:
     name:
