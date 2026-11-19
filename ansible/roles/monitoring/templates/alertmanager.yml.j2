@@ -8,12 +8,13 @@ route:
   repeat_interval: 24h
 {% if monitoring_alert_dm %}
   routes:
-    # Latido: cada 5 min a alert-dm, que no lo manda por DM sino al vigilante externo
+    # Latido: cada 10 min a alert-dm, que no lo manda por DM sino al vigilante externo
+    # (cada latido es una escritura en su KV)
     - matchers: ['alertname="Watchdog"']
       receiver: discord
       group_wait: 0s
       group_interval: 1m
-      repeat_interval: 5m
+      repeat_interval: 10m
 {% endif %}
 
 receivers:

@@ -2,7 +2,7 @@
 # Avisa al vigilante externo (Worker de Cloudflare `ops-watchdog`) de que una
 # señal sigue viva. Si deja de llegar, el Worker manda un DM.
 #
-#   ops-ping servidor          latido (timer ops-ping-servidor, cada 5 min)
+#   ops-ping servidor          latido (timer ops-ping-servidor, cada 10 min)
 #   ops-ping backup-sistema    al acabar bien cada backup (lo llama server-backup)
 #
 # Config en /etc/ops-watchdog.env (root, 600): OPS_WATCHDOG_URL y
