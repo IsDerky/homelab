@@ -11,8 +11,21 @@
     state: restarted
   when: not ansible_check_mode
 
+# Antes del reinicio: con el drop-in ya cambiado, systemd no sabe quitar la regla vieja
+- name: Quitar las excepciones anteriores
+  ansible.builtin.shell: |
+    set -o pipefail
+    iptables-save -t filter | { grep -- crowdsec-exento || true; } | sed 's/^-A/-D/' | while read -r regla; do
+      iptables -w $regla
+    done
+  args:
+    executable: /bin/bash
+  changed_when: true
+  when: not ansible_check_mode
+
 - name: Reiniciar el bouncer
   ansible.builtin.systemd_service:
     name: crowdsec-firewall-bouncer
     state: restarted
+    daemon_reload: true
   when: not ansible_check_mode

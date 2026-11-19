@@ -20,6 +20,15 @@ crowdsec_acquis: []
 # honeypot en la misma máquina siga viendo a quien llega).
 crowdsec_bouncer_chains: [INPUT]
 
+# Redes propias que nunca se banean, en formato CIDR (una IP suelta con /32).
+crowdsec_lista_blanca: []
+
+# Puertos de INPUT que el bouncer no corta, aunque la IP esté baneada. Para el
+# túnel por el que un bouncer remoto lee las decisiones: si se corta, no se
+# entera de que han quitado el baneo.
+#   - {proto: udp, puerto: 51820}
+crowdsec_bouncer_exentos: []
+
 # API local: la usan cscli y el bouncer. La de serie, 8080, es la de Wings.
 crowdsec_lapi_port: 8080
 
