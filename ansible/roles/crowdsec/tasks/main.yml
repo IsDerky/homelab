@@ -72,6 +72,34 @@
     label: "{{ item.nombre }}"
   notify: Recargar crowdsec
 
+- name: Lista blanca
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol crowdsec)
+      name: homelab/lista-blanca
+      description: Redes propias
+      whitelist:
+        reason: red propia
+        cidr:
+      {% for red in crowdsec_lista_blanca %}
+          - "{{ red }}"
+      {% endfor %}
+    dest: /etc/crowdsec/parsers/s02-enrich/homelab-lista-blanca.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recargar crowdsec
+  when:
+    - crowdsec_lista_blanca | length > 0
+    - not (ansible_check_mode and crowdsec_nuevo)
+
+- name: Sin lista blanca
+  ansible.builtin.file:
+    path: /etc/crowdsec/parsers/s02-enrich/homelab-lista-blanca.yaml
+    state: absent
+  notify: Recargar crowdsec
+  when: crowdsec_lista_blanca | length == 0
+
 - name: Puerto de la API local para cscli
   ansible.builtin.replace:
     path: /etc/crowdsec/local_api_credentials.yaml

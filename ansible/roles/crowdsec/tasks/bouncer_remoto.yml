@@ -41,6 +41,44 @@
   no_log: true
   notify: Reiniciar el bouncer
 
+- name: Carpeta del drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/system/crowdsec-firewall-bouncer.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: crowdsec_bouncer_exentos | length > 0
+
+# El bouncer se pone el primero de INPUT al arrancar: la excepción tiene que
+# entrar después, y por eso va atada a su arranque y no a ufw.
+- name: Puertos que el bouncer no corta
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol crowdsec, bouncer remoto)
+      [Service]
+      {% for r in crowdsec_bouncer_exentos %}
+      ExecStartPost=/usr/sbin/iptables -w -I INPUT 1 -p {{ r.proto }} --dport {{ r.puerto }} -m comment --comment crowdsec-exento -j ACCEPT
+      ExecStopPost=-/usr/sbin/iptables -w -D INPUT -p {{ r.proto }} --dport {{ r.puerto }} -m comment --comment crowdsec-exento -j ACCEPT
+      {% endfor %}
+    dest: /etc/systemd/system/crowdsec-firewall-bouncer.service.d/exentos.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: crowdsec_bouncer_exentos | length > 0
+  notify:
+    - Quitar las excepciones anteriores
+    - Reiniciar el bouncer
+
+- name: Sin puertos exentos
+  ansible.builtin.file:
+    path: /etc/systemd/system/crowdsec-firewall-bouncer.service.d/exentos.conf
+    state: absent
+  when: crowdsec_bouncer_exentos | length == 0
+  notify:
+    - Quitar las excepciones anteriores
+    - Reiniciar el bouncer
+
 - name: En marcha
   ansible.builtin.systemd_service:
     name: crowdsec-firewall-bouncer
