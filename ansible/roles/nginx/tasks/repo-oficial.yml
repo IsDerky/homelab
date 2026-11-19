@@ -3,12 +3,19 @@
 # de seguridad el día que sale, sin esperar a que la distribución lo empaquete.
 # Se queda el nginx.conf que ya hay (dpkg con confold), así que no cambian el
 # usuario (www-data), el pid ni los include de sites-enabled.
+# nginx.org ignora If-Modified-Since: get_url en --check daría cambio cada vez
+- name: Clave de nginx.org ya descargada
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/nginx.asc
+  register: nginx_clave
+
 - name: Clave de nginx.org
   ansible.builtin.get_url:
     url: https://nginx.org/keys/nginx_signing.key
     dest: /etc/apt/keyrings/nginx.asc
     mode: "0644"
     force: false
+  when: not nginx_clave.stat.exists
 
 - name: Repositorio de nginx.org
   ansible.builtin.copy:
