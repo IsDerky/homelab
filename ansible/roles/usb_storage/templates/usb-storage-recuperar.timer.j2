@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Comprobar cada minuto los volúmenes del disco USB
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

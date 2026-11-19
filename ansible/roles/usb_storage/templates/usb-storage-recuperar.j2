@@ -1,0 +1,148 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Recupera los volúmenes del disco USB cuando se caen sin que se desconecte del todo: el disco vuelve con otro
+# nombre (sdb → sdc) y los montajes siguen sobre el viejo, o ext4 se pone en solo lectura tras errores de escritura.
+# Hace lo mismo que a mano: para los servicios, desmonta, reactiva LVM, e2fsck -p, monta, prueba a escribir y
+# arranca los servicios. Avisa por DM. Lo lanza un timer cada minuto; si no hay nada roto no hace nada.
+# Para trabajar con el disco a mano: touch {{ usb_storage_recuperar_pausa }} (o parar el timer).
+set -uo pipefail
+
+DISCO={{ usb_storage_device | quote }}
+VG={{ usb_storage_vg | quote }}
+VOLUMENES=({% for v in usb_storage_volumes %}{{ (v.name ~ ':' ~ v.mount) | quote }} {% endfor %})
+SERVICIOS=({% for s in usb_storage_recuperar_servicios %}{{ s | quote }} {% endfor %})
+MAX_HORA={{ usb_storage_recuperar_max_hora | int }}
+PAUSA={{ usb_storage_recuperar_pausa | quote }}
+ESTADO=${USB_RECUPERAR_ESTADO:-/var/lib/usb-storage-recuperar}
+AVISAR=${USB_RECUPERAR_AVISAR:-/usr/local/bin/discord-dm}
+{% raw %}
+
+mkdir -p "$ESTADO"
+exec 9>"$ESTADO/lock"
+flock -n 9 || exit 0
+[ -e "$PAUSA" ] && exit 0
+
+avisar() { [ -x "$AVISAR" ] && "$AVISAR" "$@" >/dev/null 2>&1 || true; }
+log() { echo "$*"; }
+
+# Nombre en device-mapper: los guiones se doblan
+dm() { echo "${VG//-/--}-${1//-/--}"; }
+
+# Motivo por el que un volumen está mal, o nada si está bien
+averia() {
+  local lv=$1 m=$2 dev dep
+  if ! mountpoint -q "$m"; then
+    echo "sin montar"
+    return
+  fi
+  if findmnt -no OPTIONS "$m" | tr ',' '\n' | grep -qx ro; then
+    echo "solo lectura"
+    return
+  fi
+  # tras un journal abortado las opciones pueden seguir diciendo rw: lo fiable es escribir
+  if ! { : >"$m/.usb-recuperar-sonda" && rm -f "$m/.usb-recuperar-sonda"; } 2>/dev/null; then
+    echo "no se puede escribir"
+    return
+  fi
+  # el montaje sigue sobre un disco que ya no está (el kernel le dio otro número al volver): se compara
+  # el mayor:menor del que depende el volumen con el de la partición actual
+  dep=$(dmsetup deps "$(dm "$lv")" 2>/dev/null | grep -o '([0-9]*, [0-9]*)' | head -1 | tr -d '( )' | tr ',' ':')
+  dev=$(stat -L -c '%t %T' "$DISCO-part1" 2>/dev/null | { read -r a b && printf '%d:%d' "0x$a" "0x$b"; })
+  if [ -n "$dep" ] && [ -n "$dev" ] && [ "$dep" != "$dev" ]; then
+    echo "montado sobre el disco de antes ($dep; ahora es $dev)"
+  fi
+}
+
+# Velocidad del enlace USB del disco (5000/10000 = USB 3, 480 = USB 2)
+velocidad() {
+  local d
+  d=/sys$(udevadm info -q path -n "$(readlink -f "$DISCO")" 2>/dev/null)
+  while [ "$d" != /sys ] && [ -n "$d" ]; do
+    [ -f "$d/speed" ] && { cat "$d/speed"; return; }
+    d=$(dirname "$d")
+  done
+  echo "?"
+}
+
+[ -e "$DISCO" ] || exit 0   # sin disco no hay nada que recuperar (smartd avisa de que ha desaparecido)
+
+motivos=()
+for v in "${VOLUMENES[@]}"; do
+  m=$(averia "${v%%:*}" "${v#*:}")
+  [ -n "$m" ] && motivos+=("${v#*:}: $m")
+done
+[ ${#motivos[@]} -eq 0 ] && exit 0
+
+# El disco acaba de volver: que se asiente antes de tocar nada
+sleep "${USB_RECUPERAR_ESPERA:-10}"
+[ -e "$DISCO" ] || exit 0
+
+# Si se cae una y otra vez, parar de intentarlo y avisar (una vez por hora)
+ahora=$(date +%s)
+touch "$ESTADO/intentos"
+recientes=$(awk -v d=$((ahora - 3600)) '$1 > d' "$ESTADO/intentos" | wc -l)
+if [ "$recientes" -ge "$MAX_HORA" ]; then
+  ultimo=$(cat "$ESTADO/aviso-limite" 2>/dev/null || echo 0)
+  if [ $((ahora - ultimo)) -ge 3600 ]; then
+    echo "$ahora" >"$ESTADO/aviso-limite"
+    avisar -t "Disco USB: demasiadas caídas, no lo recupero más" -c red \
+      -f "Última hora=$recientes recuperaciones" -f "Ahora=$(printf '%s; ' "${motivos[@]}")" \
+      "Se ha caído $recientes veces en una hora. Lo dejo como está: hay que mirarlo a mano (cable, puerto, caja)."
+  fi
+  log "límite de $MAX_HORA recuperaciones por hora: no hago nada"
+  exit 1
+fi
+echo "$ahora" >>"$ESTADO/intentos"
+
+log "recuperando: ${motivos[*]}"
+inicio=$(date +%s)
+fallo() {
+  log "FALLO: $1"
+  avisar -t "Disco USB: no se ha podido recuperar" -c red -f "Paso=$1" -f "Motivo=$(printf '%s; ' "${motivos[@]}")" \
+    -f "Velocidad USB=$(velocidad) Mbit/s" \
+    "Los servicios (${SERVICIOS[*]:-ninguno}) se quedan parados y los volúmenes sin montar. Hay que mirarlo a mano."
+  exit 1
+}
+
+for s in "${SERVICIOS[@]}"; do systemctl stop "$s" 2>/dev/null; done
+for v in "${VOLUMENES[@]}"; do
+  m=${v#*:}
+  mountpoint -q "$m" && { umount "$m" 2>/dev/null || umount -l "$m" 2>/dev/null; }
+done
+# el volumen tarda un momento en soltarse tras un umount -l; si no se suelta, LVM lo daría por activo sobre
+# el disco viejo y el montaje volvería a fallar
+for v in "${VOLUMENES[@]}"; do
+  n=$(dm "${v%%:*}")
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    dmsetup info "$n" >/dev/null 2>&1 || break
+    dmsetup remove "$n" >/dev/null 2>&1 && break
+    sleep 1
+  done
+  dmsetup info "$n" >/dev/null 2>&1 && fallo "dmsetup remove $n (sigue en uso)"
+done
+pvscan --cache >/dev/null 2>&1
+err=$(vgchange -ay "$VG" 2>&1) || fallo "vgchange -ay $VG: $(tail -1 <<<"$err")"
+
+for v in "${VOLUMENES[@]}"; do
+  lv=${v%%:*}
+  e2fsck -p "/dev/$VG/$lv" >/dev/null 2>&1
+  rc=$?
+  # 0 limpio, 1 corregido (journal aplicado): bien. 2 o más: a mano
+  [ "$rc" -le 1 ] || fallo "e2fsck -p /dev/$VG/$lv (código $rc)"
+done
+for v in "${VOLUMENES[@]}"; do
+  m=${v#*:}
+  mount "$m" 2>/dev/null || fallo "mount $m"
+  { touch "$m/.usb-recuperar-prueba" && rm -f "$m/.usb-recuperar-prueba"; } 2>/dev/null || fallo "escribir en $m"
+done
+for s in "${SERVICIOS[@]}"; do systemctl start "$s" 2>/dev/null || log "no arranca $s"; done
+
+resets=$(journalctl -k --since "-1 hour" --no-pager 2>/dev/null | grep -c 'reset SuperSpeed' || true)
+vel=$(velocidad)
+log "recuperado en $(($(date +%s) - inicio)) s"
+avisar -t "Disco USB recuperado solo" -c "$([ "$vel" = 480 ] && echo amber || echo green)" \
+  -f "Motivo=$(printf '%s; ' "${motivos[@]}")" -f "Tiempo=$(($(date +%s) - inicio)) s" \
+  -f "Velocidad USB=$vel Mbit/s" -f "Resets USB última hora=$resets" -f "Recuperaciones en la última hora=$((recientes + 1))" \
+  "Volúmenes revisados con e2fsck, montados y con escritura comprobada. Lo que se estuviera escribiendo en el momento del fallo hay que repetirlo."
+exit 0
+{% endraw %}
