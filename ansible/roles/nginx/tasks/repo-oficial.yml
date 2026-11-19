@@ -14,8 +14,8 @@
   ansible.builtin.copy:
     content: >-
       deb [signed-by=/etc/apt/keyrings/nginx.asc]
-      https://nginx.org/packages/{{ (nginx_repo_oficial == 'mainline') | ternary('mainline/', '') }}{{ ansible_distribution | lower }}
-      {{ ansible_distribution_release }} nginx
+      https://nginx.org/packages/{{ (nginx_repo_oficial == 'mainline') | ternary('mainline/', '') }}{{ ansible_facts['distribution'] | lower }}
+      {{ ansible_facts['distribution_release'] }} nginx
     dest: /etc/apt/sources.list.d/nginx.list
     owner: root
     group: root
@@ -62,7 +62,7 @@
 - name: Cambio al nginx de nginx.org
   when: >-
     nginx_repo is changed
-    or ('~' ~ ansible_distribution_release) not in nginx_version_instalada.stdout
+    or ('~' ~ ansible_facts['distribution_release']) not in nginx_version_instalada.stdout
   block:
     - name: Copia de la config de nginx de la distribución
       ansible.builtin.shell: >-
