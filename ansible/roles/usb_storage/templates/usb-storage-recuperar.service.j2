@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Recuperar los volúmenes del disco USB si se han caído
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/usb-storage-recuperar
+TimeoutStartSec=30min

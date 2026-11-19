@@ -208,6 +208,19 @@ vgchange -an usb
 
 Al volver a conectarlo: `mount -a && systemctl start smbd`.
 
+Con la recuperación automática encendida, antes de desconectarlo a propósito: `touch /etc/usb-storage-recuperar.pausa` (y borrarlo al acabar).
+
+### Recuperación automática
+
+Un USB que pierde el enlace un momento vuelve con otro nombre (`sdb` → `sdc`), pero los montajes siguen sobre el dispositivo viejo y ext4 acaba en solo lectura. Con `usb_storage_recuperar: true`, un timer comprueba cada minuto cada volumen (montado, escribible y sobre el disco actual) y, si alguno falla, hace lo mismo que a mano: para los servicios de `usb_storage_recuperar_servicios`, desmonta, reactiva LVM, `e2fsck -p`, monta, prueba a escribir y arranca los servicios. Avisa por DM con `discord-dm` (rol `avisos`), con la velocidad del enlace USB y los resets de la última hora.
+
+```yaml
+usb_storage_recuperar: true
+usb_storage_recuperar_servicios: [smbd, backup-nas.timer]
+```
+
+No lo intenta si `e2fsck -p` pide intervención ni a partir de `usb_storage_recuperar_max_hora` (3) recuperaciones en una hora: deja todo parado y avisa en rojo. Lo que se estuviera escribiendo en el momento del fallo se pierde igual (una copia de Samba a medias, una pasada de backup). Probado en contenedor con un disco falso (device-mapper sobre un fichero): errores de escritura, volumen desmontado, pausa, límite por hora y sistema de archivos roto.
+
 ## Rol `nas`
 
 Una carpeta compartida por Samba para la LAN:

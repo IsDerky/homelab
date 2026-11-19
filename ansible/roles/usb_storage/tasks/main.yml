@@ -118,3 +118,50 @@
   loop: "{{ usb_storage_volumes | selectattr('owner', 'defined') }}"
   loop_control:
     label: "{{ item.mount }}"
+
+- name: Recuperación automática
+  tags: [usb_storage_recuperar]
+  when: usb_storage_recuperar | bool
+  block:
+    - name: Script de recuperación
+      ansible.builtin.template:
+        src: usb-storage-recuperar.j2
+        dest: /usr/local/sbin/usb-storage-recuperar
+        mode: "0755"
+
+    - name: Servicio y timer de recuperación
+      ansible.builtin.template:
+        src: "usb-storage-recuperar.{{ item }}.j2"
+        dest: "/etc/systemd/system/usb-storage-recuperar.{{ item }}"
+        mode: "0644"
+      loop: [service, timer]
+      register: usb_storage_unidades
+
+    - name: Timer de recuperación en marcha
+      ansible.builtin.systemd:
+        name: usb-storage-recuperar.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ usb_storage_unidades.changed }}"
+      # en --check la unidad aún no existe
+      ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Sin recuperación automática
+  tags: [usb_storage_recuperar]
+  when: not (usb_storage_recuperar | bool)
+  block:
+    - name: Timer de recuperación parado
+      ansible.builtin.systemd:
+        name: usb-storage-recuperar.timer
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Quitar la recuperación
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/sbin/usb-storage-recuperar
+        - /etc/systemd/system/usb-storage-recuperar.service
+        - /etc/systemd/system/usb-storage-recuperar.timer

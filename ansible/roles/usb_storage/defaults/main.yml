@@ -17,6 +17,20 @@ usb_storage_volumes: []
 # timeout corto para no esperarlo 90 s.
 usb_storage_mount_opts: defaults,noatime,nofail,x-systemd.device-timeout=10s
 
+# Recuperación automática: un timer cada minuto mira si algún volumen está sin
+# montar, en solo lectura o montado sobre el disco de antes (el USB volvió con
+# otro nombre). Si es así para los servicios, reactiva LVM, pasa e2fsck -p,
+# monta, prueba a escribir, arranca los servicios y avisa por DM (discord-dm
+# del rol avisos). Con e2fsck que pide intervención, o más de max_hora
+# recuperaciones en una hora, lo deja parado y avisa.
+usb_storage_recuperar: false
+# Unidades que usan los volúmenes: se paran antes y se arrancan después
+# (p. ej. smbd o los timers de copias).
+usb_storage_recuperar_servicios: []
+usb_storage_recuperar_max_hora: 3
+# Con este fichero no hace nada (para trabajar con el disco a mano)
+usb_storage_recuperar_pausa: /etc/usb-storage-recuperar.pausa
+
 # BORRA el disco (firmas, tabla de particiones) y crea la partición LVM. Solo
 # se aplica si el disco aún no es de LVM. Pasarlo una vez con -e, nunca fijo.
 usb_storage_init: false
