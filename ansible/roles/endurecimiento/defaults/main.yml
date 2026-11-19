@@ -46,6 +46,12 @@ endurecimiento_journal_max: ""
 #     mariadb.service: -800
 endurecimiento_oom: {}
 
+# Paquetes en estado rc que no se purgan nunca. nginx-common se queda en rc al
+# pasar al nginx de nginx.org (rol nginx, repo-oficial) y su postrm de purga
+# borra /etc/nginx entero, aunque los ficheros ya sean del paquete nuevo.
+endurecimiento_no_purgar:
+  - nginx-common
+
 # /etc/issue y /etc/issue.net
 endurecimiento_banner: |
   Authorized access only. All activity is logged and monitored.

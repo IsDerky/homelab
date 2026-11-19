@@ -169,5 +169,7 @@
     state: absent
     purge: true
   vars:
-    endurecimiento_rc: "{{ endurecimiento_dpkg.stdout_lines | select('match', '^rc') | map('split') | map('last') | unique | list }}"
+    endurecimiento_rc: >-
+      {{ endurecimiento_dpkg.stdout_lines | select('match', '^rc') | map('split') | map('last') | unique
+         | reject('in', endurecimiento_no_purgar) | list }}
   when: endurecimiento_rc | length > 0
