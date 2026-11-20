@@ -1,0 +1,91 @@
+---
+- name: AIDE
+  when: integridad_rutas | length > 0
+  block:
+    - name: Paquete aide
+      ansible.builtin.apt:
+        name: aide
+        install_recommends: false
+        state: present
+
+    # El de Ubuntu revisa todo el sistema cada día y manda correo a root: aquí solo
+    # se vigilan integridad_rutas con integridad-aide
+    - name: Sin la revisión diaria de Ubuntu
+      ansible.builtin.systemd_service:
+        name: dailyaidecheck.timer
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    # Sin aide-common (recomendado, no instalado) no existen
+    - name: Carpetas de AIDE
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop: [/etc/aide, /var/lib/aide]
+
+    - name: Configuración
+      ansible.builtin.template:
+        src: integridad.conf.j2
+        dest: /etc/aide/integridad.conf
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Script integridad-aide
+      ansible.builtin.copy:
+        src: integridad-aide
+        dest: /usr/local/sbin/integridad-aide
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Unidades integridad-aide
+      ansible.builtin.template:
+        src: integridad-aide.{{ item }}.j2
+        dest: /etc/systemd/system/integridad-aide.{{ item }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [service, timer]
+      register: integridad_aide_units
+
+    - name: Timer de integridad-aide
+      ansible.builtin.systemd_service:
+        name: integridad-aide.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ integridad_aide_units.changed }}"
+      when: not (ansible_check_mode and integridad_aide_units.changed)
+
+- name: PHP en carpetas públicas
+  when: integridad_php_publico | length > 0
+  block:
+    - name: Script php-publico
+      ansible.builtin.copy:
+        src: php-publico
+        dest: /usr/local/sbin/php-publico
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Unidades php-publico
+      ansible.builtin.template:
+        src: php-publico.{{ item }}.j2
+        dest: /etc/systemd/system/php-publico.{{ item }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [service, timer]
+      register: integridad_php_units
+
+    - name: Timer de php-publico
+      ansible.builtin.systemd_service:
+        name: php-publico.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ integridad_php_units.changed }}"
+      when: not (ansible_check_mode and integridad_php_units.changed)

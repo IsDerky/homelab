@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Avisa si aparece un fichero PHP nuevo en una carpeta que sirve la web: es lo que deja
+# una webshell. La primera pasada guarda la lista y no avisa. Un aviso por fichero nuevo.
+# Uso: php-publico CARPETA...
+set -euo pipefail
+estado=${ESTADO:-/var/lib/integridad}
+aviso=${AVISO:-/usr/local/bin/discord-dm}
+lista=$estado/php-publico.lista
+mkdir -p "$estado"
+
+actual=$(for d in "$@"; do
+  [ -d "$d" ] && find "$d" -xdev -type f \( -iname '*.php' -o -iname '*.php[0-9]' -o -iname '*.phtml' \
+    -o -iname '*.phar' -o -iname '*.pht' -o -iname '*.phps' \) -print
+done | sort -u)
+
+if [ ! -f "$lista" ]; then
+  printf '%s\n' "$actual" | grep . >"$lista" || true
+  echo "lista inicial: $(grep -c . "$lista" || true) ficheros"
+  exit 0
+fi
+
+nuevos=$(comm -13 "$lista" <(printf '%s\n' "$actual") | grep . || true)
+if [ -n "$nuevos" ]; then
+  n=$(grep -c . <<<"$nuevos")
+  detalle=$(while read -r f; do
+    stat -c '%n (%U, %s B, %y)' "$f" 2>/dev/null | cut -c1-200
+  done <<<"$nuevos" | head -10)
+  "$aviso" -t "PHP nuevo en una carpeta pública" -c red -f "Ficheros=$n" -f "Máquina=$(hostname)" \
+    "$detalle
+
+Puede ser una webshell. Si lo has subido tú (una instalación), no hay que hacer nada: no se repite."
+fi
+# Solo tras avisar: si el MD falla, se reintenta en la siguiente pasada
+printf '%s\n' "$actual" | grep . >"$lista" || : >"$lista"

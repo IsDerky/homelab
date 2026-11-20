@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# AIDE sobre las rutas de /etc/aide/integridad.conf: compara con la noche anterior,
+# deja los contadores para node-exporter y guarda la base nueva. La primera vez solo
+# crea la base. El informe completo queda en el journal de la unidad.
+# Uso: integridad-aide FICHERO_PROM
+set -uo pipefail
+conf=/etc/aide/integridad.conf
+db=/var/lib/aide/integridad.db
+out=$1
+
+if [ ! -f "$db" ]; then
+  aide --config="$conf" --init >/dev/null
+  mv "$db.new" "$db"
+  altas=0 quitados=0 cambiados=0
+  echo "base inicial creada"
+else
+  informe=$(aide --config="$conf" --update 2>&1)
+  rc=$?
+  # 0-7: diferencias (1 añadidos, 2 quitados, 4 cambiados); 14 o más: error
+  if [ "$rc" -ge 14 ]; then
+    echo "$informe" >&2
+    exit "$rc"
+  fi
+  echo "$informe"
+  contar() { grep -m1 -E "^ *$1 entries:" <<<"$informe" | grep -oE '[0-9]+$' || echo 0; }
+  altas=$(contar Added) quitados=$(contar Removed) cambiados=$(contar Changed)
+  mv "$db.new" "$db"
+fi
+
+tmp=$(mktemp "$(dirname "$out")/.integridad-XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+cat >"$tmp" <<EOF
+# HELP integridad_ficheros Ficheros que cambiaron en las rutas vigiladas desde la noche anterior
+# TYPE integridad_ficheros gauge
+integridad_ficheros{tipo="añadidos"} $altas
+integridad_ficheros{tipo="quitados"} $quitados
+integridad_ficheros{tipo="cambiados"} $cambiados
+# HELP integridad_ultima_pasada Hora de la última pasada de AIDE
+# TYPE integridad_ultima_pasada gauge
+integridad_ultima_pasada $(date +%s)
+EOF
+chmod 644 "$tmp"
+mv "$tmp" "$out"

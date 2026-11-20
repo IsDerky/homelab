@@ -48,6 +48,8 @@
   ansible.builtin.import_playbook: changedetection.yml
 - name: Ver y restaurar copias (Backrest)
   ansible.builtin.import_playbook: backrest.yml
+- name: Integridad de las webs
+  ansible.builtin.import_playbook: integridad.yml
 - name: Home Assistant
   ansible.builtin.import_playbook: homeassistant.yml
 - name: Matter Hub

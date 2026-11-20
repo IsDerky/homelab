@@ -1,0 +1,6 @@
+---
+- name: Integridad de las webs
+  hosts: homelab
+  become: true
+  roles:
+    - integridad
