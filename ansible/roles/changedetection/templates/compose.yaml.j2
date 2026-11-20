@@ -1,7 +1,8 @@
 # {{ ansible_managed }}
 # datastore/ son los datos de la app: no los gestiona Ansible, van en la copia.
-# Sin navegador (Playwright): las páginas se piden con requests. Si alguna lo
-# necesita, se añade aparte (gasta bastante RAM).
+{% if not changedetection_navegador %}
+# Sin navegador: las páginas se piden con requests.
+{% endif %}
 services:
   changedetection:
     image: {{ changedetection_image }}
@@ -17,6 +18,23 @@ services:
       USE_X_SETTINGS: "1"
       HIDE_REFERER: "true"
       TZ: {{ changedetection_tz }}
+{% if changedetection_navegador %}
+      PLAYWRIGHT_DRIVER_URL: ws://127.0.0.1:{{ changedetection_navegador_port }}
+{% endif %}
     volumes:
       - ./datastore:/datastore
     mem_limit: {{ changedetection_mem }}
+{% if changedetection_navegador %}
+    depends_on:
+      - navegador
+
+  navegador:
+    image: {{ changedetection_navegador_image }}
+    container_name: changedetection-navegador
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:{{ changedetection_navegador_port }}:3000
+    # Chrome necesita memoria compartida de sobra
+    shm_size: 1g
+    mem_limit: {{ changedetection_navegador_mem }}
+{% endif %}
