@@ -1,0 +1,11 @@
+---
+changedetection_dir: /opt/changedetection
+changedetection_image: ghcr.io/dgtlmoon/changedetection.io:0.70.3
+
+# Solo en loopback, para nginx
+changedetection_port: 8087
+changedetection_mem: 512m
+changedetection_tz: Europe/Madrid
+
+# URL con la que se entra (la usan los enlaces de los avisos). Obligatoria.
+changedetection_base_url: ""
