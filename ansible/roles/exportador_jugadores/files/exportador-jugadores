@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""Jugadores conectados en cada servidor de juego de Pterodactyl.
+
+Saca la lista de servidores de la Application API (solo lectura) y pregunta a
+cada uno por su estado público, igual que la lista de servidores de un juego:
+Minecraft Java (Server List Ping), Bedrock (ping de RakNet), Steam (A2S_INFO) y
+FiveM (dynamic.json). Solo se guardan cifras, nunca nombres de jugadores.
+
+Escribe un fichero .prom para el textfile collector de node_exporter.
+
+  exportador-jugadores [--config FICHERO] [--listar]
+"""
+import argparse
+import concurrent.futures
+import http.client
+import json
+import os
+import socket
+import ssl
+import struct
+import sys
+import tempfile
+import time
+import urllib.parse
+import urllib.request
+
+TIMEOUT = 3
+
+
+# ---------- protocolos ----------
+
+def _varint(n):
+    out = b""
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        if n:
+            out += bytes([b | 0x80])
+        else:
+            return out + bytes([b])
+
+
+def _leer_varint(sock):
+    n = 0
+    for i in range(5):
+        b = sock.recv(1)
+        if not b:
+            raise OSError("conexión cerrada")
+        n |= (b[0] & 0x7F) << (7 * i)
+        if not b[0] & 0x80:
+            return n
+    raise OSError("varint demasiado largo")
+
+
+def _recv_exacto(sock, n):
+    datos = b""
+    while len(datos) < n:
+        trozo = sock.recv(n - len(datos))
+        if not trozo:
+            raise OSError("conexión cerrada")
+        datos += trozo
+    return datos
+
+
+def java(host, puerto):
+    with socket.create_connection((host, puerto), timeout=TIMEOUT) as s:
+        s.settimeout(TIMEOUT)
+        h = host.encode()
+        saludo = b"\x00" + _varint(767) + _varint(len(h)) + h + struct.pack(">H", puerto) + b"\x01"
+        s.sendall(_varint(len(saludo)) + saludo + b"\x01\x00")
+        _leer_varint(s)  # largo del paquete
+        if _leer_varint(s) != 0:
+            raise OSError("respuesta inesperada")
+        datos = json.loads(_recv_exacto(s, _leer_varint(s)))
+    jug = datos.get("players", {})
+    return int(jug.get("online", 0)), int(jug.get("max", 0))
+
+
+RAKNET_MAGIA = bytes.fromhex("00ffff00fefefefefdfdfdfd12345678")
+
+
+def bedrock(host, puerto):
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.settimeout(TIMEOUT)
+        s.sendto(b"\x01" + struct.pack(">Q", int(time.time() * 1000)) + RAKNET_MAGIA + b"\x00" * 8,
+                 (host, puerto))
+        datos, _ = s.recvfrom(2048)
+    if datos[:1] != b"\x1c":
+        raise OSError("respuesta inesperada")
+    campos = datos[35:].decode("utf-8", "replace").split(";")
+    return int(campos[4]), int(campos[5])
+
+
+def a2s(host, puerto):
+    peticion = b"\xff\xff\xff\xffTSource Engine Query\x00"
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.settimeout(TIMEOUT)
+        s.sendto(peticion, (host, puerto))
+        datos, _ = s.recvfrom(4096)
+        if datos[4:5] == b"A":  # desafío: repetir con el número que manda
+            s.sendto(peticion + datos[5:9], (host, puerto))
+            datos, _ = s.recvfrom(4096)
+    if datos[4:5] != b"I":
+        raise OSError("respuesta inesperada")
+    pos = 6
+    for _ in range(4):  # nombre, mapa, carpeta, juego
+        pos = datos.index(b"\x00", pos) + 1
+    pos += 2  # id de la app
+    return datos[pos], datos[pos + 1]
+
+
+def fivem(host, puerto):
+    with urllib.request.urlopen(f"http://{host}:{puerto}/dynamic.json", timeout=TIMEOUT) as r:
+        datos = json.load(r)
+    return int(datos.get("clients", 0)), int(datos.get("sv_maxclients", 0))
+
+
+PROTOCOLOS = {"java": java, "bedrock": bedrock, "a2s": a2s, "fivem": fivem}
+
+
+# ---------- API de Pterodactyl ----------
+
+def _get(cfg, url):
+    """GET a la API; con panel_ip conecta a esa IP sin pasar por el DNS (el panel
+    está en la misma máquina y por fuera hay un proxy que bloquea scripts)."""
+    u = urllib.parse.urlsplit(url)
+    cabeceras = {"Authorization": f"Bearer {cfg['clave']}", "Accept": "application/json",
+                 "Host": u.hostname}
+    ip = cfg.get("panel_ip")
+    if u.scheme == "https":
+        ctx = ssl.create_default_context()
+        con = http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=15, context=ctx)
+        if ip:
+            def conectar(c=con):
+                s = socket.create_connection((ip, u.port or 443), timeout=15)
+                c.sock = ctx.wrap_socket(s, server_hostname=u.hostname)
+            con.connect = conectar
+    else:
+        con = http.client.HTTPConnection(ip or u.hostname, u.port or 80, timeout=15)
+    try:
+        con.request("GET", u.path + ("?" + u.query if u.query else ""), headers=cabeceras)
+        r = con.getresponse()
+        cuerpo = r.read()
+        if r.status != 200:
+            raise OSError(f"HTTP {r.status} en {u.path}")
+        return json.loads(cuerpo)
+    finally:
+        con.close()
+
+
+def api(cfg, ruta):
+    datos, pagina = [], 1
+    while True:
+        sep = "&" if "?" in ruta else "?"
+        res = _get(cfg, f"{cfg['panel']}/api/application/{ruta}{sep}per_page=100&page={pagina}")
+        datos += res["data"]
+        meta = res.get("meta", {}).get("pagination", {})
+        if meta.get("current_page", 1) >= meta.get("total_pages", 1):
+            return datos
+        pagina += 1
+
+
+def regla_para(cfg, nido, huevo):
+    for r in cfg["reglas"]:
+        if r.get("huevo") == huevo:
+            return r
+    for r in cfg["reglas"]:
+        if "huevo" not in r and r.get("nido") == nido:
+            return r
+    return None
+
+
+def objetivos(cfg):
+    nodos = {n["attributes"]["id"]: n["attributes"] for n in api(cfg, "nodes")}
+    nidos = {n["attributes"]["id"]: n["attributes"]["name"] for n in api(cfg, "nests")}
+    sin_consulta = {}
+    lista = []
+    for s in api(cfg, "servers?include=allocations"):
+        a = s["attributes"]
+        if a.get("suspended"):
+            continue
+        nido = nidos.get(a["nest"], str(a["nest"]))
+        regla = regla_para(cfg, nido, a["egg"])
+        if regla is None:
+            sin_consulta[nido] = sin_consulta.get(nido, 0) + 1
+            continue
+        asig = next((x["attributes"] for x in a["relationships"]["allocations"]["data"]
+                     if x["attributes"]["id"] == a["allocation"]), None)
+        if asig is None:
+            continue
+        nodo = nodos.get(a["node"], {})
+        if nodo.get("name") in cfg.get("nodos_locales", []):
+            host = "127.0.0.1"
+        else:
+            host = asig.get("alias") or nodo.get("fqdn")
+        # Wings solo publica los puertos asignados: una variable que apunte a otro
+        # puerto no se puede consultar desde fuera. Se prueban por orden.
+        asignados = [x["attributes"]["port"] for x in a["relationships"]["allocations"]["data"]]
+        entorno = a.get("container", {}).get("environment", {})
+        puertos = []
+        for var in regla.get("variables", []):
+            v = str(entorno.get(var, "")).strip()
+            if v.isdigit() and int(v) in asignados:
+                puertos.append(int(v))
+        puertos.append(asig["port"] + int(regla.get("desplazamiento", 0)))
+        puertos += [p for p in asignados if p != asig["port"]]
+        puertos = list(dict.fromkeys(puertos))[:3]
+        lista.append({
+            "servidor": a["identifier"], "nombre": a["name"], "nodo": nodo.get("name", "?"),
+            "juego": nido, "protocolo": regla["protocolo"], "host": host, "puertos": puertos,
+        })
+    return lista, sin_consulta
+
+
+# ---------- salida ----------
+
+def _esc(v):
+    return str(v).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def _etiquetas(o):
+    return ",".join(f'{k}="{_esc(o[k])}"' for k in ("servidor", "nombre", "nodo", "juego"))
+
+
+def consultar(o):
+    for puerto in o["puertos"]:
+        try:
+            on, mx = PROTOCOLOS[o["protocolo"]](o["host"], puerto)
+            return o, True, on, mx
+        except (OSError, ValueError, IndexError, KeyError):
+            continue
+    return o, False, 0, 0
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--config", default="/etc/exportador-jugadores.json")
+    p.add_argument("--listar", action="store_true", help="enseña los objetivos sin consultarlos")
+    args = p.parse_args()
+    with open(args.config) as f:
+        cfg = json.load(f)
+
+    inicio = time.time()
+    lineas = []
+    try:
+        lista, sin_consulta = objetivos(cfg)
+        api_ok = 1
+    except (OSError, ValueError) as e:
+        print(f"API: {e}", file=sys.stderr)
+        lista, sin_consulta, api_ok = [], {}, 0
+
+    if args.listar:
+        for o in lista:
+            print(f"{o['servidor']} {o['nodo']:10} {o['juego']:14} {o['protocolo']:8} {o['host']}:{','.join(map(str, o['puertos']))}")
+        print("sin consulta:", sin_consulta)
+        return
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
+        resultados = list(ex.map(consultar, lista))
+
+    lineas += ["# HELP jugadores_conectados Jugadores conectados según el estado público del juego",
+               "# TYPE jugadores_conectados gauge"]
+    lineas += [f"jugadores_conectados{{{_etiquetas(o)}}} {on}" for o, ok, on, _ in resultados if ok]
+    lineas += ["# HELP jugadores_maximo Plazas que anuncia el servidor",
+               "# TYPE jugadores_maximo gauge"]
+    lineas += [f"jugadores_maximo{{{_etiquetas(o)}}} {mx}" for o, ok, _, mx in resultados if ok]
+    lineas += ["# HELP jugadores_responde 1 si el servidor contestó a la consulta (0 = apagado o sin respuesta)",
+               "# TYPE jugadores_responde gauge"]
+    lineas += [f"jugadores_responde{{{_etiquetas(o)}}} {int(ok)}" for o, ok, _, _ in resultados]
+    lineas += ["# HELP jugadores_sin_consulta Servidores sin consulta pública conocida, por nido (juegos sin protocolo, webs, bots…)",
+               "# TYPE jugadores_sin_consulta gauge"]
+    lineas += [f'jugadores_sin_consulta{{juego="{_esc(k)}"}} {v}' for k, v in sorted(sin_consulta.items())]
+    lineas += ["# HELP jugadores_api_ok 1 si la API del panel devolvió la lista de servidores",
+               "# TYPE jugadores_api_ok gauge", f"jugadores_api_ok {api_ok}",
+               "# HELP jugadores_pasada_segundos Duración de la última pasada",
+               "# TYPE jugadores_pasada_segundos gauge", f"jugadores_pasada_segundos {time.time() - inicio:.2f}",
+               "# HELP jugadores_pasada_timestamp Hora de la última pasada (epoch)",
+               "# TYPE jugadores_pasada_timestamp gauge", f"jugadores_pasada_timestamp {int(time.time())}"]
+
+    destino = cfg["salida"]
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(destino), prefix=".jugadores")
+    with os.fdopen(fd, "w") as f:
+        f.write("\n".join(lineas) + "\n")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, destino)
+
+
+if __name__ == "__main__":
+    main()

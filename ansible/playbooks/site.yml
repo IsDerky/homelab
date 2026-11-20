@@ -67,6 +67,8 @@
   ansible.builtin.import_playbook: pterodactyl.yml
 - name: Bases de datos de los servidores
   ansible.builtin.import_playbook: bd-servidores.yml
+- name: Jugadores conectados
+  ansible.builtin.import_playbook: exportador-jugadores.yml
 - name: Abuso desde el host
   ansible.builtin.import_playbook: abuso.yml
 - name: Aislar los contenedores

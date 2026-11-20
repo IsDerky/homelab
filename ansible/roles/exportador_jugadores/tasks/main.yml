@@ -1,0 +1,53 @@
+---
+- name: Exportador de jugadores
+  when: exportador_jugadores_activo
+  block:
+    - name: Comprobar la configuración
+      ansible.builtin.assert:
+        that:
+          - exportador_jugadores_clave | length > 0
+          - exportador_jugadores_reglas | length > 0
+        fail_msg: Faltan la clave de la API o las reglas por juego
+        quiet: true
+
+    - name: Script exportador-jugadores
+      ansible.builtin.copy:
+        src: exportador-jugadores
+        dest: /usr/local/sbin/exportador-jugadores
+        owner: root
+        group: root
+        mode: "0755"
+
+    # Lleva la clave de la API: solo root
+    - name: Configuración
+      ansible.builtin.copy:
+        content: >-
+          {{ {'panel': exportador_jugadores_panel,
+              'panel_ip': exportador_jugadores_panel_ip,
+              'clave': exportador_jugadores_clave,
+              'nodos_locales': exportador_jugadores_nodos_locales,
+              'reglas': exportador_jugadores_reglas,
+              'salida': exportador_jugadores_salida} | to_nice_json }}
+        dest: /etc/exportador-jugadores.json
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Unidades exportador-jugadores
+      ansible.builtin.template:
+        src: exportador-jugadores.{{ item }}.j2
+        dest: /etc/systemd/system/exportador-jugadores.{{ item }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [service, timer]
+      register: exportador_jugadores_units
+
+    - name: Timer de exportador-jugadores
+      ansible.builtin.systemd_service:
+        name: exportador-jugadores.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ exportador_jugadores_units.changed }}"
+      when: not (ansible_check_mode and exportador_jugadores_units.changed)

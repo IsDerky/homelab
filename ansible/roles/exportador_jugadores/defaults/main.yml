@@ -1,0 +1,26 @@
+---
+# Jugadores conectados en los servidores de juego de Pterodactyl, por su estado
+# público (lo mismo que ve la lista de servidores del juego). Escribe métricas
+# para el textfile collector de node_exporter. Solo cifras, nunca nombres.
+exportador_jugadores_activo: false
+
+# Application API con permisos de solo lectura (Servers, Nodes, Allocations, Nests)
+exportador_jugadores_panel: https://panel.ejemplo.com
+exportador_jugadores_clave: ""
+# Si el panel está en esta máquina y por fuera hay un proxy: conectar a esta IP
+# con el nombre del certificado de exportador_jugadores_panel
+exportador_jugadores_panel_ip: ""
+
+# Nodos de esta misma máquina: se consultan por 127.0.0.1
+exportador_jugadores_nodos_locales: []
+
+# Qué protocolo usa cada juego. Por nombre de nido o por id de huevo (manda el
+# huevo). Protocolos: java, bedrock, a2s (Steam), fivem. Puerto: la primera
+# variable del servidor con un puerto asignado, si no el principal + desplazamiento.
+#   - { nido: Minecraft, protocolo: java }
+#   - { nido: Valheim, protocolo: a2s, desplazamiento: 1 }
+#   - { nido: Rust, protocolo: a2s, variables: [QUERY_PORT] }
+exportador_jugadores_reglas: []
+
+exportador_jugadores_cada: 1min
+exportador_jugadores_salida: /var/lib/node-exporter/textfile/jugadores.prom

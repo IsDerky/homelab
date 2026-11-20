@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Jugadores conectados cada {{ exportador_jugadores_cada }}
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ exportador_jugadores_cada }}
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
