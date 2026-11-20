@@ -18,6 +18,8 @@ Roles para montar piezas del homelab:
 - `changedetection`: changedetection.io para vigilar cambios en páginas (precios, versiones), solo en loopback (`playbooks/changedetection.yml`).
 - `backrest`: interfaz web de restic para mirar y restaurar copias, con los repositorios en solo lectura (`playbooks/backrest.yml`).
 - `integridad`: AIDE solo sobre las webs, con contadores para Grafana, y aviso si aparece PHP nuevo en una carpeta pública (`playbooks/integridad.yml`).
+- `vigilancia_paneles`: aviso si un administrador entra desde una red nueva y administradores trampa en paneles con BD local (`playbooks/vigilancia.yml`).
+- `vigilancia_dominios`: aviso semanal de certificados de emisores raros y dominios parecidos registrados (`playbooks/vigilancia.yml`).
 - `homeassistant`: Home Assistant en Docker Compose con la red del host, detrás de nginx y sin abrir su puerto (`playbooks/homeassistant.yml`).
 - `matter_hub`: puente Matter que publica entidades de Home Assistant para Alexa, Google o Apple, con la interfaz solo en localhost (`playbooks/matter-hub.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
@@ -456,6 +458,7 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 | `backrest_activo` | `false` | Lo comprueba el playbook |
 | `backrest_repos` | `[]` | `{nombre, ruta}` de cada repositorio local |
 | `backrest_password_file` | `/root/.restic-pass` | |
+| `backrest_rclone_conf` | `""` | Config de rclone para repos `rclone:…` (solo lectura). Vacío = sin rclone |
 | `backrest_restaurar_dir` | `/srv/restaurado` | |
 | `backrest_port` | `8088` | |
 | `backrest_image` | `garethgeorge/backrest:v1.14.1` | |
@@ -474,6 +477,28 @@ Dos comprobaciones sobre las webs, pensadas para no avisar por cada despliegue:
 | `integridad_hora` | `04:40` | |
 | `integridad_php_publico` | `[]` | Carpetas servidas por la web. Vacío = sin aviso |
 | `integridad_php_cada` | `10min` | |
+
+## Rol `vigilancia_paneles`
+
+Para paneles web con la base de datos en el MariaDB local (consulta como root por el socket, sin contraseñas). Las consultas van en el inventario, porque dependen de cada panel.
+
+- **IP nueva de un administrador** (`vigilancia_paneles_ip`): cada consulta devuelve `usuario<TAB>ip` de los admins. Si aparece una red que no se había visto para ese usuario (IPv4 /16, IPv6 /48, para que la IP dinámica del mismo proveedor no avise), llega un MD. La primera pasada solo aprende.
+- **Administradores trampa** (`vigilancia_paneles_trampas`): un usuario admin con contraseña aleatoria que no se guarda en ningún sitio. Si no existe se crea; si cambia su huella (alguien entra con él, pide otra contraseña, crea una clave de API o lo toca en la base) llega un MD.
+
+Un `vigilancia-paneles.timer` cada 5 minutos; estado en `/var/lib/vigilancia-paneles`.
+
+## Rol `vigilancia_dominios`
+
+Una pasada semanal por cada dominio de `vigilancia_dominios_lista`, con MD solo si hay algo:
+
+- **Certificados** emitidos para el dominio o sus subdominios (Certificate Transparency por la API de Cert Spotter) de un emisor fuera de `vigilancia_dominios_emisores_ok`. Las renovaciones de Let's Encrypt no avisan.
+- **Dominios parecidos** registrados ([dnstwist](https://github.com/elceef/dnstwist) en Docker, imagen fijada por digest) que no estaban la semana anterior.
+
+La primera pasada solo aprende; si un servicio de fuera falla, no avisa.
+
+## Rol `trampas`: claves SSH y Cowrie
+
+Además de los ficheros trampa, `trampas_ssh` añade una entrada en `~/.ssh/config` (con la clave como un fichero trampa más) que lleva al honeypot. `trampas_cowrie_log` activa un vigilante cada minuto: una sesión SSH al honeypot desde un origen de `trampas_cowrie_locales` (la máquina, la red de Docker del honeypot, la LAN) manda un MD. Abrir y cerrar el puerto, como hace la comprobación del rol `honeypot`, no cuenta: tiene que haber un cliente SSH.
 
 ## Rol `homeassistant`
 

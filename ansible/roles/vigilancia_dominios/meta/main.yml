@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: vigilancia_dominios
+  namespace: isderky
+  description: Aviso semanal de certificados de emisores raros (Certificate Transparency) y dominios parecidos registrados (dnstwist)
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

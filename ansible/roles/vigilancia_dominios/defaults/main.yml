@@ -1,0 +1,19 @@
+---
+# Vigilancia semanal de los dominios propios, con aviso por discord-dm:
+#
+# 1. Certificados emitidos (Certificate Transparency, API de Cert Spotter): avisa si
+#    aparece uno de un emisor que no es de los habituales. Los de Let's Encrypt y
+#    compañía se renuevan solos a menudo y no avisan.
+# 2. Dominios parecidos registrados (dnstwist): avisa si aparece uno nuevo, que es
+#    lo que se usa para suplantar la web y robar cuentas.
+#
+# La primera pasada solo aprende. Si un servicio de fuera falla, no avisa.
+vigilancia_dominios_lista: []
+#   - ejemplo.com
+vigilancia_dominios_emisores_ok:
+  - Let's Encrypt
+  - Google Trust Services
+  - SSL.com
+vigilancia_dominios_dnstwist: elceef/dnstwist@sha256:f708b9a55bf6c4b784cff204b247839d4c93df977ea4bf31e56daeff8c0812ec
+vigilancia_dominios_cuando: Mon *-*-* 06:20
+vigilancia_dominios_aviso: /usr/local/bin/discord-dm

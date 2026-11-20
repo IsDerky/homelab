@@ -11,3 +11,18 @@
 #       usuario: ubuntu
 # Si el fichero ya existe y no es la trampa, no se toca (se avisa en la salida).
 trampas_ficheros: []
+
+# Claves SSH trampa: entrada en ~/.ssh/config del usuario que lleva a un honeypot
+# (la clave privada va como una trampa más en trampas_ficheros). Quien la use acaba
+# en el honeypot, y el vigilante de abajo avisa.
+#   trampas_ssh:
+#     - {usuario: root, host: backup-nodo3, hostname: 192.0.2.10, puerto: 2222,
+#        clave: /root/.ssh/id_ed25519_backup}
+trampas_ssh: []
+
+# Log JSON de Cowrie y orígenes que nunca son de Internet (la propia máquina, la red
+# de Docker del honeypot, la LAN): una conexión desde ahí al honeypot es alguien que
+# ya está dentro. Prefijos de texto. Vacío = sin vigilante.
+trampas_cowrie_log: ""
+trampas_cowrie_locales: []
+trampas_aviso: /usr/local/bin/discord-dm

@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Vigilancia semanal de los dominios
+
+[Timer]
+OnCalendar={{ vigilancia_dominios_cuando }}
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

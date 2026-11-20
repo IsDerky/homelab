@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""IP nueva de un admin y admins trampa en paneles con BD en el MariaDB local.
+
+Lee /etc/vigilancia-paneles.json (lo escribe Ansible) y consulta como root por el
+socket. Estado en /var/lib/vigilancia-paneles. Avisos con discord-dm (AVISO=...).
+"""
+
+import hashlib
+import ipaddress
+import json
+import os
+import subprocess
+import sys
+import uuid
+
+CONF = os.environ.get("CONF", "/etc/vigilancia-paneles.json")
+ESTADO = os.environ.get("ESTADO", "/var/lib/vigilancia-paneles")
+AVISO = os.environ.get("AVISO", "/usr/local/bin/discord-dm")
+
+
+def sql(bd, consulta):
+    r = subprocess.run(["mariadb", "-N", "-B", bd], input=consulta, capture_output=True, text=True, check=True)
+    return [linea.split("\t") for linea in r.stdout.splitlines() if linea.strip()]
+
+
+def red(ip):
+    try:
+        d = ipaddress.ip_address(ip.strip())
+    except ValueError:
+        return ip.strip()
+    pref = 16 if d.version == 4 else 48
+    return str(ipaddress.ip_network(f"{d}/{pref}", strict=False))
+
+
+def avisar(titulo, texto, campos):
+    args = [AVISO, "-t", titulo, "-c", "red"]
+    for k, v in campos.items():
+        args += ["-f", f"{k}={v}"]
+    subprocess.run(args + [texto], check=True)
+
+
+def leer(ruta, defecto):
+    try:
+        with open(ruta) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return defecto
+
+
+def guardar(ruta, datos):
+    tmp = ruta + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(datos, f, indent=1, sort_keys=True)
+    os.replace(tmp, ruta)
+
+
+def slug(nombre):
+    return "".join(c if c.isalnum() else "-" for c in nombre.lower())
+
+
+def ips(c):
+    ruta = f"{ESTADO}/ip-{slug(c['nombre'])}.json"
+    conocidas = leer(ruta, None)
+    primera = conocidas is None
+    conocidas = conocidas or {}
+    nuevas = []
+    for fila in sql(c["bd"], c["sql"]):
+        if len(fila) < 2 or not fila[1] or fila[1] == "NULL":
+            continue
+        usuario, ip = fila[0], fila[1]
+        r = red(ip)
+        if r not in conocidas.setdefault(usuario, []):
+            conocidas[usuario].append(r)
+            nuevas.append((usuario, ip, r))
+    if nuevas and not primera:
+        for usuario, ip, r in nuevas[:5]:
+            avisar(
+                f"Admin de {c['nombre']} desde una red nueva",
+                "Si no has sido tú (otra conexión, el móvil, un viaje), alguien tiene tu cuenta de admin: "
+                "cierra sesiones y cambia la contraseña.",
+                {"Usuario": usuario, "IP": ip, "Red": r},
+            )
+    guardar(ruta, conocidas)
+    if primera:
+        print(f"{c['nombre']}: aprendidas {sum(len(v) for v in conocidas.values())} redes")
+
+
+def trampa(t):
+    marcas = {"correo": t["correo"]}
+    ruta = f"{ESTADO}/trampa-{slug(t['nombre'])}.huella"
+    filas = sql(t["bd"], t["existe_sql"].format(**marcas))
+    if not filas:
+        clave = os.urandom(32).hex()
+        hash_ = subprocess.run(
+            ["php", "-r", "echo password_hash(stream_get_contents(STDIN), PASSWORD_BCRYPT);"],
+            input=clave, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        sql(t["bd"], t["crear_sql"].format(hash=hash_, uuid=uuid.uuid4(), **marcas))
+        filas = sql(t["bd"], t["existe_sql"].format(**marcas))
+        if os.path.exists(ruta):
+            os.remove(ruta)
+        print(f"{t['nombre']}: admin trampa creado (id {filas[0][0]})")
+    marcas["id"] = filas[0][0]
+    huella = hashlib.sha256(json.dumps(sql(t["bd"], t["huella_sql"].format(**marcas))).encode()).hexdigest()
+    anterior = open(ruta).read().strip() if os.path.exists(ruta) else None
+    if anterior is None:
+        print(f"{t['nombre']}: línea base guardada")
+    elif anterior != huella:
+        avisar(
+            f"Trampa: admin falso de {t['nombre']}",
+            "Alguien ha entrado con él, ha pedido otra contraseña, ha creado una clave o lo ha tocado en la "
+            "base de datos. Nadie conoce su contraseña: es una intrusión. Mirar los logs del panel y ausearch -i.",
+            {"Usuario": t["correo"]},
+        )
+    # Solo tras avisar: si el MD falla, se reintenta en la siguiente pasada
+    with open(ruta, "w") as f:
+        f.write(huella)
+
+
+def main():
+    os.makedirs(ESTADO, mode=0o700, exist_ok=True)
+    conf = leer(CONF, {})
+    fallos = 0
+    for c in conf.get("ip", []):
+        try:
+            ips(c)
+        except Exception as e:  # noqa: BLE001 — una consulta rota no para las demás
+            print(f"{c['nombre']}: {e}", file=sys.stderr)
+            fallos += 1
+    for t in conf.get("trampas", []):
+        try:
+            trampa(t)
+        except Exception as e:  # noqa: BLE001
+            print(f"{t['nombre']}: {e}", file=sys.stderr)
+            fallos += 1
+    sys.exit(1 if fallos else 0)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Avisa si alguien entra al honeypot Cowrie desde dentro (la máquina, Docker o la LAN).
+
+Desde Internet llegan a todas horas y no avisan. Desde un origen local solo puede ser
+alguien que ya está dentro y ha usado una clave SSH trampa (o explora la red).
+Uso: trampa-cowrie LOG_JSON PREFIJO...  (estado en /var/lib/trampas/cowrie.pos)
+"""
+
+import json
+import os
+import subprocess
+import sys
+
+ESTADO = os.environ.get("ESTADO", "/var/lib/trampas")
+AVISO = os.environ.get("AVISO", "/usr/local/bin/discord-dm")
+
+
+def main():
+    log, locales = sys.argv[1], tuple(sys.argv[2:])
+    os.makedirs(ESTADO, mode=0o700, exist_ok=True)
+    pos_f = f"{ESTADO}/cowrie.pos"
+    if not os.path.exists(log):
+        return
+    tam = os.path.getsize(log)
+    try:
+        pos = int(open(pos_f).read())
+    except (FileNotFoundError, ValueError):
+        # Primera vez: desde el final, lo de antes no cuenta
+        open(pos_f, "w").write(str(tam))
+        return
+    if pos > tam:  # rotado
+        pos = 0
+    sesiones = {}
+    with open(log, "rb") as f:
+        f.seek(pos)
+        for linea in f:
+            try:
+                e = json.loads(linea)
+            except ValueError:
+                continue
+            s = e.get("session")
+            if e.get("eventid") == "cowrie.session.connect" and str(e.get("src_ip", "")).startswith(locales):
+                sesiones[s] = {"ip": e["src_ip"], "usuario": "-", "clave": "-", "ssh": False}
+            elif s in sesiones:
+                # Abrir y cerrar el puerto (la comprobación del rol honeypot) no cuenta:
+                # un cliente SSH de verdad manda su versión
+                if e.get("eventid") in ("cowrie.client.version", "cowrie.client.fingerprint") or e.get("username"):
+                    sesiones[s]["ssh"] = True
+                if e.get("username"):
+                    sesiones[s]["usuario"] = e["username"]
+                if e.get("eventid") == "cowrie.client.fingerprint":
+                    sesiones[s]["clave"] = e.get("fingerprint", "?")
+        nueva = f.tell()
+    sesiones = {k: v for k, v in sesiones.items() if v["ssh"]}
+    if sesiones:
+        x = next(iter(sesiones.values()))
+        subprocess.run(
+            [AVISO, "-t", "Trampa: alguien ha entrado al honeypot desde dentro", "-c", "red",
+             "-f", f"Sesiones={len(sesiones)}", "-f", f"Origen={x['ip']}", "-f", f"Usuario={x['usuario']}",
+             "-f", f"Clave={x['clave'][:60]}",
+             "Una conexión al honeypot desde la propia máquina o la LAN: alguien que ya está dentro ha usado "
+             "la clave SSH trampa o está explorando la red. Mirar ausearch -i -k comandos."],
+            check=True,
+        )
+    # Solo tras avisar: si el MD falla, se reintenta
+    open(pos_f, "w").write(str(nueva))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Vigilancia de los paneles (IP nueva de admins y admins trampa)
+After=mariadb.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vigilancia-paneles
+Environment=AVISO={{ vigilancia_paneles_aviso }}

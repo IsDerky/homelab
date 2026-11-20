@@ -1,0 +1,39 @@
+---
+- name: Vigilancia de los dominios
+  when: vigilancia_dominios_lista | length > 0
+  block:
+    - name: Script vigilancia-dominios
+      ansible.builtin.copy:
+        src: vigilancia-dominios
+        dest: /usr/local/sbin/vigilancia-dominios
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Configuración
+      ansible.builtin.copy:
+        content: >-
+          {{ {'dominios': vigilancia_dominios_lista, 'emisores_ok': vigilancia_dominios_emisores_ok,
+          'dnstwist': vigilancia_dominios_dnstwist} | to_nice_json }}
+        dest: /etc/vigilancia-dominios.json
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Unidades vigilancia-dominios
+      ansible.builtin.template:
+        src: vigilancia-dominios.{{ item }}.j2
+        dest: /etc/systemd/system/vigilancia-dominios.{{ item }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [service, timer]
+      register: vigilancia_dominios_units
+
+    - name: Timer de vigilancia-dominios
+      ansible.builtin.systemd_service:
+        name: vigilancia-dominios.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ vigilancia_dominios_units.changed }}"
+      when: not (ansible_check_mode and vigilancia_dominios_units.changed)

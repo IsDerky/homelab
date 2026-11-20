@@ -16,6 +16,9 @@ services:
       XDG_CACHE_HOME: /cache
       RESTIC_PASSWORD_FILE: /run/secrets/restic-pass
       TZ: {{ backrest_tz }}
+{% if backrest_rclone_conf %}
+      RCLONE_CONFIG: /run/secrets/rclone.conf
+{% endif %}
     volumes:
       - ./config:/config
       - ./data:/data
@@ -23,6 +26,10 @@ services:
       - {{ backrest_restic_bin }}:/usr/local/bin/restic-host:ro
       - {{ backrest_password_file }}:/run/secrets/restic-pass:ro
       - {{ backrest_restaurar_dir }}:/restaurado
+{% if backrest_rclone_conf %}
+      - {{ backrest_rclone_conf }}:/run/secrets/rclone.conf:ro
+      - {{ backrest_rclone_bin }}:/usr/local/bin/rclone:ro
+{% endif %}
 {% for r in backrest_repos %}
       - {{ r.ruta }}:/repos/{{ r.nombre }}:ro
 {% endfor %}
