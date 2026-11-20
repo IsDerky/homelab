@@ -14,17 +14,19 @@ set -euo pipefail
 
 REPO="${1:-}"
 SHA="${2:-}"
-REPOS=/etc/deploy-repo/repos # «nombre repo-de-github» por línea (ci_repos)
+REPOS=/etc/deploy-repo/repos # «nombre repo-de-github dueño» por línea (ci_repos)
 PASOS=/etc/deploy-repo/pasos # <nombre>.sh de los que no tienen caso aquí abajo
 GH_REPO=""
+OWNER=""
 if [[ $REPO =~ ^[a-z0-9-]+$ && -f $REPOS ]]; then
   GH_REPO=$(awk -v r="$REPO" '$1 == r {print $2}' "$REPOS")
+  OWNER=$(awk -v r="$REPO" '$1 == r {print $3}' "$REPOS")
 fi
+OWNER=${OWNER:-IsDerky}
 [[ -n $GH_REPO ]] || { echo "deploy-repo: repo no permitido: '$REPO'" >&2; exit 2; }
 [[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "deploy-repo: sha inválido: '$SHA'" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "deploy-repo: necesita root (vía sudo)" >&2; exit 1; }
 
-OWNER=IsDerky
 DIR=/var/lib/deploy-repo/$REPO
 OBRAS=/run/oficina-obras
 KEY=/root/.ssh/deploy-$REPO
@@ -60,6 +62,8 @@ install -d -m 700 /var/lib/deploy-repo
 if [[ ! -d $DIR/.git ]]; then
   git clone --quiet "git@github.com:$OWNER/$GH_REPO.git" "$DIR"
 fi
+# Por si el repo ha cambiado de dueño (GitHub redirige, pero mejor la de verdad)
+git -C "$DIR" remote set-url origin "git@github.com:$OWNER/$GH_REPO.git"
 git -C "$DIR" fetch --quiet origin main
 git -C "$DIR" merge-base --is-ancestor "$SHA" origin/main ||
   { echo "deploy-repo: ${SHA:0:7} no está en origin/main" >&2; exit 3; }

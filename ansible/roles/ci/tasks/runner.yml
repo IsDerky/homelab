@@ -1,8 +1,10 @@
 ---
-# Un runner nuevo para ci_repo. La versión no se fija: el runner se actualiza
-# solo, así que solo importa al registrarlo. Se comprueba con la sha256 que
-# GitHub publica en las notas de la versión.
-- name: Última versión del runner ({{ ci_repo.nombre }})
+# Un runner nuevo, de repo o de organización, según ci_runner:
+#   carpeta (bajo ci_runners_dir), api (repos/<owner>/<repo> u orgs/<owner>),
+#   url (la de config.sh) y etiquetas.
+# La versión no se fija: el runner se actualiza solo, así que solo importa al
+# registrarlo. Se comprueba con la sha256 que GitHub publica en las notas.
+- name: Última versión del runner ({{ ci_runner.carpeta }})
   ansible.builtin.uri:
     url: https://api.github.com/repos/actions/runner/releases/latest
   register: ci_runner_release
@@ -36,7 +38,7 @@
 
 - name: Carpeta del runner
   ansible.builtin.file:
-    path: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}"
+    path: "{{ ci_runners_dir }}/{{ ci_runner.carpeta }}"
     state: directory
     owner: deployer
     group: deployer
@@ -45,7 +47,7 @@
 - name: Desempaquetar
   ansible.builtin.unarchive:
     src: "{{ ci_runners_dir }}/_dist/actions-runner-linux-x64-{{ ci_runner_version }}.tar.gz"
-    dest: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}"
+    dest: "{{ ci_runners_dir }}/{{ ci_runner.carpeta }}"
     remote_src: true
     owner: deployer
     group: deployer
@@ -53,7 +55,7 @@
 # Caduca en 1 h y solo vale para registrar: no se guarda en ningún sitio
 - name: Token de registro
   ansible.builtin.command: >-
-    gh api -X POST repos/{{ ci_owner }}/{{ ci_repo.github }}/actions/runners/registration-token --jq .token
+    gh api -X POST {{ ci_runner.api }}/actions/runners/registration-token --jq .token
   register: ci_token
   changed_when: false
   no_log: true
@@ -72,21 +74,21 @@
       - --unattended
       - --replace
       - --url
-      - https://github.com/{{ ci_owner }}/{{ ci_repo.github }}
+      - "{{ ci_runner.url }}"
       - --token
       - "{{ ci_token.stdout }}"
       - --name
-      - "{{ ansible_facts['hostname'] }}-{{ ci_repo.nombre }}"
+      - "{{ ansible_facts['hostname'] }}-{{ ci_runner.carpeta }}"
       - --labels
-      - "{{ ci_repo.nombre }}"
+      - "{{ ci_runner.etiquetas | join(',') }}"
       - --work
       - _work
-    chdir: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}"
-    creates: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}/.runner"
+    chdir: "{{ ci_runners_dir }}/{{ ci_runner.carpeta }}"
+    creates: "{{ ci_runners_dir }}/{{ ci_runner.carpeta }}/.runner"
   no_log: true
 
 - name: Unidad del runner
   ansible.builtin.command: ./svc.sh install deployer
   args:
-    chdir: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}"
-    creates: "{{ ci_runners_dir }}/{{ ci_repo.nombre }}/.service"
+    chdir: "{{ ci_runners_dir }}/{{ ci_runner.carpeta }}"
+    creates: "{{ ci_runners_dir }}/{{ ci_runner.carpeta }}/.service"

@@ -7,6 +7,8 @@ ci_owner: IsDerky
 
 # nombre: etiqueta del runner y argumento de deploy-repo; github: el repo.
 # Cada uno necesita su caso en files/deploy-repo o sus pasos en ci_pasos.
+# Opcionales: owner (si no, ci_owner) y runner: el nombre de un runner de
+# ci_runners_org que lo atiende en vez de tener uno propio.
 ci_repos:
   - { nombre: oficina, github: oficina }
   - { nombre: asistente, github: asistente }
@@ -21,6 +23,12 @@ ci_pasos: {}
 # de baja en GitHub (runner y deploy key). Mismo formato que ci_repos, más
 # `borrar` opcional: carpetas que dejó su despliegue.
 ci_repos_retirados: []
+
+# Runners de organización: uno sirve a varios repos de esa organización, con
+# una etiqueta por repo (la que pide el workflow). Registrarlo pide el permiso
+# admin:org en el gh del controlador.
+#   - { owner: mi-org, nombre: mi-org, etiquetas: [web, bot] }
+ci_runners_org: []
 
 ci_runners_dir: /opt/actions-runner
 
