@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: exportador_jugadores
+  namespace: isderky
+  description: Jugadores conectados en servidores de juego de Pterodactyl por su estado público, para node_exporter
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

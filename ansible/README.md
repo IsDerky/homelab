@@ -20,6 +20,7 @@ Roles para montar piezas del homelab:
 - `integridad`: AIDE solo sobre las webs, con contadores para Grafana, y aviso si aparece PHP nuevo en una carpeta pública (`playbooks/integridad.yml`).
 - `vigilancia_paneles`: aviso si un administrador entra desde una red nueva y administradores trampa en paneles con BD local (`playbooks/vigilancia.yml`).
 - `vigilancia_dominios`: aviso semanal de certificados de emisores raros y dominios parecidos registrados (`playbooks/vigilancia.yml`).
+- `exportador_jugadores`: jugadores conectados en cada servidor de juego por su estado público, para Prometheus (`playbooks/exportador-jugadores.yml`).
 - `homeassistant`: Home Assistant en Docker Compose con la red del host, detrás de nginx y sin abrir su puerto (`playbooks/homeassistant.yml`).
 - `matter_hub`: puente Matter que publica entidades de Home Assistant para Alexa, Google o Apple, con la interfaz solo en localhost (`playbooks/matter-hub.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
@@ -495,6 +496,14 @@ Una pasada semanal por cada dominio de `vigilancia_dominios_lista`, con MD solo 
 - **Dominios parecidos** registrados ([dnstwist](https://github.com/elceef/dnstwist) en Docker, imagen fijada por digest) que no estaban la semana anterior.
 
 La primera pasada solo aprende; si un servicio de fuera falla, no avisa.
+
+## Rol `exportador_jugadores`
+
+Cada minuto pide a la Application API de Pterodactyl (clave de solo lectura) la lista de servidores y pregunta a cada uno por su estado público, como la lista de servidores del propio juego: Minecraft Java (Server List Ping), Bedrock (ping de RakNet), juegos de Steam (A2S_INFO) y FiveM/RedM (`dynamic.json`). No entra en los servidores ni usa RCON, y solo guarda cifras: los nombres de jugadores que manda Minecraft se descartan.
+
+Qué protocolo usa cada juego va en `exportador_jugadores_reglas`, por nido o por huevo. El puerto de consulta sale de las variables del servidor si apuntan a un puerto asignado (Wings no publica los demás); si no, el principal con `desplazamiento` y después los otros asignados.
+
+Métricas en el textfile de node_exporter: `jugadores_conectados`, `jugadores_maximo` y `jugadores_responde` por servidor (etiquetas `servidor`, `nombre`, `nodo`, `juego`), `jugadores_sin_consulta` por juego y `jugadores_api_ok`/`jugadores_pasada_*` de la propia pasada.
 
 ## Rol `trampas`: claves SSH y Cowrie
 

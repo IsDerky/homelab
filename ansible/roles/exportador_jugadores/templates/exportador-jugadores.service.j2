@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Jugadores conectados en los servidores de juego (estado público)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/exportador-jugadores
+TimeoutStartSec=50
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{ exportador_jugadores_salida | dirname }}

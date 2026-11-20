@@ -1,0 +1,7 @@
+---
+# Jugadores conectados por servidor (estado público) → node_exporter
+- name: Exportador de jugadores
+  hosts: homelab
+  become: true
+  roles:
+    - exportador_jugadores
