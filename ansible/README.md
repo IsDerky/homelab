@@ -429,13 +429,15 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 
 [changedetection.io](https://github.com/dgtlmoon/changedetection.io) en Docker Compose como servicio systemd, en `127.0.0.1:8087` y detrás de nginx. Lo uso para seguir precios de piezas y páginas de versiones; los avisos se configuran en la propia web (Apprise: Discord, correo…).
 
-- Sin navegador: las páginas se piden con `requests`. Las que necesitan JavaScript se pueden añadir luego con un contenedor de Playwright aparte, que gasta bastante más RAM.
+- Por defecto sin navegador: las páginas se piden con `requests`. Con `changedetection_navegador: true` se añade un Chrome aparte ([sockpuppetbrowser](https://github.com/dgtlmoon/sockpuppetbrowser), unos 500 MB) publicado solo en `127.0.0.1`, y en cada página se elige «Playwright Chromium» como forma de leerla. Sirve para tiendas que exigen JavaScript o bloquean peticiones sin navegador; las que van detrás de un desafío de Cloudflare siguen sin poder leerse.
 - Los datos van en `datastore/` dentro de `changedetection_dir`; si esa carpeta está en `/opt`, entra en `server-backup sistema`.
 
 | Variable | Por defecto | |
 |---|---|---|
 | `changedetection_base_url` | `""` | Obligatoria. URL con la que se entra (sale en los avisos) |
 | `changedetection_port` | `8087` | |
+| `changedetection_navegador` | `false` | Chrome aparte para páginas con JavaScript |
+| `changedetection_navegador_port` | `3011` | |
 | `changedetection_dir` | `/opt/changedetection` | |
 | `changedetection_image` | `ghcr.io/dgtlmoon/changedetection.io:0.70.3` | |
 

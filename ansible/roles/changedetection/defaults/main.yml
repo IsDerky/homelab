@@ -7,5 +7,12 @@ changedetection_port: 8087
 changedetection_mem: 512m
 changedetection_tz: Europe/Madrid
 
+# Chrome aparte (sockpuppetbrowser) para las páginas que exigen JavaScript o
+# bloquean peticiones sin navegador. Publicado solo en 127.0.0.1.
+changedetection_navegador: false
+changedetection_navegador_image: dgtlmoon/sockpuppetbrowser:0.0.5
+changedetection_navegador_port: 3011
+changedetection_navegador_mem: 1g
+
 # URL con la que se entra (la usan los enlaces de los avisos). Obligatoria.
 changedetection_base_url: ""
