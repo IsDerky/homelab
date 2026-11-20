@@ -1,0 +1,56 @@
+---
+- name: Falta la URL
+  ansible.builtin.assert:
+    that: changedetection_base_url is match('^https://')
+    fail_msg: Define changedetection_base_url (https://...).
+    quiet: true
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ changedetection_dir }}", mode: "0755" }
+    # Lo que se vigila, historial y ajustes: entra en la copia con /opt
+    - { path: "{{ changedetection_dir }}/datastore", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ changedetection_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de changedetection
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: changedetection.service.j2
+    dest: /etc/systemd/system/changedetection.service
+    mode: "0644"
+  register: changedetection_unit
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: changedetection.service
+    enabled: true
+    state: started
+  # En --check la unidad nueva no se ha copiado de verdad
+  when: not (ansible_check_mode and changedetection_unit.changed)
+
+- name: Responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ changedetection_port }}/
+  register: changedetection_check
+  until: changedetection_check.status == 200
+  retries: 12
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode

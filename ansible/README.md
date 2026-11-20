@@ -15,6 +15,8 @@ Roles para montar piezas del homelab:
 - `code_server`: code-server con un usuario sin privilegios (también en `playbooks/apps.yml`).
 - `inicio`: página de inicio propia, estática, con carpetas, widgets y el estado de cada web sacados de Prometheus (`playbooks/inicio.yml`).
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
+- `changedetection`: changedetection.io para vigilar cambios en páginas (precios, versiones), solo en loopback (`playbooks/changedetection.yml`).
+- `backrest`: interfaz web de restic para mirar y restaurar copias, con los repositorios en solo lectura (`playbooks/backrest.yml`).
 - `homeassistant`: Home Assistant en Docker Compose con la red del host, detrás de nginx y sin abrir su puerto (`playbooks/homeassistant.yml`).
 - `matter_hub`: puente Matter que publica entidades de Home Assistant para Alexa, Google o Apple, con la interfaz solo en localhost (`playbooks/matter-hub.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
@@ -422,6 +424,38 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 | `vaultwarden_signups_allowed` | `false` | |
 | `vaultwarden_port` | `8086` | |
 | `vaultwarden_image` | `vaultwarden/server:1.37.5` | |
+
+## Rol `changedetection`
+
+[changedetection.io](https://github.com/dgtlmoon/changedetection.io) en Docker Compose como servicio systemd, en `127.0.0.1:8087` y detrás de nginx. Lo uso para seguir precios de piezas y páginas de versiones; los avisos se configuran en la propia web (Apprise: Discord, correo…).
+
+- Sin navegador: las páginas se piden con `requests`. Las que necesitan JavaScript se pueden añadir luego con un contenedor de Playwright aparte, que gasta bastante más RAM.
+- Los datos van en `datastore/` dentro de `changedetection_dir`; si esa carpeta está en `/opt`, entra en `server-backup sistema`.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `changedetection_base_url` | `""` | Obligatoria. URL con la que se entra (sale en los avisos) |
+| `changedetection_port` | `8087` | |
+| `changedetection_dir` | `/opt/changedetection` | |
+| `changedetection_image` | `ghcr.io/dgtlmoon/changedetection.io:0.70.3` | |
+
+## Rol `backrest`
+
+[Backrest](https://github.com/garethgeorge/backrest) en Docker Compose, en `127.0.0.1:8088` y detrás de nginx, solo para **mirar y restaurar**. Las copias las siguen haciendo los timers del rol `backup`.
+
+- Usa el `restic` del host (el que instala `backup`) para tener la misma versión que hace las copias.
+- Los repositorios de `backrest_repos` se montan en solo lectura en `/repos/<nombre>`, con la contraseña en `RESTIC_PASSWORD_FILE`. Al darlos de alta en la web hay que poner la bandera `--no-lock`: sin ella restic se queda reintentando crear el bloqueo. No crear planes.
+- Lo restaurado sale en `backrest_restaurar_dir` (dentro del contenedor, `/restaurado`), fuera de `/opt` para que no entre en la copia.
+- El primer acceso pide crear el usuario de la web.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `backrest_activo` | `false` | Lo comprueba el playbook |
+| `backrest_repos` | `[]` | `{nombre, ruta}` de cada repositorio local |
+| `backrest_password_file` | `/root/.restic-pass` | |
+| `backrest_restaurar_dir` | `/srv/restaurado` | |
+| `backrest_port` | `8088` | |
+| `backrest_image` | `garethgeorge/backrest:v1.14.1` | |
 
 ## Rol `homeassistant`
 

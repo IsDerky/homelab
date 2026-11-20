@@ -1,0 +1,7 @@
+---
+- name: Cambios en páginas web (changedetection.io)
+  hosts: homelab
+  become: true
+  roles:
+    - role: changedetection
+      when: changedetection_base_url is defined and changedetection_base_url | length > 0

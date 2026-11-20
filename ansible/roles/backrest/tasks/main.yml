@@ -1,0 +1,63 @@
+---
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ backrest_dir }}", mode: "0755" }
+    # config.json (usuarios y repositorios dados de alta en la web) y registro de operaciones
+    - { path: "{{ backrest_dir }}/config", mode: "0700" }
+    - { path: "{{ backrest_dir }}/data", mode: "0700" }
+    - { path: "{{ backrest_dir }}/cache", mode: "0700" }
+    - { path: "{{ backrest_restaurar_dir }}", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: El restic del host existe
+  ansible.builtin.stat:
+    path: "{{ backrest_restic_bin }}"
+  register: backrest_restic
+
+- name: Falta restic
+  ansible.builtin.assert:
+    that: backrest_restic.stat.exists or ansible_check_mode
+    fail_msg: No está {{ backrest_restic_bin }} (lo instala el rol backup).
+    quiet: true
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ backrest_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de backrest
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: backrest.service.j2
+    dest: /etc/systemd/system/backrest.service
+    mode: "0644"
+  register: backrest_unit
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: backrest.service
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and backrest_unit.changed)
+
+- name: Responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ backrest_port }}/
+  register: backrest_check
+  until: backrest_check.status == 200
+  retries: 12
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode

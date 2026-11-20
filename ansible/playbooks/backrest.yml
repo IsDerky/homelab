@@ -1,0 +1,8 @@
+---
+# Después de backup.yml: usa su restic y su contraseña
+- name: Backrest
+  hosts: homelab
+  become: true
+  roles:
+    - role: backrest
+      when: backrest_activo | default(false)

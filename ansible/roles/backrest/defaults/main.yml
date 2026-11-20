@@ -1,0 +1,25 @@
+---
+# Backrest como interfaz web de restic solo para mirar y restaurar: las copias
+# las siguen haciendo los timers del rol backup. Los repositorios se montan en
+# solo lectura y se abren con --no-lock, así que no puede borrar ni podar nada.
+backrest_dir: /opt/backrest
+backrest_image: garethgeorge/backrest:v1.14.1
+
+# Solo en loopback, para nginx
+backrest_port: 8088
+backrest_mem: 512m
+backrest_tz: Europe/Madrid
+
+# El restic del host (el del rol backup), para usar la misma versión que hace las copias
+backrest_restic_bin: /usr/local/bin/restic
+
+# Repositorios locales que se montan en /repos/<nombre> (solo lectura).
+#   backrest_repos:
+#     - {nombre: local, ruta: /srv/backup-local/restic}
+backrest_repos: []
+# Contraseña de los repositorios (se monta en /run/secrets/restic-pass)
+backrest_password_file: /root/.restic-pass
+
+# Lo que se restaura va aquí (en el contenedor, /restaurado). Fuera de /opt
+# para que no entre en la copia del sistema.
+backrest_restaurar_dir: /srv/restaurado

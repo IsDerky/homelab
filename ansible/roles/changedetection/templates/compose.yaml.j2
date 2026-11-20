@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# datastore/ son los datos de la app: no los gestiona Ansible, van en la copia.
+# Sin navegador (Playwright): las páginas se piden con requests. Si alguna lo
+# necesita, se añade aparte (gasta bastante RAM).
+services:
+  changedetection:
+    image: {{ changedetection_image }}
+    container_name: changedetection
+    restart: unless-stopped
+    # Red del host escuchando en 127.0.0.1: Docker no publica ningún puerto
+    network_mode: host
+    environment:
+      LISTEN_HOST: 127.0.0.1
+      PORT: "{{ changedetection_port }}"
+      BASE_URL: {{ changedetection_base_url }}
+      # nginx va delante
+      USE_X_SETTINGS: "1"
+      HIDE_REFERER: "true"
+      TZ: {{ changedetection_tz }}
+    volumes:
+      - ./datastore:/datastore
+    mem_limit: {{ changedetection_mem }}

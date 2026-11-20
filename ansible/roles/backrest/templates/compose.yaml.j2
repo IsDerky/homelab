@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# Los repositorios entran en solo lectura: al darlos de alta en la web hay que
+# poner la bandera --no-lock (restic no puede crear el bloqueo) y no crear planes.
+services:
+  backrest:
+    image: {{ backrest_image }}
+    container_name: backrest
+    restart: unless-stopped
+    # Red del host escuchando en 127.0.0.1: Docker no publica ningún puerto
+    network_mode: host
+    environment:
+      BACKREST_PORT: 127.0.0.1:{{ backrest_port }}
+      BACKREST_CONFIG: /config/config.json
+      BACKREST_DATA: /data
+      BACKREST_RESTIC_COMMAND: /usr/local/bin/restic-host
+      XDG_CACHE_HOME: /cache
+      RESTIC_PASSWORD_FILE: /run/secrets/restic-pass
+      TZ: {{ backrest_tz }}
+    volumes:
+      - ./config:/config
+      - ./data:/data
+      - ./cache:/cache
+      - {{ backrest_restic_bin }}:/usr/local/bin/restic-host:ro
+      - {{ backrest_password_file }}:/run/secrets/restic-pass:ro
+      - {{ backrest_restaurar_dir }}:/restaurado
+{% for r in backrest_repos %}
+      - {{ r.ruta }}:/repos/{{ r.nombre }}:ro
+{% endfor %}
+    mem_limit: {{ backrest_mem }}
