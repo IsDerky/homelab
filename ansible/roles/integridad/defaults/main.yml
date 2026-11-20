@@ -1,0 +1,23 @@
+---
+# Integridad de las webs, en dos partes:
+#
+# 1. AIDE solo sobre integridad_rutas (no todo el sistema): cada noche compara
+#    hash, permisos y dueño de cada fichero con la noche anterior y deja cuántos
+#    se añadieron, quitaron o cambiaron en el textfile de node-exporter. Sin
+#    avisos: los despliegues cambian ficheros a menudo. Sirve para mirar en
+#    Grafana y para tener la lista exacta en el journal si pasa algo.
+#
+# 2. PHP nuevo en una carpeta que sirve la web (lo típico de una webshell): cada
+#    pocos minutos, y aviso por discord-dm. Una app Laravel solo tiene ahí index.php.
+integridad_rutas: []
+#   - /var/www
+# Expresiones regulares de AIDE (rutas que no se vigilan: logs, cachés, subidas)
+integridad_excluir: []
+#   - /var/www/[^/]+/storage
+integridad_hora: "04:40"
+integridad_textfile_dir: /var/lib/node-exporter/textfile
+
+integridad_php_publico: []
+#   - /var/www/mi-app/public
+integridad_php_cada: 10min
+integridad_aviso: /usr/local/bin/discord-dm

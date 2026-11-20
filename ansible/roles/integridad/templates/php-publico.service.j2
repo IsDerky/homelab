@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Aviso de PHP nuevo en carpetas públicas (webshells)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/php-publico{% for d in integridad_php_publico %} {{ d }}{% endfor %}
+
+Environment=AVISO={{ integridad_aviso }}
+Nice=10
+LogLevelMax=notice

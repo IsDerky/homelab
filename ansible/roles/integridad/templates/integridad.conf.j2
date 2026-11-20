@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# AIDE solo para las rutas de integridad_rutas. Lo lanza integridad-aide.
+database_in=file:/var/lib/aide/integridad.db
+database_out=file:/var/lib/aide/integridad.db.new
+gzip_dbout=yes
+report_url=stdout
+report_summarize_changes=yes
+report_grouped=yes
+
+Integridad = p+u+g+s+sha256
+
+{% for r in integridad_excluir %}
+!{{ r }}
+{% endfor %}
+{% for r in integridad_rutas %}
+{{ r }} Integridad
+{% endfor %}

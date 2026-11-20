@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+[Unit]
+Description=AIDE sobre las webs (contadores para node-exporter)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/integridad-aide {{ integridad_textfile_dir }}/integridad.prom
+Nice=19
+IOSchedulingClass=idle

@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Aviso de PHP nuevo en carpetas públicas cada {{ integridad_php_cada }}
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec={{ integridad_php_cada }}
+
+[Install]
+WantedBy=timers.target

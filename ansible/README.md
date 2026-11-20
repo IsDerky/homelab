@@ -17,6 +17,7 @@ Roles para montar piezas del homelab:
 - `vaultwarden`: gestor de contraseñas compatible con Bitwarden, solo en loopback y con usuario propio (`playbooks/vaultwarden.yml`).
 - `changedetection`: changedetection.io para vigilar cambios en páginas (precios, versiones), solo en loopback (`playbooks/changedetection.yml`).
 - `backrest`: interfaz web de restic para mirar y restaurar copias, con los repositorios en solo lectura (`playbooks/backrest.yml`).
+- `integridad`: AIDE solo sobre las webs, con contadores para Grafana, y aviso si aparece PHP nuevo en una carpeta pública (`playbooks/integridad.yml`).
 - `homeassistant`: Home Assistant en Docker Compose con la red del host, detrás de nginx y sin abrir su puerto (`playbooks/homeassistant.yml`).
 - `matter_hub`: puente Matter que publica entidades de Home Assistant para Alexa, Google o Apple, con la interfaz solo en localhost (`playbooks/matter-hub.yml`).
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
@@ -458,6 +459,21 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 | `backrest_restaurar_dir` | `/srv/restaurado` | |
 | `backrest_port` | `8088` | |
 | `backrest_image` | `garethgeorge/backrest:v1.14.1` | |
+
+## Rol `integridad`
+
+Dos comprobaciones sobre las webs, pensadas para no avisar por cada despliegue:
+
+- **AIDE** solo sobre `integridad_rutas`, no sobre todo el sistema (la revisión diaria de Ubuntu se desactiva). Cada noche compara hash, permisos y dueño con la noche anterior, guarda la base nueva y deja en el textfile de node-exporter cuántos ficheros se añadieron, quitaron o cambiaron (`integridad_ficheros{tipo}`). No avisa; la lista exacta queda en el journal de `integridad-aide.service`.
+- **PHP nuevo en carpetas públicas** (`php-publico`, cada 10 min): una app Laravel solo tiene `index.php` en `public/`, así que un `.php`, `.phtml` o `.phar` nuevo ahí o en las subidas es lo que deja una webshell. Manda un MD con `discord-dm` una sola vez por fichero. La primera pasada solo guarda la lista.
+
+| Variable | Por defecto | |
+|---|---|---|
+| `integridad_rutas` | `[]` | Rutas que vigila AIDE. Vacío = sin AIDE |
+| `integridad_excluir` | `[]` | Expresiones regulares de AIDE (logs, cachés, `node_modules`) |
+| `integridad_hora` | `04:40` | |
+| `integridad_php_publico` | `[]` | Carpetas servidas por la web. Vacío = sin aviso |
+| `integridad_php_cada` | `10min` | |
 
 ## Rol `homeassistant`
 
