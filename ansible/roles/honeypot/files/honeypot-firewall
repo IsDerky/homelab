@@ -27,5 +27,9 @@ rule DOCKER-USER -s "$NET" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
 rule INPUT -s "$NET" -j DROP
 rule INPUT -s "$NET" -p udp --dport 53 -j ACCEPT
 rule INPUT -s "$NET" -p tcp --dport 53 -j ACCEPT
+# Respuestas a conexiones que abre el servidor hacia el honeypot (el proxy de Docker
+# de 127.0.0.1:2222, una clave SSH trampa): sin esto se cuelgan en el saludo SSH.
+# El contenedor sigue sin poder abrir nada nuevo hacia el servidor.
+rule INPUT -s "$NET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
 echo "honeypot-firewall: reglas puestas para $NET"
