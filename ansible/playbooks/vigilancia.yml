@@ -1,0 +1,8 @@
+---
+# Paneles (IP nueva de admins, admins trampa) y dominios (certificados, parecidos)
+- name: Vigilancia
+  hosts: homelab
+  become: true
+  roles:
+    - vigilancia_paneles
+    - vigilancia_dominios

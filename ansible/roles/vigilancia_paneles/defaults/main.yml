@@ -1,0 +1,30 @@
+---
+# Vigilancia de los paneles web con BD en el MariaDB local (como root por el socket):
+#
+# 1. IP nueva de un administrador: cada consulta devuelve filas «usuario<TAB>ip»
+#    (solo admins). Una red que no se había visto para ese usuario manda un MD. La
+#    primera pasada solo aprende. Se compara por red (IPv4 /16, IPv6 /48) para que
+#    una IP dinámica del mismo proveedor no avise.
+#   vigilancia_paneles_ip:
+#     - nombre: Mi panel
+#       bd: panel
+#       sql: >-
+#         SELECT u.email, a.ip FROM activity_logs a JOIN users u ON u.id = a.actor_id
+#         WHERE a.event = 'auth:success' AND u.root_admin = 1
+vigilancia_paneles_ip: []
+
+# 2. Admins trampa: un usuario con permisos de admin y contraseña aleatoria que no
+#    se guarda. Si no existe, se crea con crear_sql; si cambia su huella (alguien
+#    entra con él, pide otra contraseña, crea una clave de API o lo toca en la BD),
+#    manda un MD. Marcas en el SQL: {correo}, {hash} (bcrypt), {uuid}, {id}.
+#   vigilancia_paneles_trampas:
+#     - nombre: Mi panel
+#       bd: panel
+#       correo: admin@ejemplo.com
+#       existe_sql: "SELECT id FROM users WHERE email = '{correo}'"
+#       crear_sql: "INSERT INTO users (...) VALUES (...)"
+#       huella_sql: "SELECT password, remember_token, updated_at FROM users WHERE id = {id}"
+vigilancia_paneles_trampas: []
+
+vigilancia_paneles_cada: 5min
+vigilancia_paneles_aviso: /usr/local/bin/discord-dm

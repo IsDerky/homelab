@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Aviso de conexiones al honeypot desde dentro (clave SSH trampa)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/trampa-cowrie {{ trampas_cowrie_log }}{% for p in trampas_cowrie_locales %} {{ p }}{% endfor %}
+
+Environment=AVISO={{ trampas_aviso }}
+LogLevelMax=notice

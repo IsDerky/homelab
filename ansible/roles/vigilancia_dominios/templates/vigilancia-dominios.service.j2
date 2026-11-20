@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Certificados raros y dominios parecidos a los propios
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vigilancia-dominios
+Environment=AVISO={{ vigilancia_dominios_aviso }}
+Nice=10
+TimeoutStartSec=2h

@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: vigilancia_paneles
+  namespace: isderky
+  description: Aviso de IP nueva de administradores y administradores trampa en paneles con BD en el MariaDB local
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

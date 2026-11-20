@@ -17,6 +17,11 @@ backrest_restic_bin: /usr/local/bin/restic
 #   backrest_repos:
 #     - {nombre: local, ruta: /srv/backup-local/restic}
 backrest_repos: []
+# Repositorios remotos por rclone (p. ej. rclone:gdrive:copias): se monta la config de
+# rclone en solo lectura y el rclone del host. Vacío = sin rclone. Con la config en
+# solo lectura, rclone no puede guardar el token renovado (avisa en el log y sigue).
+backrest_rclone_conf: ""
+backrest_rclone_bin: /usr/local/bin/rclone
 # Contraseña de los repositorios (se monta en /run/secrets/restic-pass)
 backrest_password_file: /root/.restic-pass
 

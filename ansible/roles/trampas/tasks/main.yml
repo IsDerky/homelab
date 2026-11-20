@@ -38,3 +38,51 @@
   loop_control:
     label: "{{ item.ruta }}"
   no_log: true
+
+- name: Entradas SSH trampa
+  ansible.builtin.blockinfile:
+    path: "{{ (item.usuario == 'root') | ternary('/root', '/home/' ~ item.usuario) }}/.ssh/config"
+    create: true
+    owner: "{{ item.usuario }}"
+    group: "{{ item.usuario }}"
+    mode: "0600"
+    marker: "# {mark} {{ item.host }}"
+    block: |
+      Host {{ item.host }}
+          HostName {{ item.hostname }}
+          Port {{ item.puerto }}
+          User root
+          IdentityFile {{ item.clave }}
+          IdentitiesOnly yes
+  loop: "{{ trampas_ssh }}"
+  loop_control:
+    label: "{{ item.usuario }} → {{ item.host }}"
+
+- name: Vigilante de Cowrie
+  when: trampas_cowrie_log | length > 0
+  block:
+    - name: Script trampa-cowrie
+      ansible.builtin.copy:
+        src: trampa-cowrie
+        dest: /usr/local/sbin/trampa-cowrie
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Unidades trampa-cowrie
+      ansible.builtin.template:
+        src: trampa-cowrie.{{ item }}.j2
+        dest: /etc/systemd/system/trampa-cowrie.{{ item }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [service, timer]
+      register: trampas_cowrie_units
+
+    - name: Timer de trampa-cowrie
+      ansible.builtin.systemd_service:
+        name: trampa-cowrie.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ trampas_cowrie_units.changed }}"
+      when: not (ansible_check_mode and trampas_cowrie_units.changed)
