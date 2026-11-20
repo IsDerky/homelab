@@ -6,7 +6,7 @@
 # inventario).
 umami_dir: /opt/umami
 # renovate: datasource=docker depName=ghcr.io/umami-software/umami
-umami_image: ghcr.io/umami-software/umami:3.4.1
+umami_image: ghcr.io/umami-software/umami:3.5.0
 # renovate: datasource=docker depName=postgres
 umami_postgres_image: postgres:17.12-alpine
 umami_port: 3070
