@@ -52,9 +52,9 @@
 - name: Repos que puede desplegar
   ansible.builtin.copy:
     content: |
-      # Lo escribe Ansible (ci_repos): nombre y repo de GitHub
+      # Lo escribe Ansible (ci_repos): nombre, repo de GitHub y su dueño
       {% for r in ci_repos %}
-      {{ r.nombre }} {{ r.github }}
+      {{ r.nombre }} {{ r.github }} {{ r.owner | default(ci_owner) }}
       {% endfor %}
     dest: /etc/deploy-repo/repos
     owner: root
@@ -119,10 +119,11 @@
 - name: Deploy keys en GitHub (solo lectura)
   ansible.builtin.shell: |
     set -euo pipefail
-    if gh api "repos/{{ ci_owner }}/{{ item.item.github }}/keys" --jq '.[].key' | grep -qxF "$CLAVE"; then
+    R="repos/{{ item.item.owner | default(ci_owner) }}/{{ item.item.github }}"
+    if gh api "$R/keys" --jq '.[].key' | grep -qxF "$CLAVE"; then
       echo ya
     else
-      gh api "repos/{{ ci_owner }}/{{ item.item.github }}/keys" \
+      gh api "$R/keys" \
         -f title="deploy-repo (servidor)" -f key="$CLAVE" -F read_only=true >/dev/null
       echo añadida
     fi
@@ -139,12 +140,29 @@
   become: false
   when: ci_github | bool and not ansible_check_mode
 
+# Uno por repo (los que no tienen runner de organización) y uno por cada
+# runner de organización (carpeta org-<nombre>, para no chocar con un repo)
+- name: Runners que tiene que haber
+  ansible.builtin.set_fact:
+    ci_runners: >-
+      {%- set l = [] -%}
+      {%- for r in ci_repos if r.runner is not defined -%}
+      {%- set o = r.owner | default(ci_owner) -%}
+      {%- set _ = l.append({'carpeta': r.nombre, 'api': 'repos/' ~ o ~ '/' ~ r.github,
+                            'url': 'https://github.com/' ~ o ~ '/' ~ r.github, 'etiquetas': [r.nombre]}) -%}
+      {%- endfor -%}
+      {%- for g in ci_runners_org -%}
+      {%- set _ = l.append({'carpeta': 'org-' ~ g.nombre, 'api': 'orgs/' ~ g.owner,
+                            'url': 'https://github.com/' ~ g.owner, 'etiquetas': g.etiquetas}) -%}
+      {%- endfor -%}
+      {{ l }}
+
 - name: ¿Runners registrados?
   ansible.builtin.stat:
-    path: "{{ ci_runners_dir }}/{{ item.nombre }}/.runner"
-  loop: "{{ ci_repos }}"
+    path: "{{ ci_runners_dir }}/{{ item.carpeta }}/.runner"
+  loop: "{{ ci_runners }}"
   loop_control:
-    label: "{{ item.nombre }}"
+    label: "{{ item.carpeta }}"
   register: ci_runner_stat
 
 - name: Runners por registrar
@@ -153,24 +171,24 @@
 
 - name: Sin gh no se registran
   ansible.builtin.debug:
-    msg: "Sin runner (ci_github: false): {{ ci_runners_nuevos | map(attribute='nombre') | join(', ') }}"
+    msg: "Sin runner (ci_github: false): {{ ci_runners_nuevos | map(attribute='carpeta') | join(', ') }}"
   when: ci_runners_nuevos | length > 0 and not ci_github | bool
 
 - name: Registrar runners nuevos
   ansible.builtin.include_tasks: runner.yml
   loop: "{{ ci_runners_nuevos }}"
   loop_control:
-    loop_var: ci_repo
-    label: "{{ ci_repo.nombre }}"
+    loop_var: ci_runner
+    label: "{{ ci_runner.carpeta }}"
   when: ci_github | bool and not ansible_check_mode
 
 # svc.sh deja en .service el nombre de la unidad que ha creado
 - name: ¿Unidad de cada runner?
   ansible.builtin.stat:
-    path: "{{ ci_runners_dir }}/{{ item.nombre }}/.service"
-  loop: "{{ ci_repos }}"
+    path: "{{ ci_runners_dir }}/{{ item.carpeta }}/.service"
+  loop: "{{ ci_runners }}"
   loop_control:
-    label: "{{ item.nombre }}"
+    label: "{{ item.carpeta }}"
   register: ci_service_stat
 
 - name: Leer el nombre de las unidades
@@ -178,7 +196,7 @@
     src: "{{ item.stat.path }}"
   loop: "{{ ci_service_stat.results | selectattr('stat.exists') | list }}"
   loop_control:
-    label: "{{ item.item.nombre }}"
+    label: "{{ item.item.carpeta }}"
   register: ci_service
 
 - name: Runners en marcha
@@ -188,7 +206,24 @@
     state: started
   loop: "{{ ci_service.results }}"
   loop_control:
-    label: "{{ item.item.item.nombre }}"
+    label: "{{ item.item.item.carpeta }}"
+
+# Un repo que pasa a un runner de organización deja de tener el suyo (la deploy
+# key y la copia del repo se quedan: deploy-repo las sigue usando)
+- name: ¿Runner propio de los repos con runner de organización?
+  ansible.builtin.stat:
+    path: "{{ ci_runners_dir }}/{{ item.nombre }}/.runner"
+  loop: "{{ ci_repos | selectattr('runner', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.nombre }}"
+  register: ci_propio_stat
+
+- name: Quitar el runner propio
+  ansible.builtin.include_tasks: quitar-runner.yml
+  loop: "{{ ci_propio_stat.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+  loop_control:
+    loop_var: ci_quitar
+    label: "{{ ci_quitar.nombre }}"
 
 - name: Retirar runners que ya no se usan
   ansible.builtin.include_tasks: retirar.yml

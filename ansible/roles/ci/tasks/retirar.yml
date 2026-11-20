@@ -42,7 +42,7 @@
 - name: Baja en GitHub (runner y deploy key)
   ansible.builtin.shell: |
     set -euo pipefail
-    R="repos/{{ ci_owner }}/{{ ci_viejo.github }}"
+    R="repos/{{ ci_viejo.owner | default(ci_owner) }}/{{ ci_viejo.github }}"
     for id in $(gh api "$R/actions/runners" --jq ".runners[] | select(.name == \"$NOMBRE\") | .id"); do
       gh api -X DELETE "$R/actions/runners/$id" && echo "baja runner $id"
     done

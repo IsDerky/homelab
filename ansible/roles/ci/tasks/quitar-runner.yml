@@ -1,0 +1,52 @@
+---
+# Quita el runner propio de ci_quitar (un repo de ci_repos que ahora atiende un
+# runner de organización): unidad, registro en GitHub y carpeta. No toca su
+# deploy key ni su copia del repo.
+- name: ¿Unidad del runner de {{ ci_quitar.nombre }}?
+  ansible.builtin.stat:
+    path: "{{ ci_runners_dir }}/{{ ci_quitar.nombre }}/.service"
+  register: ci_quitar_service
+
+- name: Parar y quitar la unidad
+  when: ci_quitar_service.stat.exists
+  block:
+    - name: Nombre de la unidad
+      ansible.builtin.slurp:
+        src: "{{ ci_quitar_service.stat.path }}"
+      register: ci_quitar_unidad
+
+    - name: Parar el runner
+      ansible.builtin.systemd_service:
+        name: "{{ ci_quitar_unidad.content | b64decode | trim }}"
+        enabled: false
+        state: stopped
+
+    - name: Quitar la unidad
+      ansible.builtin.command: ./svc.sh uninstall
+      args:
+        chdir: "{{ ci_runners_dir }}/{{ ci_quitar.nombre }}"
+      changed_when: true
+      when: not ansible_check_mode
+
+- name: Baja del runner en GitHub
+  ansible.builtin.shell: |
+    set -euo pipefail
+    R="repos/{{ ci_quitar.owner | default(ci_owner) }}/{{ ci_quitar.github }}"
+    for id in $(gh api "$R/actions/runners" --jq ".runners[] | select(.name == \"$NOMBRE\") | .id"); do
+      gh api -X DELETE "$R/actions/runners/$id" && echo "baja runner $id"
+    done
+  args:
+    executable: /bin/bash
+  environment:
+    NOMBRE: "{{ ansible_facts['hostname'] }}-{{ ci_quitar.nombre }}"
+  register: ci_quitar_baja
+  changed_when: "'baja' in ci_quitar_baja.stdout"
+  delegate_to: localhost
+  become: false
+  when: ci_github | bool and not ansible_check_mode
+
+- name: Borrar la carpeta del runner
+  ansible.builtin.file:
+    path: "{{ ci_runners_dir }}/{{ ci_quitar.nombre }}"
+    state: absent
+  when: not ansible_check_mode
