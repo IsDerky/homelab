@@ -1,6 +1,7 @@
 # {{ ansible_managed }}
-# La de la documentación de Pterodactyl (o la de `wings service-install` de
-# Calagopus). Los límites van aparte, en wings.service.d/limites.conf.
+# La de la documentación de Pterodactyl. Los límites van aparte, en
+# wings.service.d/limites.conf.
+{# Con Calagopus, KillMode y PIDFile como los pone su `wings service-install` #}
 [Unit]
 Description={{ 'Calagopus' if pterodactyl_wings_calagopus | bool else 'Pterodactyl' }} Wings Daemon
 After=docker.service
