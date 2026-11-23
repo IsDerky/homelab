@@ -30,6 +30,10 @@ earlyoom_evitar:
 earlyoom_preferir:
   - java
 
+# Apaga systemd-oomd (lo trae Ubuntu): con los dos, cualquiera puede matar
+# primero y systemd-oomd no respeta la lista de arriba
+earlyoom_sin_oomd: true
+
 # Cada cuánto deja en el journal cómo va la memoria (s); 0 = nunca
 earlyoom_informe: 3600
 
