@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pone los SHA-256 (y los asset id de restic) de las versiones de los defaults.
 
-restic, rclone, Wings y Lynis.
+restic, rclone, Wings (oficial y Calagopus) y Lynis.
 
 Renovate sube la versión pero no sabe de sumas. Esto las saca del digest que da
 la API de GitHub para cada asset (si no lo hay, descarga y calcula) y del
@@ -84,6 +84,14 @@ def wings(texto):
     return texto
 
 
+def calagopus(texto):
+    v = version(texto, "pterodactyl_calagopus_version")
+    for arch, nombre in (("amd64", "x86_64"), ("arm64", "aarch64")):
+        _, suma = asset("calagopus/wings", f"release-{v}", f"wings-rs-{nombre}-linux")
+        texto = poner(texto, "pterodactyl_calagopus_sha256", arch, suma)
+    return texto
+
+
 def lynis(texto):
     # Sin assets: el tarball del tag (GitHub mantiene estable su suma)
     v = version(texto, "lynis_version")
@@ -94,7 +102,7 @@ def lynis(texto):
 def main():
     for fichero, pasos in (
         (ROLES / "backup" / "defaults" / "main.yml", (restic, rclone)),
-        (ROLES / "pterodactyl" / "defaults" / "main.yml", (wings,)),
+        (ROLES / "pterodactyl" / "defaults" / "main.yml", (wings, calagopus)),
         (ROLES / "lynis" / "defaults" / "main.yml", (lynis,)),
     ):
         antes = fichero.read_text()

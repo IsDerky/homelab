@@ -25,9 +25,14 @@
     {
       // Va a los nodos de los amigos y tiene que casar con el panel
       description: 'Wings solo cuando se pida desde el dashboard',
-      matchDepNames: ['pterodactyl/wings'],
+      matchDepNames: ['pterodactyl/wings', 'calagopus/wings'],
       dependencyDashboardApproval: true,
       automerge: false,
+    },
+    {
+      // Sus tags son release-1.2.11
+      matchDepNames: ['calagopus/wings'],
+      extractVersion: '^release-(?<version>.+)$',
     },
   ],
 }

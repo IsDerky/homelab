@@ -1,8 +1,8 @@
 # {{ ansible_managed }}
-# La de la documentación de Pterodactyl. Los límites van aparte, en
-# wings.service.d/limites.conf.
+# La de la documentación de Pterodactyl (o la de `wings service-install` de
+# Calagopus). Los límites van aparte, en wings.service.d/limites.conf.
 [Unit]
-Description=Pterodactyl Wings Daemon
+Description={{ 'Calagopus' if pterodactyl_wings_calagopus | bool else 'Pterodactyl' }} Wings Daemon
 After=docker.service
 Requires=docker.service
 PartOf=docker.service
@@ -11,7 +11,12 @@ PartOf=docker.service
 User=root
 WorkingDirectory=/etc/pterodactyl
 LimitNOFILE=4096
+{% if pterodactyl_wings_calagopus | bool %}
+KillMode=process
+PIDFile=/run/calagopus-wings/daemon.pid
+{% else %}
 PIDFile=/var/run/wings/daemon.pid
+{% endif %}
 ExecStart=/usr/local/bin/wings
 Restart=on-failure
 StartLimitInterval=180
