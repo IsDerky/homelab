@@ -85,6 +85,8 @@ Los valores por defecto son los seguros. Si hace falta relajar algo mientras se 
 | `ssh_password_authentication` | `false` | |
 | `ssh_permit_root_login` | `prohibit-password` | |
 | `ssh_x11_forwarding` | `false` | |
+| `ssh_allow_tcp_forwarding` | `no` | `yes`, `local` (solo `ssh -L`), `remote` o `no` |
+| `ssh_allow_agent_forwarding` | `false` | |
 | `ssh_match_blocks` | `[]` | Bloques `Match` (ver `defaults/main.yml`) |
 
 Antes de aplicarlo la primera vez: deja una sesión abierta como root y comprueba que el usuario nuevo entra con su clave y puede usar sudo.

@@ -13,6 +13,10 @@ ClientAliveCountMax {{ ssh_client_alive_count_max }}
 KbdInteractiveAuthentication no
 UsePAM yes
 X11Forwarding {{ 'yes' if ssh_x11_forwarding | bool else 'no' }}
+AllowTcpForwarding {{ ssh_allow_tcp_forwarding }}
+AllowAgentForwarding {{ 'yes' if ssh_allow_agent_forwarding | bool else 'no' }}
+AllowStreamLocalForwarding no
+PermitTunnel no
 PrintMotd no
 AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server
