@@ -131,7 +131,7 @@
     - name: Dueños de GitHub
       ansible.builtin.copy:
         content: |
-          # {{ ansible_managed }}
+          # Gestionado por Ansible (rol forgejo)
           {% for e in forgejo_espejos %}
           {{ e.dueno }} {{ e.tipo }}
           {% endfor %}
