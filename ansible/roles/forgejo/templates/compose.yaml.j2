@@ -10,6 +10,9 @@ services:
     network_mode: host
     user: "{{ forgejo_account.uid | default(0) }}:{{ forgejo_account.group | default(0) }}"
     environment:
+      # El uid de la cuenta forgejo no existe dentro de la imagen: sin nombre, Forgejo usa
+      # $USER para comprobar que corre como RUN_USER (git) y si no, no arranca
+      USER: git
       FORGEJO__server__DOMAIN: {{ forgejo_domain | urlsplit('hostname') }}
       FORGEJO__server__ROOT_URL: {{ forgejo_domain }}/
       FORGEJO__server__HTTP_ADDR: 127.0.0.1
