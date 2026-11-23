@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.15"
       - run: pip install mkdocs-material==9.8.1
       # La página de Ansible es su README, con los enlaces a docs/ corregidos
       - name: Página de Ansible
