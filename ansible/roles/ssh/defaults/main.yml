@@ -3,6 +3,9 @@
 ssh_allow_users: []
 
 ssh_password_authentication: false
+# yes | local (solo ssh -L) | remote | no. Un Match puede abrirlo para un usuario
+ssh_allow_tcp_forwarding: "no"
+ssh_allow_agent_forwarding: false
 ssh_permit_root_login: prohibit-password
 ssh_x11_forwarding: false
 
