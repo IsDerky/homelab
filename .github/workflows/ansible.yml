@@ -16,12 +16,12 @@ jobs:
 
   monitoring:
     name: Tests del rol monitoring
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: ansible/roles/monitoring
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: ops-exporter y alert-dm
         run: python3 -m unittest discover -s tests -v
       # Con el promtool de la misma imagen que va al servidor
@@ -33,13 +33,13 @@ jobs:
 
   honeypot:
     name: Rol honeypot sobre el runner
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: lint
     defaults:
       run:
         working-directory: ansible
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: pipx install ansible-core
 
       - name: Señuelos
