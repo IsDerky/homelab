@@ -1,0 +1,8 @@
+---
+# Copia diaria de los repos de GitHub en un Forgejo solo de LAN
+- name: Forgejo
+  hosts: homelab
+  become: true
+  roles:
+    - role: forgejo
+      when: forgejo_domain is defined

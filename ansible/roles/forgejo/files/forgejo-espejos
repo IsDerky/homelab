@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Copia en Forgejo todos los repos de los dueños de GitHub de espejos.conf
+# (una línea «dueño tipo», tipo user u org). Cada dueño va a una organización
+# de Forgejo con su nombre; cada repo se trae a una caché local y se sube con
+# sus ramas y etiquetas. No borra nada en Forgejo: una rama o un repo que
+# desaparezca de GitHub se queda aquí (y en la copia del sistema).
+# Los tokens van por cabeceras en ficheros y un credential helper: nunca en
+# la línea de comandos.
+set -uo pipefail
+ETC=${ETC:-/etc/forgejo-espejos}
+CACHE=${CACHE:-/var/cache/forgejo-espejos}
+FORGEJO=${FORGEJO:-http://127.0.0.1:3010}
+FORGEJO_USUARIO=${FORGEJO_USUARIO:-gitadmin}
+TEXTFILE=${TEXTFILE:-/var/lib/node-exporter/textfile/forgejo_espejos.prom}
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+chmod 700 "$tmp"
+
+printf 'Authorization: token %s\n' "$(<"$ETC/forgejo.token")" >"$tmp/forgejo.h"
+fapi() { curl -fsS -H @"$tmp/forgejo.h" -H 'Content-Type: application/json' "$@"; }
+gapi() {
+  curl -fsS -H @"$tmp/github.h" -H 'Accept: application/vnd.github+json' \
+    -H 'X-GitHub-Api-Version: 2022-11-28' "$@"
+}
+existe() { [ "$(curl -s -o /dev/null -w '%{http_code}' -H @"$tmp/forgejo.h" "$FORGEJO/api/v1/$1")" = 200 ]; }
+
+# git pide usuario y contraseña al helper: el token de GitHub del dueño en
+# curso o el de Forgejo, según el host
+cat >"$tmp/credenciales" <<'EOF'
+#!/bin/sh
+[ "$1" = get ] || exit 0
+host=$(sed -n 's/^host=//p')
+if [ "$host" = github.com ]; then
+  echo username=x-access-token
+  echo "password=$(cat "$GITHUB_TOKEN_FICHERO")"
+else
+  echo "username=$FORGEJO_USUARIO"
+  echo "password=$(cat "$ETC/forgejo.token")"
+fi
+EOF
+chmod 700 "$tmp/credenciales"
+export ETC FORGEJO_USUARIO
+g() { git -c credential.helper= -c credential.helper="$tmp/credenciales" -c core.askPass=true "$@"; }
+
+ok=0
+fallos=0
+mkdir -p "$CACHE"
+
+while read -r dueno tipo; do
+  case "$dueno" in '' | '#'*) continue ;; esac
+  export GITHUB_TOKEN_FICHERO="$ETC/github-$dueno.token"
+  printf 'Authorization: Bearer %s\n' "$(<"$GITHUB_TOKEN_FICHERO")" >"$tmp/github.h"
+
+  if ! existe "orgs/$dueno"; then
+    fapi -X POST "$FORGEJO/api/v1/orgs" \
+      -d "{\"username\":\"$dueno\",\"visibility\":\"private\"}" >/dev/null &&
+      echo "organización $dueno creada"
+  fi
+
+  # Lista de repos del dueño (nombre y rama por defecto), paginada
+  : >"$tmp/repos"
+  pagina=1
+  while :; do
+    if [ "$tipo" = org ]; then
+      url="https://api.github.com/orgs/$dueno/repos?type=all&per_page=100&page=$pagina"
+    else
+      url="https://api.github.com/user/repos?affiliation=owner&per_page=100&page=$pagina"
+    fi
+    if ! gapi "$url" >"$tmp/pagina.json"; then
+      echo "ERROR: no se pudo listar los repos de $dueno en GitHub" >&2
+      fallos=$((fallos + 1))
+      continue 2
+    fi
+    n=$(jq length "$tmp/pagina.json")
+    jq -r --arg d "$dueno" '.[] | select(.owner.login == $d) | "\(.name) \(.default_branch)"' \
+      "$tmp/pagina.json" >>"$tmp/repos"
+    [ "$n" -lt 100 ] && break
+    pagina=$((pagina + 1))
+  done
+
+  while read -r repo rama; do
+    dir="$CACHE/$dueno/$repo.git"
+    if ! existe "repos/$dueno/$repo"; then
+      if ! fapi -X POST "$FORGEJO/api/v1/orgs/$dueno/repos" \
+        -d "{\"name\":\"$repo\",\"private\":true,\"description\":\"Copia de https://github.com/$dueno/$repo\"}" >/dev/null; then
+        echo "ERROR: no se pudo crear $dueno/$repo en Forgejo" >&2
+        fallos=$((fallos + 1))
+        continue
+      fi
+      echo "repo $dueno/$repo creado"
+    fi
+
+    if [ -d "$dir" ]; then
+      g -C "$dir" remote update --prune >/dev/null 2>"$tmp/err" || {
+        echo "ERROR: traer $dueno/$repo: $(tail -1 "$tmp/err")" >&2
+        fallos=$((fallos + 1))
+        continue
+      }
+    else
+      mkdir -p "$CACHE/$dueno"
+      g clone --quiet --mirror "https://github.com/$dueno/$repo.git" "$dir" 2>"$tmp/err" || {
+        echo "ERROR: clonar $dueno/$repo: $(tail -1 "$tmp/err")" >&2
+        rm -rf "$dir"
+        fallos=$((fallos + 1))
+        continue
+      }
+    fi
+
+    # Repo vacío en GitHub: nada que subir
+    if [ -z "$(git -C "$dir" for-each-ref --count=1 refs/heads)" ]; then
+      ok=$((ok + 1))
+      continue
+    fi
+
+    # Ramas y etiquetas (no refs/pull); --force por si se reescribe la historia
+    g -C "$dir" push --quiet --force "$FORGEJO/$dueno/$repo.git" \
+      'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*' 2>"$tmp/err" || {
+      echo "ERROR: subir $dueno/$repo: $(tail -1 "$tmp/err")" >&2
+      fallos=$((fallos + 1))
+      continue
+    }
+
+    actual=$(fapi "$FORGEJO/api/v1/repos/$dueno/$repo" | jq -r .default_branch)
+    if [ -n "$rama" ] && [ "$rama" != null ] && [ "$actual" != "$rama" ]; then
+      fapi -X PATCH "$FORGEJO/api/v1/repos/$dueno/$repo" -d "{\"default_branch\":\"$rama\"}" >/dev/null ||
+        echo "aviso: no se pudo poner $rama como rama por defecto de $dueno/$repo" >&2
+    fi
+    ok=$((ok + 1))
+  done <"$tmp/repos"
+done <"$ETC/espejos.conf"
+
+echo "repos al día: $ok, con fallo: $fallos"
+
+if [ -d "$(dirname "$TEXTFILE")" ]; then
+  {
+    echo '# HELP forgejo_espejos_repos Repos copiados de GitHub en la última pasada'
+    echo '# TYPE forgejo_espejos_repos gauge'
+    echo "forgejo_espejos_repos{estado=\"ok\"} $ok"
+    echo "forgejo_espejos_repos{estado=\"fallo\"} $fallos"
+    echo '# HELP forgejo_espejos_ultima_pasada_segundos Fin de la última pasada'
+    echo '# TYPE forgejo_espejos_ultima_pasada_segundos gauge'
+    echo "forgejo_espejos_ultima_pasada_segundos $(date +%s)"
+  } >"$TEXTFILE.tmp" && mv "$TEXTFILE.tmp" "$TEXTFILE"
+fi
+
+[ "$fallos" -eq 0 ]

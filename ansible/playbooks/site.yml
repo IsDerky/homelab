@@ -44,6 +44,8 @@
   ansible.builtin.import_playbook: inicio.yml
 - name: Vaultwarden
   ansible.builtin.import_playbook: vaultwarden.yml
+- name: Forgejo (copia de los repos de GitHub)
+  ansible.builtin.import_playbook: forgejo.yml
 - name: Cambios en páginas web (changedetection.io)
   ansible.builtin.import_playbook: changedetection.yml
 - name: Ver y restaurar copias (Backrest)

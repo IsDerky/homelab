@@ -1,0 +1,27 @@
+---
+forgejo_image: codeberg.org/forgejo/forgejo:17.0.2-rootless
+forgejo_dir: /opt/forgejo
+# Repos, base de datos (SQLite) y config. Fuera de /opt para que la copia la
+# meta en las rutas de más y vuelque la SQLite con .backup.
+forgejo_data: /var/lib/forgejo
+
+# Solo en loopback, para nginx
+forgejo_port: 3010
+forgejo_mem: 512m
+forgejo_user: forgejo
+
+# URL completa con la que se entra (https://...)
+forgejo_domain: ""
+
+# Cuenta de administración (la única). La contraseña, desde el vault.
+forgejo_admin_user: gitadmin  # «admin» está reservado en Forgejo
+forgejo_admin_email: ""
+forgejo_admin_password: ""
+
+# Espejo de GitHub: un dueño por elemento, con su token de solo lectura
+# (fine-grained: Contents y Metadata, todos los repos de ese dueño).
+#   - {dueno: usuario, tipo: user, token: "..."}
+#   - {dueno: organizacion, tipo: org, token: "..."}
+# Cada dueño acaba en una organización de Forgejo con el mismo nombre.
+forgejo_espejos: []
+forgejo_espejos_hora: "*-*-* 03:40:00"

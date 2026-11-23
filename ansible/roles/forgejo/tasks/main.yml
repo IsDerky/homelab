@@ -1,0 +1,206 @@
+---
+- name: Faltan datos
+  ansible.builtin.assert:
+    that:
+      - forgejo_domain is match('^https://')
+      - forgejo_admin_email | length > 0
+      - forgejo_admin_password | length >= 16
+    fail_msg: Define forgejo_domain (https://...), forgejo_admin_email y forgejo_admin_password (16+).
+    quiet: true
+
+- name: Usuario de forgejo
+  ansible.builtin.user:
+    name: "{{ forgejo_user }}"
+    system: true
+    create_home: false
+    home: /nonexistent
+    shell: /usr/sbin/nologin
+    password_lock: true
+  register: forgejo_account
+
+- name: Carpetas
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ forgejo_dir }}", owner: root, mode: "0755" }
+    - { path: "{{ forgejo_data }}", owner: "{{ forgejo_user }}", mode: "0700" }
+    - { path: "{{ forgejo_data }}/secretos", owner: "{{ forgejo_user }}", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+# Se crean una vez y se quedan: cambiarlos invalida las sesiones y los tokens.
+# Van en la copia con el resto de forgejo_data.
+- name: Secretos internos de Forgejo
+  ansible.builtin.shell: |
+    set -eu
+    umask 077
+    openssl rand -hex 32 > {{ item }}
+    chown {{ forgejo_user }}: {{ item }}
+  args:
+    creates: "{{ item }}"
+  loop:
+    - "{{ forgejo_data }}/secretos/secret_key"
+    - "{{ forgejo_data }}/secretos/internal_token"
+  notify: Aplicar compose de forgejo
+
+- name: Compose
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ forgejo_dir }}/compose.yaml"
+    mode: "0644"
+  notify: Aplicar compose de forgejo
+
+- name: Unidad systemd
+  ansible.builtin.template:
+    src: forgejo.service.j2
+    dest: /etc/systemd/system/forgejo.service
+    mode: "0644"
+  register: forgejo_unit
+  notify: Recargar systemd
+
+- name: Aplicar cambios pendientes
+  ansible.builtin.meta: flush_handlers
+
+- name: Servicio
+  ansible.builtin.systemd_service:
+    name: forgejo.service
+    enabled: true
+    state: started
+  # En --check la unidad nueva no se ha copiado de verdad
+  when: not (ansible_check_mode and forgejo_unit.changed)
+
+- name: Responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ forgejo_port }}/api/healthz
+  register: forgejo_check
+  until: forgejo_check.status == 200
+  retries: 24
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Cuentas de administración
+  ansible.builtin.command: docker exec forgejo forgejo admin user list --admin
+  register: forgejo_admins
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Cuenta de administración
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - forgejo
+      - forgejo
+      - admin
+      - user
+      - create
+      - --admin
+      - --username={{ forgejo_admin_user }}
+      - --email={{ forgejo_admin_email }}
+      - --password={{ forgejo_admin_password }}
+      - --must-change-password=false
+  no_log: true
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    # Columnas: ID Username Email IsActive IsAdmin 2FA
+    - forgejo_admins.stdout is not search('^\\d+\\s+' ~ forgejo_admin_user ~ '\\s', multiline=True)
+
+- name: Espejo de GitHub
+  when: forgejo_espejos | length > 0
+  block:
+    - name: Paquetes del espejo
+      ansible.builtin.apt:
+        name: [git, jq, curl]
+        state: present
+
+    - name: Carpetas del espejo
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop: [/etc/forgejo-espejos, /var/cache/forgejo-espejos]
+
+    - name: Dueños de GitHub
+      ansible.builtin.copy:
+        content: |
+          # {{ ansible_managed }}
+          {% for e in forgejo_espejos %}
+          {{ e.dueno }} {{ e.tipo }}
+          {% endfor %}
+        dest: /etc/forgejo-espejos/espejos.conf
+        mode: "0600"
+
+    - name: Tokens de GitHub
+      ansible.builtin.copy:
+        content: "{{ item.token }}"
+        dest: /etc/forgejo-espejos/github-{{ item.dueno }}.token
+        mode: "0600"
+      loop: "{{ forgejo_espejos }}"
+      loop_control:
+        label: "{{ item.dueno }}"
+      no_log: true
+
+    - name: ¿Hay token de Forgejo?
+      ansible.builtin.stat:
+        path: /etc/forgejo-espejos/forgejo.token
+      register: forgejo_token_fichero
+
+    # Una vez: token de la cuenta de administración solo para repos y organizaciones
+    - name: Token de Forgejo para el espejo
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - forgejo
+          - forgejo
+          - admin
+          - user
+          - generate-access-token
+          - --username={{ forgejo_admin_user }}
+          - --token-name=espejos
+          - --scopes=write:repository,write:organization
+          - --raw
+      register: forgejo_token_nuevo
+      no_log: true
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - not forgejo_token_fichero.stat.exists
+
+    - name: Guardar el token de Forgejo
+      ansible.builtin.copy:
+        content: "{{ forgejo_token_nuevo.stdout | trim }}"
+        dest: /etc/forgejo-espejos/forgejo.token
+        mode: "0600"
+      no_log: true
+      when: forgejo_token_nuevo.stdout | default('') | length > 0
+
+    - name: Script forgejo-espejos
+      ansible.builtin.copy:
+        src: forgejo-espejos
+        dest: /usr/local/bin/forgejo-espejos
+        mode: "0755"
+
+    - name: Unidades forgejo-espejos
+      ansible.builtin.template:
+        src: forgejo-espejos.{{ item }}.j2
+        dest: /etc/systemd/system/forgejo-espejos.{{ item }}
+        mode: "0644"
+      loop: [service, timer]
+      register: forgejo_espejos_units
+
+    - name: Timer de forgejo-espejos
+      ansible.builtin.systemd_service:
+        name: forgejo-espejos.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ forgejo_espejos_units.changed }}"
+      when: not (ansible_check_mode and forgejo_espejos_units.changed)

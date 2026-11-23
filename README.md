@@ -17,7 +17,7 @@ Aquí no hay IPs, dominios ni credenciales. La configuración está en [`ansible
 |---|---|
 | [App web propia](https://github.com/IsDerky/bentonime-showcase), dos webs más, el panel de Pterodactyl y code-server | Cloudflare Tunnel (el router no abre web) |
 | Wings y servidores de juego (casa y nodos) | Directo: puertos del router / IP del nodo |
-| AdGuard Home + Unbound, Vaultwarden, página de inicio, Grafana, panel de estado, NAS | Solo LAN, cada uno con su nombre y HTTPS |
+| AdGuard Home + Unbound, Vaultwarden, Forgejo (copia diaria de los repos de GitHub), página de inicio, Grafana, panel de estado, NAS | Solo LAN, cada uno con su nombre y HTTPS |
 | Honeypot Cowrie | Puertos 22 y 23 del router, aislado con iptables |
 | Prometheus, Alertmanager, bot de operaciones, runners de CI | No escuchan fuera |
 

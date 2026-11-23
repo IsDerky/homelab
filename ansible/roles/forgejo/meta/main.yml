@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: forgejo
+  namespace: isderky
+  description: Forgejo en Docker Compose, solo en loopback, como copia diaria de los repos de GitHub
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []
