@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Copia diaria de los repos de GitHub en Forgejo
+
+[Timer]
+OnCalendar={{ forgejo_espejos_hora }}
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,41 @@
+# {{ ansible_managed }}
+# {{ forgejo_data }} son los datos de Forgejo (repos, SQLite, custom/conf/app.ini, secretos): no los
+# gestiona Ansible, van en la copia del sistema.
+services:
+  forgejo:
+    image: {{ forgejo_image }}
+    container_name: forgejo
+    restart: unless-stopped
+    # Red del host escuchando en 127.0.0.1: Docker no publica ningún puerto
+    network_mode: host
+    user: "{{ forgejo_account.uid | default(0) }}:{{ forgejo_account.group | default(0) }}"
+    environment:
+      FORGEJO__server__DOMAIN: {{ forgejo_domain | urlsplit('hostname') }}
+      FORGEJO__server__ROOT_URL: {{ forgejo_domain }}/
+      FORGEJO__server__HTTP_ADDR: 127.0.0.1
+      FORGEJO__server__HTTP_PORT: "{{ forgejo_port }}"
+      FORGEJO__server__DISABLE_SSH: "true"
+      FORGEJO__server__START_SSH_SERVER: "false"
+      FORGEJO__server__OFFLINE_MODE: "true"
+      FORGEJO__server__LANDING_PAGE: login
+      # Sin LFS ni proveedor OAuth2: no hacen falta para una copia (y así no hay más secretos)
+      FORGEJO__server__LFS_START_SERVER: "false"
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__database__PATH: /var/lib/gitea/data/forgejo.db
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__security__SECRET_KEY_URI: file:/var/lib/gitea/secretos/secret_key
+      FORGEJO__security__INTERNAL_TOKEN_URI: file:/var/lib/gitea/secretos/internal_token
+      FORGEJO__oauth2__ENABLED: "false"
+      # Sin registro y sin ver nada sin sesión: solo la cuenta de administración
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__service__REQUIRE_SIGNIN_VIEW: "true"
+      FORGEJO__service__DEFAULT_KEEP_EMAIL_PRIVATE: "true"
+      FORGEJO__repository__DEFAULT_PRIVATE: private
+      FORGEJO__picture__DISABLE_GRAVATAR: "true"
+      FORGEJO__actions__ENABLED: "false"
+      FORGEJO__mailer__ENABLED: "false"
+      FORGEJO__cron_0x2E_update_checker__ENABLED: "false"
+      FORGEJO__log__LEVEL: Warn
+    volumes:
+      - {{ forgejo_data }}:/var/lib/gitea
+    mem_limit: {{ forgejo_mem }}

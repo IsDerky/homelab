@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Copia de los repos de GitHub en Forgejo
+Requires=forgejo.service
+After=forgejo.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=FORGEJO=http://127.0.0.1:{{ forgejo_port }}
+Environment=FORGEJO_USUARIO={{ forgejo_admin_user }}
+ExecStart=/usr/local/bin/forgejo-espejos
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=true
