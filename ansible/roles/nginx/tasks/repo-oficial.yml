@@ -103,6 +103,17 @@
         state: restarted
       when: not ansible_check_mode
 
+# El logrotate de la distribución reabre los logs con «invoke-rc.d nginx rotate»,
+# que el nginx de nginx.org no tiene: falla cada noche y nginx sigue escribiendo
+# en el fichero ya rotado. USR1 es lo que hace el logrotate de nginx.org.
+- name: Logrotate que reabre los logs con USR1
+  ansible.builtin.lineinfile:
+    path: /etc/logrotate.d/nginx
+    regexp: '^(\s*)invoke-rc\.d nginx rotate.*$'
+    line: '\1[ -s /run/nginx.pid ] && kill -USR1 "$(cat /run/nginx.pid)"'
+    # Sin la línea vieja no toca nada (no añade nada fuera del postrotate)
+    backrefs: true
+
 # El paquete de nginx.org trae un server de ejemplo en el 80
 - name: Sin el server de ejemplo de nginx.org
   ansible.builtin.file:

@@ -30,6 +30,28 @@
     state: started
   when: not (ansible_check_mode and earlyoom_paquete.changed)
 
+- name: Servicios instalados
+  ansible.builtin.service_facts:
+  when: earlyoom_sin_oomd
+
+# En 22.04 no hay socket; service_facts no lista sockets
+- name: Socket de systemd-oomd
+  ansible.builtin.stat:
+    path: /usr/lib/systemd/system/systemd-oomd.socket
+  register: earlyoom_oomd_socket
+  when: earlyoom_sin_oomd
+
+- name: Sin systemd-oomd
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: "{{ (['systemd-oomd.socket'] if earlyoom_oomd_socket.stat.exists else []) + ['systemd-oomd.service'] }}"
+  when:
+    - earlyoom_sin_oomd
+    - "'systemd-oomd.service' in ansible_facts.services"
+
 - name: Contador de muertes
   when: earlyoom_textfile_dir | length > 0
   block:
