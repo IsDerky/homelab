@@ -1,5 +1,6 @@
 ---
-# Sube Wings a pterodactyl_wings_version un nodo cada vez: primero el grupo
+# Sube Wings a la versión del rol un nodo cada vez (también sirve para cambiar
+# de sabor, oficial ↔ calagopus, con pterodactyl_wings_sabor): primero el grupo
 # wings_canario (el nodo con menos servidores), luego los demás nodos de fuera
 # y por último el servidor. En cada uno guarda el binario actual, descarga el
 # nuevo, reinicia y comprueba; si algo falla vuelve al anterior y se para todo.
@@ -66,7 +67,7 @@
           changed_when: false
           failed_when: >-
             wings_etapas_version.rc != 0 or not (wings_etapas_version.stdout_lines[0] | default(''))
-            is search('v' ~ (pterodactyl_wings_version | regex_escape) ~ '$')
+            is search(pterodactyl_wings_patron_version)
 
         - name: Activo, sin reinicios solos y con los mismos contenedores
           ansible.builtin.shell: |
@@ -108,6 +109,15 @@
             group: root
             mode: "0755"
 
+        - name: Volver a la config anterior
+          ansible.builtin.copy:
+            src: /etc/pterodactyl/config.yml.anterior
+            dest: /etc/pterodactyl/config.yml
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0600"
+
         - name: Reiniciar Wings con el anterior
           ansible.builtin.systemd_service:
             name: wings.service
@@ -116,6 +126,6 @@
         - name: Parar aquí
           ansible.builtin.fail:
             msg: >-
-              Wings {{ pterodactyl_wings_version }} no pasó las comprobaciones en
+              Wings {{ pterodactyl_wings_sabor }} {{ pterodactyl_wings_objetivo }} no pasó las comprobaciones en
               {{ inventory_hostname }} ({{ ansible_failed_task.name }}). Vuelto al
               binario anterior; los nodos que faltan no se han tocado.

@@ -15,6 +15,31 @@ pterodactyl_wings_actualizar: false
 # De dónde baja el binario (las pruebas lo cambian por un servidor local)
 pterodactyl_wings_url: "https://github.com/pterodactyl/wings/releases/download/v{{ pterodactyl_wings_version }}/wings_linux_{{ pterodactyl_arch }}"
 
+# Qué Wings corre en el nodo: oficial (Go) o calagopus (Rust, compatible con el
+# mismo panel y la misma config). Se elige por nodo; pasar de uno a otro es como
+# subir de versión: playbooks/wings-etapas.yml, con vuelta atrás si falla.
+pterodactyl_wings_sabor: oficial
+
+# renovate: datasource=github-releases depName=calagopus/wings
+pterodactyl_calagopus_version: 1.2.11
+pterodactyl_calagopus_sha256:
+  amd64: 844e6a0ecda5b0298a820da9906d9ce03d0b2fcbfe741ddb40000e091665376e
+  arm64: a4c27df158ae076d7d1d9a782799170990b603daff7528e317837260709b4477
+pterodactyl_calagopus_url: >-
+  https://github.com/calagopus/wings/releases/download/release-{{ pterodactyl_calagopus_version
+  }}/wings-rs-{{ {'amd64': 'x86_64', 'arm64': 'aarch64'}[pterodactyl_arch] }}-linux
+
+# Lo que usan las tareas según el sabor. La primera línea de `wings version` es
+# «wings v1.13.5» en el oficial y «github.com/calagopus/wings 1.2.11 (x86_64-gnu)» en Calagopus.
+pterodactyl_wings_calagopus: "{{ pterodactyl_wings_sabor == 'calagopus' }}"
+pterodactyl_wings_objetivo: "{{ pterodactyl_calagopus_version if pterodactyl_wings_calagopus | bool else pterodactyl_wings_version }}"
+pterodactyl_wings_binario_url: "{{ pterodactyl_calagopus_url if pterodactyl_wings_calagopus | bool else pterodactyl_wings_url }}"
+pterodactyl_wings_binario_sha256: "{{ pterodactyl_calagopus_sha256 if pterodactyl_wings_calagopus | bool else pterodactyl_wings_sha256 }}"
+pterodactyl_wings_patron_version: >-
+  {{ ('calagopus/wings ' ~ (pterodactyl_calagopus_version | regex_escape) ~ ' ')
+     if pterodactyl_wings_calagopus | bool
+     else ('v' ~ (pterodactyl_wings_version | regex_escape) ~ '$') }}
+
 # wings-etapas.yml: segundos que espera tras el canario (grupo wings_canario) y
 # tras cada uno de los demás, antes de comprobar que Wings sigue bien
 pterodactyl_wings_pausa_canario: 600

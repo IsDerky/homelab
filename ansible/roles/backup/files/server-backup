@@ -278,7 +278,8 @@ paths_clientes() {
   if [ -d /var/lib/pterodactyl/backups ]; then paths+=(/var/lib/pterodactyl/backups); fi
   if [ -d "$NODOS_DIR" ]; then paths+=("$NODOS_DIR"); fi
   if [ -d "$NODOS_SISTEMA" ]; then paths+=("$NODOS_SISTEMA"); fi
-  excludes=()
+  # Papelera de Calagopus Wings dentro de cada volumen: lo que el cliente ya borró
+  excludes=(--exclude '/var/lib/pterodactyl/volumes/*/.trash' --exclude "$NODOS_DIR/*/*/.trash")
   keep=(--keep-daily 7 --keep-weekly 4 --keep-monthly 3)
   # Cada copia lleva nodo-<nombre> por los nodos traídos en esa pasada: al caducar
   # se agrupa solo por equipo para que esas etiquetas no partan la retención
@@ -341,7 +342,7 @@ pull_nodes() {
     started=$(date +%s)
     install -d -m 700 "$NODOS_DIR/$nombre" "$NODOS_SISTEMA/$nombre"
     rc=0
-    rsync -a --delete --numeric-ids --timeout=300 -e "$ssh_cmd" \
+    rsync -a --delete --delete-excluded --numeric-ids --timeout=300 --exclude '/*/.trash' -e "$ssh_cmd" \
       "root@$host:volumes/" "$NODOS_DIR/$nombre/" </dev/null || rc=$?
     # 24: algún archivo desapareció mientras se copiaba (normal con servidores en marcha)
     if [ "$rc" -eq 0 ] || [ "$rc" -eq 24 ]; then

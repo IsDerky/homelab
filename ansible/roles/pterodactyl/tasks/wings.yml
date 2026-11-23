@@ -6,18 +6,18 @@
   failed_when: false
   check_mode: false
 
-# Imprime «wings vv1.13.4»: basta con que la primera línea acabe en la versión.
-# Pendiente = instalado en otra versión y este playbook no puede subirlo.
+# La primera línea dice sabor y versión (pterodactyl_wings_patron_version).
+# Pendiente = instalado otro sabor u otra versión, y este playbook no puede cambiarlo.
 - name: ¿Wings va por detrás?
   ansible.builtin.set_fact:
     pterodactyl_wings_al_dia: >-
       {{ pterodactyl_wings_instalada.rc == 0
          and (pterodactyl_wings_instalada.stdout_lines[0] | default(''))
-             is search('v' ~ (pterodactyl_wings_version | regex_escape) ~ '$') }}
+             is search(pterodactyl_wings_patron_version) }}
     pterodactyl_wings_pendiente: >-
       {{ pterodactyl_wings_instalada.rc == 0
          and not (pterodactyl_wings_instalada.stdout_lines[0] | default(''))
-                 is search('v' ~ (pterodactyl_wings_version | regex_escape) ~ '$')
+                 is search(pterodactyl_wings_patron_version)
          and not (pterodactyl_wings_actualizar | bool) }}
 
 # Para volver atrás si el nuevo no arranca bien (lo hace wings-etapas.yml)
@@ -34,19 +34,34 @@
     - pterodactyl_wings_instalada.rc == 0
     - not (pterodactyl_wings_al_dia | bool)
 
+# Calagopus reescribe config.yml con sus claves: si hay que volver al oficial,
+# se vuelve también a la config de antes
+- name: Copia de la config anterior de Wings
+  ansible.builtin.copy:
+    src: /etc/pterodactyl/config.yml
+    dest: /etc/pterodactyl/config.yml.anterior
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - pterodactyl_wings_actualizar | bool
+    - pterodactyl_wings_instalada.rc == 0
+    - not (pterodactyl_wings_al_dia | bool)
+
 - name: Aviso de Wings por detrás
   ansible.builtin.debug:
     msg: >-
       Instalado: {{ pterodactyl_wings_instalada.stdout_lines[0] }}. El rol pide
-      {{ pterodactyl_wings_version }}; se sube con playbooks/wings-etapas.yml.
+      {{ pterodactyl_wings_sabor }} {{ pterodactyl_wings_objetivo }}; se cambia con playbooks/wings-etapas.yml.
   when: pterodactyl_wings_pendiente | bool
 
 - name: Binario de Wings
   when: not (pterodactyl_wings_pendiente | bool)
   ansible.builtin.get_url:
-    url: "{{ pterodactyl_wings_url }}"
+    url: "{{ pterodactyl_wings_binario_url }}"
     dest: /usr/local/bin/wings
-    checksum: "sha256:{{ pterodactyl_wings_sha256[pterodactyl_arch] }}"
+    checksum: "sha256:{{ pterodactyl_wings_binario_sha256[pterodactyl_arch] }}"
     owner: root
     group: root
     mode: "0755"
