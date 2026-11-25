@@ -4,7 +4,7 @@ homeassistant_dir: /opt/homeassistant
 # Configuración y datos (.storage, BD del historial). Fuera de /opt para que
 # la copia vuelque las SQLite con .backup (backup_sistema_extra).
 homeassistant_config_dir: /var/lib/homeassistant
-homeassistant_image: ghcr.io/home-assistant/home-assistant:2026.11.2
+homeassistant_image: ghcr.io/home-assistant/home-assistant:2026.11.3
 
 # Red del host (descubrimiento, Wake on LAN, dispositivos de la LAN). El puerto
 # no se abre en ufw: se entra por nginx.

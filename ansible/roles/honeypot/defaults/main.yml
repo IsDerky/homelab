@@ -2,7 +2,7 @@
 # Dónde se instala (compose, .env, datos en var/)
 honeypot_dir: /opt/honeypot
 
-honeypot_image: cowrie/cowrie:3.1.4
+honeypot_image: cowrie/cowrie:3.1.8
 
 # Usuario del host con el que corre el contenedor (se crea si no existe) y
 # grupo de sus datos (p. ej. systemd-journal para leer los logs sin ser root)

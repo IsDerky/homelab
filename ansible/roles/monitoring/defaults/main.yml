@@ -8,12 +8,12 @@ monitoring_reglas_extra: []
 monitoring_dashboards_extra: []
 
 monitoring_images:
-  prometheus: prom/prometheus:v3.15.1
-  alertmanager: prom/alertmanager:v0.34.1
+  prometheus: prom/prometheus:v3.16.0
+  alertmanager: prom/alertmanager:v0.35.1
   blackbox: prom/blackbox-exporter:v0.29.1
-  node_exporter: prom/node-exporter:v1.12.1
-  grafana: grafana/grafana:13.2.4
-  cadvisor: ghcr.io/google/cadvisor:v0.60.6
+  node_exporter: prom/node-exporter:v1.13.1
+  grafana: grafana/grafana:13.3.2
+  cadvisor: ghcr.io/google/cadvisor:v0.61.1
 
 # Todo escucha en 127.0.0.1 (red del host, sin puertos publicados por Docker).
 # cAdvisor no en su 8080 de siempre, que es el de Wings.
