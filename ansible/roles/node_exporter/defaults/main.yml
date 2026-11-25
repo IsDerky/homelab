@@ -1,7 +1,7 @@
 ---
 # node-exporter suelto, para máquinas sin el rol monitoring (los nodos de fuera)
 node_exporter_dir: /opt/node-exporter
-node_exporter_image: prom/node-exporter:v1.12.1
+node_exporter_image: prom/node-exporter:v1.13.1
 node_exporter_mem: 64m
 
 # IP:puerto donde escucha. Obligatoria: en los nodos, la IP del túnel, para que

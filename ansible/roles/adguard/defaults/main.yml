@@ -1,6 +1,6 @@
 ---
 adguard_dir: /opt/adguard
-adguard_image: adguard/adguardhome:v0.107.79
+adguard_image: adguard/adguardhome:v0.107.80
 
 # IP donde escucha el DNS (53 tcp/udp). Obligatoria: en 127.0.0.53:53 ya está
 # systemd-resolved, así que no puede ser 0.0.0.0.
