@@ -16,6 +16,8 @@ Environment=NEXT_TELEMETRY_DISABLED=1
 Environment=HOME=/var/lib/roninfc
 Environment=XDG_CONFIG_HOME=/var/lib/roninfc/.config
 Environment=XDG_CACHE_HOME=/var/lib/roninfc/.cache
+# JSON del scraping: aquí sobreviven a reinicios y despliegues (antes, /tmp privado)
+Environment=RONIN_DATOS=/var/lib/roninfc/datos
 ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p {{ roninfc_port }}
 Restart=always
 RestartSec=5
