@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Cuándo caducan los dominios, según el registro (RDAP). Solo deja métricas;
+avisan las alertas CaducaEnUnMes y CaducaEnUnaSemana.
+
+    caducidad-dominios dominio1 dominio2 ...
+
+rdap.org redirige al servidor RDAP del registro de cada extensión. Si una
+consulta falla, se conserva la fecha de la pasada anterior: un fallo del
+registro no hace desaparecer la caducidad (ni su aviso).
+
+Variables de entorno:
+  TEXTFILE  carpeta del colector textfile de node-exporter
+  RDAP      base de la consulta (https://rdap.org/domain/)
+"""
+
+import json
+import os
+import re
+import sys
+import tempfile
+import urllib.request
+from datetime import datetime, timezone
+
+TEXTFILE = os.environ.get("TEXTFILE", "/var/lib/node-exporter/textfile")
+RDAP = os.environ.get("RDAP", "https://rdap.org/domain/")
+FICHERO = "caducidad-dominios.prom"
+# Mismo HELP y TYPE que caducidades.prom: node-exporter junta la métrica de los dos
+CABECERA = """# HELP caducidad_timestamp_segundos Cuándo caduca algo que no se puede comprobar desde aquí (monitoring_caducidades)
+# TYPE caducidad_timestamp_segundos gauge
+# HELP dominio_rdap_ok 1 si la última consulta RDAP del dominio ha dado fecha
+# TYPE dominio_rdap_ok gauge
+"""
+LINEA = re.compile(r'^caducidad_timestamp_segundos\{.*dominio="([^"]+)".*\} (\d+)$')
+
+
+def caducidad(datos):
+    """Segundos epoch del evento «expiration» de una respuesta RDAP, o None."""
+    for evento in datos.get("events", []):
+        if evento.get("eventAction") == "expiration" and evento.get("eventDate"):
+            # Python 3.10 no entiende «Z» ni fracciones de 1 o 3 cifras
+            texto = re.sub(r"\.\d+", "", evento["eventDate"]).replace("Z", "+00:00")
+            try:
+                fecha = datetime.fromisoformat(texto)
+            except ValueError:
+                return None
+            if fecha.tzinfo is None:
+                fecha = fecha.replace(tzinfo=timezone.utc)
+            return int(fecha.timestamp())
+    return None
+
+
+def consultar(dominio):
+    # Algún registro (Identity Digital) da 403 al User-Agent de urllib
+    cabeceras = {"Accept": "application/rdap+json", "User-Agent": "caducidad-dominios/1"}
+    pedido = urllib.request.Request(RDAP + dominio, headers=cabeceras)
+    with urllib.request.urlopen(pedido, timeout=30) as r:
+        return caducidad(json.load(r))
+
+
+def anteriores(ruta):
+    """{dominio: epoch} de la pasada anterior."""
+    try:
+        with open(ruta) as f:
+            return {m[1]: int(m[2]) for m in map(LINEA.match, f) if m}
+    except OSError:
+        return {}
+
+
+def metricas(dominios, nuevas, viejas):
+    lineas = [CABECERA.rstrip("\n")]
+    for d in dominios:
+        epoch = nuevas.get(d) or viejas.get(d)
+        if epoch:
+            fecha = datetime.fromtimestamp(epoch, timezone.utc).strftime("%d-%m-%Y")
+            lineas.append(
+                f'caducidad_timestamp_segundos{{nombre="Dominio {d}",dominio="{d}",fecha="{fecha}",'
+                f'renovar="Renovar en el registrador"}} {epoch}'
+            )
+        lineas.append(f'dominio_rdap_ok{{dominio="{d}"}} {1 if nuevas.get(d) else 0}')
+    return "\n".join(lineas) + "\n"
+
+
+def main(dominios):
+    ruta = os.path.join(TEXTFILE, FICHERO)
+    nuevas = {}
+    for d in dominios:
+        try:
+            nuevas[d] = consultar(d)
+        except Exception as e:  # noqa: BLE001 - cualquier fallo de red o de JSON cuenta igual
+            print(f"{d}: {e}", file=sys.stderr)
+    fd, tmp = tempfile.mkstemp(dir=TEXTFILE, prefix=".caducidad-dominios.")
+    with os.fdopen(fd, "w") as f:
+        f.write(metricas(dominios, nuevas, anteriores(ruta)))
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, ruta)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

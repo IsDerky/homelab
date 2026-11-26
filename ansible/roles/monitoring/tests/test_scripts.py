@@ -1,4 +1,4 @@
-"""Tests de ops-exporter, alert-dm y systemd-textfile. Uso: python3 -m unittest discover -s tests"""
+"""Tests de ops-exporter, alert-dm, systemd-textfile y caducidad-dominios. Uso: python3 -m unittest discover -s tests"""
 
 import importlib.machinery
 import importlib.util
@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
 FILES = os.path.join(os.path.dirname(__file__), "..", "files")
 
@@ -21,6 +22,7 @@ def load(name):
 exporter = load("ops-exporter")
 alert_dm = load("alert-dm")
 textfile = load("systemd-textfile")
+dominios = load("caducidad-dominios")
 
 SNAPSHOT = {
     "collected_at": "2026-11-06T19:22:03+00:00",
@@ -269,6 +271,53 @@ class SystemdTextfileTest(unittest.TestCase):
             textfile.write(path, self.text)
             self.assertEqual(os.listdir(d), ["systemd.prom"])
             self.assertEqual(os.stat(path).st_mode & 0o777, 0o644)
+
+
+SEP_2027 = int(datetime(2027, 9, 21, 19, 58, 43, tzinfo=timezone.utc).timestamp())
+ABR_2028 = int(datetime(2028, 4, 20, 12, 0, tzinfo=timezone.utc).timestamp())
+
+
+class CaducidadDominiosTest(unittest.TestCase):
+    def test_fechas_de_varios_registros(self):
+        # Verisign (.com), CentralNic (.lol) e Identity Digital (.digital): con y sin fracción
+        for fecha in ("2027-09-21T19:58:43Z", "2027-09-21T19:58:43.0Z", "2027-09-21T19:58:43.861Z"):
+            datos = {"events": [{"eventAction": "registration", "eventDate": "2024-09-21T19:58:43Z"},
+                                {"eventAction": "expiration", "eventDate": fecha}]}
+            self.assertEqual(dominios.caducidad(datos), SEP_2027)
+
+    def test_sin_fecha(self):
+        self.assertIsNone(dominios.caducidad({"events": [{"eventAction": "registration", "eventDate": "x"}]}))
+        self.assertIsNone(dominios.caducidad({"events": [{"eventAction": "expiration", "eventDate": "mañana"}]}))
+        self.assertIsNone(dominios.caducidad({}))
+
+    def test_un_fallo_conserva_la_fecha_anterior(self):
+        with tempfile.TemporaryDirectory() as d:
+            dominios.TEXTFILE = d
+            ruta = os.path.join(d, dominios.FICHERO)
+            with open(ruta, "w") as f:
+                f.write(dominios.metricas(["a.invalid", "b.invalid"], {"a.invalid": SEP_2027, "b.invalid": 1830000000}, {}))
+            # a: el registro responde sin fecha; b: fecha nueva; c: sin red
+            def consultar(dominio):
+                if dominio == "c.invalid":
+                    raise OSError("sin red")
+                return {"a.invalid": None, "b.invalid": ABR_2028}[dominio]
+
+            original = dominios.consultar
+            dominios.consultar = consultar
+            try:
+                dominios.main(["a.invalid", "b.invalid", "c.invalid"])
+            finally:
+                dominios.consultar = original
+            s = samples(open(ruta).read())
+            self.assertEqual(os.listdir(d), [dominios.FICHERO])
+            self.assertEqual(s['caducidad_timestamp_segundos{nombre="Dominio a.invalid",dominio="a.invalid",'
+                               'fecha="21-09-2027",renovar="Renovar en el registrador"}'], SEP_2027)
+            self.assertEqual(s['dominio_rdap_ok{dominio="a.invalid"}'], 0)
+            self.assertEqual(s['dominio_rdap_ok{dominio="b.invalid"}'], 1)
+            self.assertIn('fecha="20-04-2028"', open(ruta).read())
+            # Nunca consultado: sin fecha, solo el fallo
+            self.assertEqual(s['dominio_rdap_ok{dominio="c.invalid"}'], 0)
+            self.assertNotIn('dominio="c.invalid",fecha', open(ruta).read())
 
 
 if __name__ == "__main__":

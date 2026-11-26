@@ -130,14 +130,26 @@ groups:
         annotations:
           summary: "La operadora bloquea {{ $labels.dominio }} (IP de Cloudflare {{ $labels.ip }}) desde hace 30 min: con esa operadora no se llega a la web."
 
-      # Lo que no se puede comprobar desde aquí (monitoring_caducidades)
-      - alert: CaducaPronto
-        expr: caducidad_timestamp_segundos - time() < 30 * 86400
+      # Calendario de caducidades (monitoring_caducidades y dominios por RDAP):
+      # un DM al entrar en el último mes y otro en la última semana. La ruta
+      # aviso="caducidad" de Alertmanager no repite ni manda «Resuelto».
+      - alert: CaducaEnUnMes
+        expr: (caducidad_timestamp_segundos - time()) / 86400 < 30 and (caducidad_timestamp_segundos - time()) / 86400 >= 7
         for: 1h
         labels:
           severity: warning
+          aviso: caducidad
         annotations:
-          summary: "{{ $labels.nombre }} caduca en {{ $value | humanizeDuration }}."
+          summary: "{{ $labels.nombre }} caduca el {{ $labels.fecha }} (en {{ printf \"%.0f\" $value }} días).{{ with $labels.renovar }} {{ . }}{{ end }}"
+
+      - alert: CaducaEnUnaSemana
+        expr: (caducidad_timestamp_segundos - time()) / 86400 < 7
+        for: 1h
+        labels:
+          severity: critical
+          aviso: caducidad
+        annotations:
+          summary: "{{ $labels.nombre }} caduca el {{ $labels.fecha }} (en {{ printf \"%.0f\" $value }} días).{{ with $labels.renovar }} {{ . }}{{ end }}"
 
       # Comprobaciones de contenido: van cada 15 min, más que la ventana con la
       # que Prometheus busca el último valor (5 min), así que se mira con

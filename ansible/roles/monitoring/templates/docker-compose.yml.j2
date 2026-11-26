@@ -28,6 +28,9 @@ services:
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
+      # Registro de avisos enviados: 31 días (por defecto 5). Con menos, el
+      # aviso de caducidad a 30 días se volvería a mandar al quinto día.
+      - --data.retention=744h
       - --web.listen-address=127.0.0.1:{{ monitoring_ports.alertmanager }}
       # Una sola instancia: sin el puerto de cluster (9094)
       - --cluster.listen-address=
