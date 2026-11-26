@@ -38,6 +38,61 @@ def consultar(base, expr):
     return valor if math.isfinite(valor) else None
 
 
+def series(base, expr):
+    """Todas las series de una consulta: [(etiquetas, valor)]. Lista vacía si falla."""
+    url = f"{base}/api/v1/query?" + urllib.parse.urlencode({"query": expr})
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as r:
+            resultado = json.load(r)["data"]["result"]
+    except Exception as e:  # noqa: BLE001
+        print(f"consulta fallida: {expr!r}: {e}", file=sys.stderr)
+        return []
+    salida = []
+    for s in resultado:
+        try:
+            valor = float(s["value"][1])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if math.isfinite(valor):
+            salida.append((s.get("metric", {}), valor))
+    return salida
+
+
+def caducidades(c, base, ahora=None):
+    """Lista de caducidades ordenada por fecha: una fila por serie de `consulta` y una
+    por cada grupo (muchas cosas iguales, como los certificados TLS, juntas)."""
+    ahora = time.time() if ahora is None else ahora
+    filas = []
+    for m, ts in series(base, c["consulta"]):
+        filas.append({
+            "nombre": m.get("corto") or m.get("dominio") or m.get("nombre", "?"),
+            "completo": m.get("nombre", ""),
+            "ts": int(ts),
+            "renovar": m.get("renovar", ""),
+            "tipo": "dominio" if m.get("dominio") else "",
+        })
+    for g in c.get("grupos", []):
+        valores = sorted(int(v) for _, v in series(base, g["consulta"]))
+        if not valores:
+            continue
+        filas.append({
+            "nombre": f"{len(valores)} {g['nombre']}",
+            "ts": valores[0],
+            "hasta": valores[-1],
+            "renovar": g.get("renovar", ""),
+            "tipo": "grupo",
+            "nota": g.get("nota", ""),
+        })
+    filas.sort(key=lambda f: f["ts"])
+    aviso = c.get("aviso", 30) * 86400
+    return {
+        "filas": filas,
+        "mostrar": c.get("filas", 4),
+        # punto verde si nada de lo propio (los grupos se renuevan solos) entra en el aviso
+        "ok": all(f["ts"] - ahora >= aviso for f in filas if f["tipo"] != "grupo"),
+    }
+
+
 def sondas(base):
     """probe_success por instance (la URL que se sondea)."""
     url = f"{base}/api/v1/query?" + urllib.parse.urlencode({"query": "probe_success"})
@@ -60,6 +115,11 @@ def app(a, estado):
 
 def widget(w, base):
     salida = {k: w[k] for k in ("widget", "titulo", "icono", "tamano") if w.get(k)}
+    if w.get("caducidades"):
+        cad = caducidades(w["caducidades"], base)
+        salida["ok"] = cad.pop("ok")
+        salida["caducidades"] = cad
+        return salida
     if w.get("estado"):
         valor = consultar(base, w["estado"]["consulta"])
         textos = w["estado"].get("textos", {})

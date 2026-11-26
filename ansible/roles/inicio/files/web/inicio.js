@@ -14,6 +14,7 @@ const ICONOS = {
   sai: '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4"/><path d="M11 9l-2 4h4l-2 4"/>',
   nube: '<path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/>',
   escudo: '<path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/>',
+  calendario: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
 };
 const icono = (nombre) => {
   if (ICONOS[nombre]) {
@@ -93,7 +94,43 @@ const carpeta = (c) => {
   return b;
 };
 
-const TAMANOS = ['2x2', '3x2', '4x2', '6x2'];
+// ---------- caducidades: fechas y días que quedan ----------
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const diasHasta = (ts) => Math.round((ts - Date.now() / 1000) / 86400);
+// ámbar en el último mes (aviso a 30 días), rojo en la última semana (aviso a 7)
+const claseDias = (d) => (d < 7 ? ' rojo' : d < 30 ? ' ambar' : '');
+const fechaCorta = (ts) => {
+  const f = new Date(ts * 1000);
+  return `${f.getDate()} ${MESES[f.getMonth()]} ${f.getFullYear()}`;
+};
+const fechaLarga = (ts) => new Date(ts * 1000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+const quedan = (d, unidad) => {
+  const v = crear('span');
+  v.append(String(d), crear('small', '', unidad));
+  return v;
+};
+
+// A · lista: las más cercanas (sin los grupos) y una línea con los grupos (certificados TLS)
+const listaCaducidades = (c) => {
+  const caja = crear('div', 'cad');
+  const lista = crear('div', 'cad-lista');
+  for (const f of c.filas.filter((f) => f.tipo !== 'grupo').slice(0, c.mostrar)) {
+    const d = diasHasta(f.ts);
+    const fila = crear('div', 'cad-fila');
+    fila.title = f.completo || f.nombre;
+    const dd = crear('div', 'd' + claseDias(d));
+    dd.append(quedan(d, 'd'));
+    fila.append(crear('div', 'n', f.nombre), crear('div', 'f', fechaCorta(f.ts)), dd);
+    lista.append(fila);
+  }
+  caja.append(lista);
+  for (const g of c.filas.filter((f) => f.tipo === 'grupo')) {
+    caja.append(crear('div', 'cad-pie', `${g.nombre}${g.nota ? ' · ' + g.nota : ''} · el primero en ${diasHasta(g.ts)} d`));
+  }
+  return caja;
+};
+
+const TAMANOS = ['2x2', '3x2', '4x2', '6x2', '6x3'];
 const widget = (w) => {
   const e = crear('div', 'widget t' + (TAMANOS.includes(w.tamano) ? w.tamano : '6x2'));
   const caja = crear('div', 'caja');
@@ -103,12 +140,26 @@ const widget = (w) => {
   if (w.estado) titulo.append(crear('span', 'estado', '· ' + w.estado));
   if (w.ok !== undefined) {
     const p = crear('span', 'punto' + (w.ok ? '' : ' mal'));
-    p.title = w.ok ? 'Todo bien' : 'Algo falla';
+    p.title = w.caducidades ? (w.ok ? 'Nada caduca en el próximo mes' : 'Algo caduca en menos de un mes') : (w.ok ? 'Todo bien' : 'Algo falla');
     titulo.append(p);
   }
-  const cifras = crear('div', 'cifras');
-  cifras.append(...(w.cifras || []).map(cifra));
-  caja.append(titulo, cifras);
+  if (w.caducidades) {
+    caja.append(titulo, listaCaducidades(w.caducidades));
+    // se pulsa: vista completa con todo y cómo renovarlo
+    e.classList.add('pulsable');
+    e.tabIndex = 0;
+    e.setAttribute('role', 'button');
+    e.setAttribute('aria-label', (w.titulo || 'Caducidades') + ': ver todas');
+    e.dataset.vista = w.widget;
+    e.addEventListener('click', () => abrirVista(w.widget));
+    e.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrirVista(w.widget, true); }
+    });
+  } else {
+    const cifras = crear('div', 'cifras');
+    cifras.append(...(w.cifras || []).map(cifra));
+    caja.append(titulo, cifras);
+  }
   e.append(caja, crear('div', 'nombre', w.titulo || ''));
   return e;
 };
@@ -185,6 +236,100 @@ const cerrar = () => {
 $('carpeta').addEventListener('click', (e) => { if (!e.target.closest('.panel')) cerrar(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && abierta) cerrar(); });
 
+// ---------- vista completa de un widget (caducidades): crece desde su recuadro, como las carpetas ----------
+let vistaAbierta = null;
+let antesDeVista = null;
+const desdeRecuadro = () => {
+  const caja = document.querySelector(`[data-vista="${CSS.escape(vistaAbierta || '')}"] .caja`);
+  const panel = $('vista-panel');
+  if (!caja) return 'scale(.6)';
+  const a = caja.getBoundingClientRect();
+  const b = panel.getBoundingClientRect();
+  const dx = a.left + a.width / 2 - (b.left + b.width / 2);
+  const dy = a.top + a.height / 2 - (b.top + b.height / 2);
+  return `translate(${dx}px, ${dy}px) scale(${a.width / b.width}, ${a.height / b.height})`;
+};
+const pintarVista = () => {
+  const w = datos && datos.elementos.find((e) => e.widget === vistaAbierta);
+  if (!w || !w.caducidades) return cerrarVista();
+  const titulo = crear('h2');
+  titulo.id = 'vista-titulo';
+  titulo.append(icono(w.icono || 'calendario'), w.titulo || 'Caducidades');
+  const boton = crear('button', 'cerrar', 'Cerrar');
+  boton.type = 'button';
+  boton.addEventListener('click', cerrarVista);
+  titulo.append(boton);
+  const tabla = crear('table', 'cad-tabla');
+  const cab = crear('tr');
+  for (const t of ['Qué', 'Caduca', 'Quedan', 'Cómo renovar']) cab.append(crear('th', '', t));
+  tabla.append(cab);
+  for (const f of w.caducidades.filas) {
+    const d = diasHasta(f.ts);
+    const tr = crear('tr', f.tipo === 'grupo' ? 'grupo' : '');
+    const n = crear('td', 'n', f.nombre);
+    if (f.completo && f.completo !== f.nombre) n.title = f.completo;
+    if (f.tipo === 'dominio') n.append(crear('span', 'tipo', 'dominio'));
+    if (f.tipo === 'grupo' && f.nota) n.append(crear('span', 'tipo', f.nota));
+    const fecha = f.tipo === 'grupo' && f.hasta && f.hasta !== f.ts ? `${fechaCorta(f.ts)} – ${fechaCorta(f.hasta)}` : fechaLarga(f.ts);
+    const dd = crear('td', 'd' + (f.tipo === 'grupo' ? '' : claseDias(d)));
+    dd.append(quedan(d, d === 1 ? 'día' : 'días'));
+    // lo que parece una orden (sin espacios raros) va como código
+    const r = crear('td', 'r');
+    if (f.renovar) r.append(/^(En WSL: )?[\w.-]+\.sh\b/.test(f.renovar) ? crear('code', '', f.renovar.replace(/^En WSL: /, '')) : crear('span', 'txt', f.renovar));
+    tr.append(n, crear('td', 'f', fecha), dd, r);
+    tabla.append(tr);
+  }
+  const sub = crear('p', 'sub', 'Aviso por MD al entrar en el último mes y en la última semana.');
+  $('vista-panel').replaceChildren(titulo, sub, tabla);
+};
+const abrirVista = (id, teclado = false) => {
+  antesDeVista = document.activeElement;
+  vistaAbierta = id;
+  pintarVista();
+  const capa = $('vista');
+  const panel = $('vista-panel');
+  capa.hidden = false;
+  if (!quieto.matches) {
+    panel.style.transition = 'none';
+    panel.style.transform = desdeRecuadro();
+    panel.style.opacity = '0';
+    capa.classList.remove('abierta');
+    panel.getBoundingClientRect();
+    panel.style.transition = '';
+    requestAnimationFrame(() => {
+      capa.classList.add('abierta');
+      panel.style.transform = '';
+      panel.style.opacity = '';
+    });
+  } else {
+    capa.classList.add('abierta');
+  }
+  if (teclado) panel.querySelector('.cerrar')?.focus({ preventScroll: true });
+};
+const cerrarVista = () => {
+  const capa = $('vista');
+  const panel = $('vista-panel');
+  if (capa.hidden) return;
+  const fin = () => {
+    capa.hidden = true;
+    panel.style.transform = '';
+    panel.style.opacity = '';
+    vistaAbierta = null;
+  };
+  capa.classList.remove('abierta');
+  if (quieto.matches) {
+    fin();
+  } else {
+    panel.style.transform = desdeRecuadro();
+    panel.style.opacity = '0';
+    panel.addEventListener('transitionend', fin, { once: true });
+    setTimeout(() => { if (!capa.hidden) fin(); }, 450);
+  }
+  antesDeVista?.focus?.({ preventScroll: true });
+};
+$('vista').addEventListener('click', (e) => { if (!e.target.closest('.panel')) cerrarVista(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && vistaAbierta) cerrarVista(); });
+
 // ---------- datos ----------
 const pintar = () => {
   document.title = datos.titulo;
@@ -201,6 +346,7 @@ const pintar = () => {
   r.classList.toggle('mal', s.caidas.length > 0);
   r.textContent = s.caidas.length ? `No responde: ${s.caidas.join(', ')}` : `Todo en marcha · ${s.bien}/${s.total} sondas`;
   if (abierta) pintarCarpeta();
+  if (vistaAbierta) pintarVista();
 };
 
 const avisar = (texto) => {

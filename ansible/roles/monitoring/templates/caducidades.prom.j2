@@ -3,5 +3,5 @@
 # TYPE caducidad_timestamp_segundos gauge
 {% for c in monitoring_caducidades %}
 {% set f = c.fecha | string | to_datetime('%Y-%m-%d') %}
-caducidad_timestamp_segundos{nombre="{{ c.nombre }}",fecha="{{ f.strftime('%d-%m-%Y') }}",renovar="{{ c.renovar | default('') }}"} {{ f.strftime('%s') }}
+caducidad_timestamp_segundos{nombre="{{ c.nombre }}",corto="{{ c.corto | default('') }}",fecha="{{ f.strftime('%d-%m-%Y') }}",renovar="{{ c.renovar | default('') }}"} {{ f.strftime('%s') }}
 {% endfor %}

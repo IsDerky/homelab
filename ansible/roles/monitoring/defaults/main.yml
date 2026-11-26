@@ -116,9 +116,11 @@ monitoring_ram_historico_fichero: /var/lib/ram-servidores/historico.jsonl
 # Caducidades que no se pueden comprobar desde aquí (un certificado de SSH que
 # vive en otro equipo, un token, una licencia...). Un DM a 30 días
 # (CaducaEnUnMes) y otro a 7 (CaducaEnUnaSemana). «renovar» (opcional) sale en
-# el aviso: cómo se renueva.
+# el aviso: cómo se renueva. «corto» (opcional): el nombre en la lista de la
+# página de inicio.
 #   - nombre: Certificado SSH del portátil
 #     fecha: "2027-01-31"
+#     corto: Cert. SSH del portátil
 #     renovar: "ssh-keygen -s ca ..."
 monitoring_caducidades: []
 
