@@ -668,7 +668,7 @@ Pocas y solo de cosas graves. Lo demás (backups, certificados de este servidor,
 | `SinRespuestaHTTPS` | Una comprobación TLS falla durante 10 min (un reinicio de Wings tarda segundos y no cuenta) |
 | `CertificadoPorCaducar` | Un certificado de las comprobaciones TLS caduca en menos de 14 días. Certbot renueva a 30, así que a 14 algo ha fallado; el caso típico es Wings, que solo lee el certificado al arrancar |
 | `CloudflareBloqueado` | La sonda `bloqueo-cloudflare` ve 30 min seguidos la IP de Cloudflare de una web propia cortada por la operadora |
-| `CaducaPronto` | Algo de `monitoring_caducidades` caduca en menos de 30 días (lo que no se puede comprobar desde el servidor, como un certificado de SSH que vive en el PC) |
+| `CaducaEnUnMes` / `CaducaEnUnaSemana` | Algo del calendario de caducidades (`monitoring_caducidades` y los dominios de `monitoring_dominios`) entra en su último mes o en su última semana. Un solo DM por aviso: ni recordatorio diario ni «Resuelto» al renovarlo |
 | `ContenidoRoto` | Una comprobación de contenido falla dos veces seguidas |
 
 **El SLO.** Cada comprobación HTTP tiene un objetivo de disponibilidad en 30 días (`monitoring_slo_target`, 99,5 % por defecto: unas 3,6 h de fallo al mes). Avisar en cuanto falla una comprobación sería ruido. Esperar a incumplir el objetivo sería avisar tarde. La alerta mira **a qué ritmo se gasta el margen**, en dos ventanas a la vez, como propone el libro de SRE de Google: a 14,4 veces el ritmo permitido, el margen del mes se acaba en unos 2 días. La ventana larga (1 h) evita que salte por un fallo suelto. La corta (5 min) hace que se apague en cuanto se arregla.
@@ -689,7 +689,8 @@ Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): 
 | `monitoring_content_probes` | `[]` | `nombre`, `url`, `body_regex` y opcionalmente `timeout` (máx. 85s). Cada `monitoring_content_interval` (`15m`) |
 | `monitoring_remote_nodes` | `[]` | node-exporter de otras máquinas (`nombre`, `target`): job `nodos` |
 | `monitoring_systemd_units` | `[]` | Unidades cuyo estado exporta node_exporter (expresiones regulares) |
-| `monitoring_caducidades` | `[]` | `nombre` y `fecha` (`AAAA-MM-DD`): métrica `caducidad_timestamp_segundos` y alerta `CaducaPronto` |
+| `monitoring_caducidades` | `[]` | Lo que no se puede comprobar desde el servidor (un certificado de SSH que vive en otro equipo, un token): `nombre`, `fecha` (`AAAA-MM-DD`) y opcionalmente `renovar` (sale en el aviso). Métrica `caducidad_timestamp_segundos` |
+| `monitoring_dominios` | `[]` | Dominios cuya caducidad se lee del registro por RDAP una vez al día (`caducidad-dominios`, misma métrica). Si una consulta falla se conserva la fecha anterior; `dominio_rdap_ok` dice si la última dio fecha |
 | `monitoring_bloqueo_cf_dominios` | `[]` | Dominios detrás de Cloudflare. Cada 15 min, `bloqueo-cloudflare` mira si la operadora corta su IP (https no conecta y http a esa IP no lleva `cf-ray`). Métricas `cloudflare_*` y alerta `CloudflareBloqueado` |
 | `monitoring_precio_kwh` | `""` | Precio del kWh con impuestos: métrica `luz_precio_kwh_euros` para calcular el coste de la luz con los vatios del SAI |
 | `monitoring_cadvisor` | `true` | Métricas por contenedor |

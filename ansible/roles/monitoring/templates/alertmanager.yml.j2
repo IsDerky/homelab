@@ -15,6 +15,13 @@ route:
       group_wait: 0s
       group_interval: 1m
       repeat_interval: 10m
+    # Caducidades: un solo DM por aviso (30 y 7 días), sin recordatorio diario
+    # ni «Resuelto» al renovar. Que no se repita depende de que el registro de
+    # avisos dure más que la alerta: --data.retention en el compose.
+    - matchers: ['aviso="caducidad"']
+      receiver: discord-sin-resuelto
+      group_by: [alertname, nombre]
+      repeat_interval: 8760h
 {% endif %}
 
 receivers:
@@ -24,4 +31,8 @@ receivers:
     webhook_configs:
       - url: http://127.0.0.1:{{ monitoring_ports.alert_dm }}/alertmanager
         send_resolved: true
+  - name: discord-sin-resuelto
+    webhook_configs:
+      - url: http://127.0.0.1:{{ monitoring_ports.alert_dm }}/alertmanager
+        send_resolved: false
 {% endif %}

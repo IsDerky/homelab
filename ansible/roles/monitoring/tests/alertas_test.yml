@@ -222,22 +222,38 @@ tests:
             exp_annotations:
               summary: "La operadora bloquea web.invalid (IP de Cloudflare 198.51.100.7) desde hace 30 min: con esa operadora no se llega a la web."
 
-  # Caducidad a mano: a 20 días avisa; a 40 no
+  # Caducidades: a 20 días, el aviso del mes; a 3, el de la semana; a 40, ninguno
   - interval: 1m
     input_series:
-      - series: 'caducidad_timestamp_segundos{nombre="Certificado SSH"}'
+      - series: 'caducidad_timestamp_segundos{nombre="Certificado SSH",fecha="21-01-1970",renovar="ssh-ca.sh firmar"}'
         values: "1728000x80"
-      - series: 'caducidad_timestamp_segundos{nombre="Otra"}'
+      - series: 'caducidad_timestamp_segundos{nombre="Dominio ejemplo.invalid",dominio="ejemplo.invalid",fecha="04-01-1970",renovar=""}'
+        values: "259200x80"
+      - series: 'caducidad_timestamp_segundos{nombre="Otra",fecha="10-02-1970",renovar=""}'
         values: "3456000x80"
     alert_rule_test:
       - eval_time: 70m
-        alertname: CaducaPronto
+        alertname: CaducaEnUnMes
         exp_alerts:
           - exp_labels:
               severity: warning
+              aviso: caducidad
               nombre: Certificado SSH
+              fecha: 21-01-1970
+              renovar: ssh-ca.sh firmar
             exp_annotations:
-              summary: "Certificado SSH caduca en 19d 22h 50m 0s."
+              summary: "Certificado SSH caduca el 21-01-1970 (en 20 días). ssh-ca.sh firmar"
+      - eval_time: 70m
+        alertname: CaducaEnUnaSemana
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              aviso: caducidad
+              nombre: Dominio ejemplo.invalid
+              dominio: ejemplo.invalid
+              fecha: 04-01-1970
+            exp_annotations:
+              summary: "Dominio ejemplo.invalid caduca el 04-01-1970 (en 3 días)."
 
   # Contenido: dos fallos seguidos (cada 15 min) avisan; uno suelto no
   - interval: 15m

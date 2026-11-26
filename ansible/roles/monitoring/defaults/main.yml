@@ -114,10 +114,17 @@ monitoring_ram_historico: true
 monitoring_ram_historico_fichero: /var/lib/ram-servidores/historico.jsonl
 
 # Caducidades que no se pueden comprobar desde aquí (un certificado de SSH que
-# vive en otro equipo, una licencia...). Avisa 30 días antes.
+# vive en otro equipo, un token, una licencia...). Un DM a 30 días
+# (CaducaEnUnMes) y otro a 7 (CaducaEnUnaSemana). «renovar» (opcional) sale en
+# el aviso: cómo se renueva.
 #   - nombre: Certificado SSH del portátil
 #     fecha: "2027-01-31"
+#     renovar: "ssh-keygen -s ca ..."
 monitoring_caducidades: []
+
+# Dominios cuya caducidad se lee del registro por RDAP una vez al día (mismos
+# avisos que monitoring_caducidades). Vacío = sin consulta.
+monitoring_dominios: []
 
 # Precio del kWh (€, con impuestos) para el coste de la luz: métrica
 # luz_precio_kwh_euros, que multiplica los vatios del SAI. Vacío = sin métrica.

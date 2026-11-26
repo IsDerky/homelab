@@ -279,6 +279,24 @@
       register: monitoring_cf_units
       notify: Recargar systemd
 
+- name: Caducidad de los dominios
+  when: monitoring_dominios | length > 0
+  block:
+    - name: Script caducidad-dominios
+      ansible.builtin.copy:
+        src: caducidad-dominios
+        dest: /usr/local/bin/caducidad-dominios
+        mode: "0755"
+
+    - name: Unidades caducidad-dominios
+      ansible.builtin.template:
+        src: caducidad-dominios.{{ item }}.j2
+        dest: /etc/systemd/system/caducidad-dominios.{{ item }}
+        mode: "0644"
+      loop: [service, timer]
+      register: monitoring_dominios_units
+      notify: Recargar systemd
+
 - name: Estado de unidades systemd
   when: monitoring_systemd_units | length > 0
   block:
@@ -320,7 +338,16 @@
        + (['cambios-recoger.timer'] if monitoring_cambios and not (ansible_check_mode and monitoring_cambios_units is changed) else [])
        + (['ram-servidores.timer'] if monitoring_ram_historico and not (ansible_check_mode and monitoring_ram_units is changed) else [])
        + (['bloqueo-cloudflare.timer'] if monitoring_bloqueo_cf_dominios | length > 0
-          and not (ansible_check_mode and monitoring_cf_units is changed) else []) }}
+          and not (ansible_check_mode and monitoring_cf_units is changed) else [])
+       + (['caducidad-dominios.timer'] if monitoring_dominios | length > 0
+          and not (ansible_check_mode and monitoring_dominios_units is changed) else []) }}
+
+# Sin esperar a la pasada de las 06:00: la métrica sale ya (y con la lista nueva)
+- name: Primera consulta de los dominios
+  ansible.builtin.systemd_service:
+    name: caducidad-dominios.service
+    state: started
+  when: monitoring_dominios | length > 0 and monitoring_dominios_units is changed and not ansible_check_mode
 
 - name: Esperar a que escuchen
   ansible.builtin.wait_for:
