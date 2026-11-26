@@ -360,6 +360,8 @@ Solo lo que es del sistema: el usuario (con el grupo `render` para que ffmpeg us
 
 Al cambiar la unidad **solo recarga systemd, no reinicia la app**, para no cortar a quien esté viendo algo. El siguiente deploy reinicia y aplica el cambio. El `.env.production` (con los secretos) no lo crea el rol: si falta, falla y pide restaurarlo del backup.
 
+Con `bentonime_umami_dominio` (un dominio de `umami_sitios`), la unidad lee también `/etc/umami/<dominio>.env`, donde el rol `umami` deja el `UMAMI_WEBSITE_ID` de la web; sin él la app no carga la analítica.
+
 ## Rol `adguard`
 
 AdGuard Home con el DNS solo en la IP de la LAN (`adguard_dns_listen`; en `127.0.0.53:53` ya está systemd-resolved) y el panel en loopback para nginx. `conf/` y `work/` son datos de AdGuard y van en el backup, no en Ansible. El compose es el mismo que había, así que aplicar el rol no recrea el contenedor: en un servidor que es el único DNS de la casa, eso es un corte.

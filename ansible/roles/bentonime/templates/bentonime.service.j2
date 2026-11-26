@@ -12,6 +12,10 @@ User={{ bentonime_user }}
 WorkingDirectory={{ bentonime_home }}/apps/current
 Environment="PATH={{ bentonime_home }}/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 EnvironmentFile={{ bentonime_home }}/apps/bentonime/.env.production
+{% if bentonime_umami_dominio %}
+# Id de la web en Umami (rol umami, umami_sitios): UMAMI_WEBSITE_ID
+EnvironmentFile=-/etc/umami/{{ bentonime_umami_dominio }}.env
+{% endif %}
 ExecStart={{ bentonime_home }}/.bun/bin/bun --bun run start
 Restart=on-failure
 RestartSec=5
