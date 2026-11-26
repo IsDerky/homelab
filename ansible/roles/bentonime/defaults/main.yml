@@ -5,4 +5,7 @@ bentonime_home: /home/bentonime
 bentonime_groups: [render]
 
 bentonime_memory_max: 6G
+# Dominio dado de alta en Umami (umami_sitios del rol umami): la unidad lee su
+# /etc/umami/<dominio>.env con UMAMI_WEBSITE_ID. Vacío = sin analítica.
+bentonime_umami_dominio: ""
 bentonime_tasks_max: 200
