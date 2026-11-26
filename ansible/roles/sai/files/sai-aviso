@@ -66,6 +66,13 @@ case "${1:-}" in
     rm -f "$E/corte" "$E/corte-avisado"
     ;;
   LOWBATT)
+    # Con luz, el SAI marca batería baja si el consumo deja la autonomía por debajo del
+    # umbral (picos del PC que cuelga de él). upsmon solo apaga con OB+LB: no es un apagado.
+    if ! dato ups.status | grep -qw OB; then
+      r=$(dato battery.runtime)
+      logger -t sai-aviso "batería baja con luz (autonomía ~$((${r:-0} / 60)) min por el consumo): sin aviso"
+      exit 0
+    fi
     # este ya cuenta el corte: que el aviso de corte pendiente no salga después
     touch "$E/corte-avisado"
     mapfile -d '' f < <(campos)
