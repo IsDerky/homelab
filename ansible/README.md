@@ -406,6 +406,7 @@ Página de inicio propia en `/var/www/inicio`, sin librerías: iconos cuadrados 
 - **Estado de cada web desde las sondas de blackbox** (`probe_success`, por `instance`): cada app dice qué sonda es la suya con `sonda`. Una carpeta se marca en rojo si alguna de sus apps no responde, y arriba sale cuáles.
 - Una consulta que falla deja su cifra en «–», no rompe la página. Si `datos.json` se queda viejo (más de 4 intervalos), la página lo avisa.
 - El servicio corre con el usuario de sistema `inicio`, sin capacidades, solo con red a localhost y escribiendo solo en `/run/inicio` (no `DynamicUser`: su carpeta iría a `/run/private`, 0700, y nginx no llegaría).
+- **Widget de caducidades** (`caducidades:` en vez de `cifras:`, tamaño `6x3`): lista las más cercanas de una consulta con una serie por cosa (`caducidad_timestamp_segundos` del rol `monitoring`: nombre corto, fecha y cómo renovar) y agrupa en una línea lo que se renueva solo (los certificados TLS de las sondas). Ámbar en el último mes y rojo en la última semana, como los avisos. Al pulsarlo, una vista completa con todo y cómo renovar cada cosa.
 - Qué sale y en qué orden va en `inicio_elementos` (widgets, apps y carpetas; el formato está comentado en `defaults/main.yml`). El vhost es del inventario: raíz en `/var/www/inicio` y `location = /datos.json` con `alias /run/inicio/datos.json`.
 
 | Variable | Por defecto | |
@@ -691,7 +692,7 @@ Las alertas tienen tests (`tests/alertas_test.yml`, con `promtool test rules`): 
 | `monitoring_content_probes` | `[]` | `nombre`, `url`, `body_regex` y opcionalmente `timeout` (máx. 85s). Cada `monitoring_content_interval` (`15m`) |
 | `monitoring_remote_nodes` | `[]` | node-exporter de otras máquinas (`nombre`, `target`): job `nodos` |
 | `monitoring_systemd_units` | `[]` | Unidades cuyo estado exporta node_exporter (expresiones regulares) |
-| `monitoring_caducidades` | `[]` | Lo que no se puede comprobar desde el servidor (un certificado de SSH que vive en otro equipo, un token): `nombre`, `fecha` (`AAAA-MM-DD`) y opcionalmente `renovar` (sale en el aviso). Métrica `caducidad_timestamp_segundos` |
+| `monitoring_caducidades` | `[]` | Lo que no se puede comprobar desde el servidor (un certificado de SSH que vive en otro equipo, un token): `nombre`, `fecha` (`AAAA-MM-DD`) y opcionalmente `renovar` (sale en el aviso) y `corto` (el nombre en la lista de la página de inicio). Métrica `caducidad_timestamp_segundos` |
 | `monitoring_dominios` | `[]` | Dominios cuya caducidad se lee del registro por RDAP una vez al día (`caducidad-dominios`, misma métrica). Si una consulta falla se conserva la fecha anterior; `dominio_rdap_ok` dice si la última dio fecha |
 | `monitoring_bloqueo_cf_dominios` | `[]` | Dominios detrás de Cloudflare. Cada 15 min, `bloqueo-cloudflare` mira si la operadora corta su IP (https no conecta y http a esa IP no lleva `cf-ray`). Métricas `cloudflare_*` y alerta `CloudflareBloqueado` |
 | `monitoring_precio_kwh` | `""` | Precio del kWh con impuestos: métrica `luz_precio_kwh_euros` para calcular el coste de la luz con los vatios del SAI |

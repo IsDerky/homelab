@@ -31,6 +31,20 @@ inicio_iconos_dir: ""
 #         formato: duracion     # opcional: la consulta da segundos → «14 min», «3 h»
 #         rojo: {mayor: 90}     # opcional: en rojo si pasa de (mayor) o baja de (menor)
 #
+#   - widget: caducidades       # lista en vez de cifras; se pulsa para verlo todo
+#     titulo: Caducidades
+#     icono: calendario
+#     tamano: 6x3
+#     caducidades:
+#       consulta: caducidad_timestamp_segundos   # una serie por cosa (etiquetas nombre, corto, dominio, renovar)
+#       filas: 4                # cuántas se ven en el recuadro
+#       aviso: 30               # días: punto rojo si algo (sin contar los grupos) baja de aquí
+#       grupos:                 # muchas cosas iguales en una fila
+#         - consulta: probe_ssl_earliest_cert_expiry{job="tls"}
+#           nombre: certificados TLS
+#           nota: se renuevan solos
+#           renovar: certbot los renueva a 30 días
+#
 #   - app: oficina
 #     nombre: Oficina
 #     icono: oficina.svg        # de icons/ o apps/<fichero> (inicio_iconos_dir)

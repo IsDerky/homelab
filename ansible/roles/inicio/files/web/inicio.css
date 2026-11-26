@@ -4,7 +4,7 @@
 @font-face { font-family: "Tektur"; src: url("fuentes/tektur-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-display: swap; }
 
 :root {
-  --texto: #f4f0ff; --apagado: #a99fc4; --verde: #39ff14; --morado: #9933ff; --rojo: #ff5c7a;
+  --texto: #f4f0ff; --apagado: #a99fc4; --verde: #39ff14; --morado: #9933ff; --rojo: #ff5c7a; --ambar: #ffb547;
   --borde: rgba(255, 255, 255, .08); --widget: rgba(22, 19, 33, .72); --cristal: rgba(28, 24, 40, .7);
   --curva: cubic-bezier(.2, .9, .25, 1);   /* sale rápido y frena suave, como iOS */
   /* la rejilla ocupa todo el ancho útil: la celda sale del ancho de la ventana y el número de columnas */
@@ -49,6 +49,7 @@ body { background: #000; color: var(--texto); font: 14px/1.35 "Chakra Petch", ui
 .t3x2 { grid-column: span 3; grid-row: span 2; }
 .t4x2 { grid-column: span 4; grid-row: span 2; }
 .t6x2 { grid-column: span 6; grid-row: span 2; }
+.t6x3 { grid-column: span 6; grid-row: span 3; }
 
 /* ---------- apps ---------- */
 .app { display: flex; flex-direction: column; align-items: center; gap: 7px; text-decoration: none; color: inherit;
@@ -110,6 +111,47 @@ a.app:active .icono, button.app:active .icono { transform: scale(.95); }
 .t2x2.widget .cifra .l { margin: 0; }
 .t4x2.widget .cifra .v { font-size: calc(var(--cifra) * .85); }
 
+/* caducidades: lista de las más cercanas; se pulsa para la vista completa */
+.widget.pulsable { cursor: pointer; }
+.widget.pulsable .caja { transition: transform .2s var(--curva); }
+.widget.pulsable:hover .caja { transform: translateY(-2px); }
+.widget.pulsable:focus-visible { outline: none; }
+.widget.pulsable:focus-visible .caja { outline: 2px solid var(--morado); outline-offset: 3px; }
+.t6x3.widget .caja { justify-content: flex-start; gap: calc(var(--celda) * .22); }
+.cad { display: flex; flex-direction: column; gap: 8px; }
+.cad-lista { display: flex; flex-direction: column; gap: 4px; }
+.cad-fila { display: grid; grid-template-columns: 1fr auto auto; align-items: baseline; gap: 14px; }
+.cad-fila .n { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(13px, calc(var(--celda) * .2), 16px); }
+.cad-fila .f { color: var(--apagado); font-size: 13px; white-space: nowrap; }
+.cad-fila .d { font-weight: 600; font-size: clamp(15px, calc(var(--celda) * .24), 20px); min-width: 4.2em; text-align: right; white-space: nowrap; }
+.cad-fila .d small, .cad-tabla td.d small { color: var(--apagado); font-weight: 400; margin-left: 2px; }
+.cad-fila .d small { font-size: .62em; }
+.cad-pie { font-size: 12.5px; color: var(--apagado); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ambar { color: var(--ambar) !important; }
+.cad .rojo, .cad-tabla .rojo { color: var(--rojo) !important; }
+
+/* vista completa: mismo cristal que las carpetas, más ancha */
+.carpeta-abierta .panel.vista { display: block; width: min(980px, calc(100vw - 40px)); max-height: calc(100vh - 80px); overflow: auto;
+                                background: var(--cristal); backdrop-filter: blur(22px); border: 1px solid var(--borde); border-radius: 30px;
+                                padding: 28px 32px 26px; box-shadow: 0 30px 80px rgba(0, 0, 0, .65); }
+.panel.vista h2 { margin: 0 0 4px; font: 700 26px "Tektur", "Chakra Petch", sans-serif; display: flex; align-items: center; gap: 12px; text-shadow: none; }
+.panel.vista h2 svg { width: 24px; height: 24px; stroke: var(--apagado); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.panel.vista .sub { color: var(--apagado); margin: 0 0 22px; font-size: 13.5px; }
+.panel.vista .cerrar { margin-left: auto; font: inherit; font-size: 13px; color: var(--apagado); background: none; border: 1px solid var(--borde); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.panel.vista .cerrar:hover, .panel.vista .cerrar:focus-visible { color: var(--texto); outline: none; border-color: var(--morado); }
+.cad-tabla { width: 100%; border-collapse: collapse; }
+.cad-tabla th { text-align: left; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--apagado); font-weight: 600; padding: 0 10px 10px; }
+.cad-tabla td { padding: 12px 10px; border-top: 1px solid var(--borde); vertical-align: middle; }
+.cad-tabla td.d { font-weight: 600; font-size: 18px; white-space: nowrap; text-align: right; width: 1%; }
+.cad-tabla td.d small { font-size: 12px; }
+.cad-tabla td.f { color: var(--apagado); white-space: nowrap; width: 1%; }
+.cad-tabla td.r code { font: 12.5px ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--texto); background: rgba(255, 255, 255, .06);
+                       border: 1px solid var(--borde); border-radius: 7px; padding: 3px 7px; white-space: nowrap; }
+.cad-tabla td.r .txt { color: var(--apagado); font-size: 13px; }
+.cad-tabla .tipo { display: inline-block; font-size: 11px; border-radius: 999px; padding: 2px 8px; margin-left: 8px; color: var(--apagado); border: 1px solid var(--borde); vertical-align: 1px; }
+.cad-tabla tr.grupo td { color: var(--apagado); }
+.cad-tabla tr.grupo .n { color: var(--texto); }
+
 .aviso { text-align: center; color: var(--apagado); font-size: 13px; margin-top: 34px; }
 
 /* ---------- carpeta abierta: crece desde su icono (inicio.js), sin oscurecer apenas el fondo ---------- */
@@ -134,6 +176,15 @@ a.app:active .icono, button.app:active .icono { transform: scale(.95); }
   /* widgets: los anchos toda la fila, los estrechos media; siempre 3 filas para que quepan */
   .t4x2.widget, .t6x2.widget { grid-column: span 8; grid-row: span 3; }
   .t2x2.widget, .t3x2.widget { grid-column: span 4; grid-row: span 3; }
+  .t6x3.widget { grid-column: span 8; grid-row: span 4; }
+  /* en estrecho la tabla no cabe: cada fila es un bloque (qué y días arriba, cómo renovar debajo) */
+  .carpeta-abierta .panel.vista { padding: 20px 16px; border-radius: 24px; }
+  .cad-tabla, .cad-tabla tbody { display: block; }
+  .cad-tabla tr:first-child, .cad-tabla td.f { display: none; }
+  .cad-tabla tr { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 12px 2px; border-top: 1px solid var(--borde); }
+  .cad-tabla td { padding: 0; border: 0; }
+  .cad-tabla td.d { font-size: 16px; }
+  .cad-tabla td.r { grid-column: 1 / -1; }
   .cabecera { margin-bottom: 24px; }
   .hora { font-size: 48px; }
   :root { --cifra: 19px; }
