@@ -25,3 +25,59 @@
     loop_var: quadlet_s
     index_var: quadlet_i
     label: "{{ quadlet_s.nombre }}"
+
+# Reconstrucción semanal y edad de las imágenes (la alerta está en el rol monitoring)
+- name: Reconstrucción y edad de las imágenes
+  when: quadlet_servicios | length > 0
+  block:
+    - name: Carpeta /etc/quadlet
+      ansible.builtin.file:
+        path: /etc/quadlet
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Lista de servicios
+      ansible.builtin.template:
+        src: servicios.j2
+        dest: /etc/quadlet/servicios
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Scripts
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: /usr/local/bin/{{ item }}
+        owner: root
+        group: root
+        mode: "0755"
+      loop: [quadlet-reconstruir, quadlet-imagenes]
+
+    - name: Unidades
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: /etc/systemd/system/{{ item }}
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - quadlet-reconstruir.service
+        - quadlet-reconstruir.timer
+        - quadlet-imagenes.service
+        - quadlet-imagenes.timer
+      notify: Recargar systemd
+
+# meta no admite when: fuera del bloque
+- name: Recargar systemd si hay unidades nuevas
+  ansible.builtin.meta: flush_handlers
+
+# En seco una unidad nueva no llega a existir: se activa en la pasada de verdad
+- name: Timers de reconstrucción y edad
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [quadlet-reconstruir.timer, quadlet-imagenes.timer]
+  when: quadlet_servicios | length > 0 and not ansible_check_mode

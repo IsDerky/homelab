@@ -170,6 +170,17 @@ groups:
         annotations:
           summary: "ops-collect no actualiza el snapshot desde hace más de 30 min."
 
+      # Rol quadlet: las imágenes se reconstruyen cada lunes (quadlet-reconstruir).
+      # Si una en marcha pasa de 14 días, la reconstrucción no está funcionando y
+      # la base lleva parches sin poner.
+      - alert: ImagenContenedorVieja
+        expr: time() - quadlet_imagen_creada_segundos > 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "La imagen de {{ $labels.servicio }} tiene más de 14 días: la reconstrucción semanal no funciona (journalctl -u quadlet-reconstruir)."
+
       # Rol abuso: se mira solo desde el host (conntrack). Un pool de minería en
       # sus puertos típicos casi nunca es legítimo; la CPU al límite sola no
       # avisa (un servidor de juego puede ir así), se ve en Grafana.

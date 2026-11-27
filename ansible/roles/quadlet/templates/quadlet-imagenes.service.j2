@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Edad de las imágenes de los contenedores rootless para node-exporter
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/quadlet-imagenes {{ quadlet_textfile_dir }}/quadlet.prom

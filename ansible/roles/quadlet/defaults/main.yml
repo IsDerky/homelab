@@ -19,6 +19,8 @@
 #     fichero_entorno: /etc/mi-bot.env  # opcional: se copia al home del usuario (0600)
 #     solo_lectura: true                # raíz del contenedor de solo lectura (por defecto)
 #     arrancar: true                    # false = preparado y parado
+#     repo: mi-bot                      # opcional: nombre en deploy-repo; con él se
+#                                       # reconstruye cada semana (quadlet-reconstruir)
 quadlet_servicios: []
 
 # Home de los usuarios de servicio (imágenes, quadlets y entorno van ahí)
@@ -36,3 +38,13 @@ quadlet_espera_arranque: 10
 # file = $XDG_RUNTIME_DIR/libpod/tmp/events (se ven con podman events) y no
 # ensucian el journal de la unidad; journald es lo que podman usa por defecto.
 quadlet_eventos: file
+
+# Reconstrucción semanal: los servicios con `repo` se vuelven a construir en el
+# commit con el que corren, sin caché y bajando la imagen base, para que los
+# parches de la base no esperen a un commit (los pasos de la app leen
+# DEPLOY_RECONSTRUIR). Lunes de madrugada, antes de Renovate (antes de las 7).
+quadlet_reconstruir_cuando: "Mon *-*-* 05:30:00"
+
+# Colector textfile de node-exporter: quadlet.prom con la edad de cada imagen en
+# marcha (alerta ImagenContenedorVieja del rol monitoring a los 14 días)
+quadlet_textfile_dir: /var/lib/node-exporter/textfile

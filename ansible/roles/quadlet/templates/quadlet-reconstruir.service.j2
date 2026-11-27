@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Reconstruir las imágenes de los contenedores rootless (sin caché, base nueva)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/quadlet-reconstruir
+# La edad nueva se ve en seguida, sin esperar al timer de quadlet-imagenes
+ExecStartPost=/usr/local/bin/quadlet-imagenes {{ quadlet_textfile_dir }}/quadlet.prom
+TimeoutStartSec=1h

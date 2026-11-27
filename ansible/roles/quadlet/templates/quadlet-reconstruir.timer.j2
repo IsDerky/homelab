@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Reconstrucción semanal de las imágenes de los contenedores rootless
+
+[Timer]
+OnCalendar={{ quadlet_reconstruir_cuando }}
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

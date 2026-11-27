@@ -332,3 +332,24 @@ tests:
               severity: none
             exp_annotations:
               summary: "Latido de la cadena de alertas: si deja de llegar al vigilante externo, algo de Prometheus, Alertmanager o alert-dm no funciona."
+
+  # Imagen construida en el instante 0: a los 14 días y medio ya pasa del umbral,
+  # pero con el for de 1 h avisa después; una reconstruida a los 7 días no avisa
+  - interval: 1m
+    input_series:
+      - series: 'quadlet_imagen_creada_segundos{servicio="mi-bot"}'
+        values: "0x20460"
+      - series: 'quadlet_imagen_creada_segundos{servicio="otro-bot"}'
+        values: "0x10080 604800x10380"
+    alert_rule_test:
+      - eval_time: 336h30m
+        alertname: ImagenContenedorVieja
+        exp_alerts: []
+      - eval_time: 340h
+        alertname: ImagenContenedorVieja
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              servicio: mi-bot
+            exp_annotations:
+              summary: "La imagen de mi-bot tiene más de 14 días: la reconstrucción semanal no funciona (journalctl -u quadlet-reconstruir)."

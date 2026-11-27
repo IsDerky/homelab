@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# nombre usuario repo (el de deploy-repo; - = no se reconstruye)
+# Lo leen quadlet-reconstruir y quadlet-imagenes.
+{% for s in quadlet_servicios %}
+{{ s.nombre }} {{ s.usuario }} {{ s.repo | default('-') }}
+{% endfor %}
