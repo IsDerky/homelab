@@ -98,6 +98,21 @@
   register: quadlet_unidad
   when: quadlet_escribible
 
+# Con journald, los eventos de podman (create, init, start...) caen en el journal
+# de la unidad y tapan los logs de la app
+- name: "Configuración de podman del usuario ({{ quadlet_s.nombre }})"
+  ansible.builtin.copy:
+    content: |
+      # Ansible managed (rol quadlet)
+      [engine]
+      events_logger = "{{ quadlet_eventos }}"
+    dest: "{{ quadlet_home }}/.config/containers/containers.conf"
+    owner: "{{ quadlet_s.usuario }}"
+    group: "{{ quadlet_s.usuario }}"
+    mode: "0600"
+  register: quadlet_conf
+  when: quadlet_escribible
+
 - name: "Systemd del usuario en marcha ({{ quadlet_s.nombre }})"
   ansible.builtin.systemd_service:
     name: user@{{ quadlet_usuario.uid }}.service
@@ -148,7 +163,9 @@
       when:
         - quadlet_s.arrancar | default(true)
         - quadlet_imagen.rc == 0
-        - quadlet_activo.stdout != 'active' or quadlet_unidad.changed or quadlet_entorno.changed | default(false)
+        - >-
+          quadlet_activo.stdout != 'active' or quadlet_unidad.changed
+          or quadlet_entorno.changed | default(false) or quadlet_conf.changed | default(false)
       register: quadlet_arranque
       changed_when: true
 
