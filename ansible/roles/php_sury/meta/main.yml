@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Alex (Derky)
+  role_name: php_sury
+  namespace: isderky
+  description: PHP de packages.sury.org en lugar del PPA ondrej/php congelado, con la huella de la clave comprobada
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

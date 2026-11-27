@@ -1,0 +1,24 @@
+---
+# PHP de packages.sury.org. El PPA ondrej/php quedó congelado en noviembre de
+# 2026 (Label «deprecated») y el mismo mantenedor publica los paquetes en
+# packages.sury.org. El rol no instala ni configura PHP: pone el repositorio,
+# quita el PPA y pasa a Sury los paquetes php* que ya haya.
+
+# Clave del repositorio. Se baja sola (no el paquete debsuryorg-archive-keyring,
+# que además la deja en trusted.gpg.d y valdría para cualquier repositorio).
+php_sury_clave: /etc/apt/keyrings/sury-php.gpg
+php_sury_clave_url: https://packages.sury.org/php/apt.gpg
+# Huella de la clave principal; si la descargada no la tiene, se para
+php_sury_huella: 15058500A0235D97F5D10063B188E2B695BD4743
+
+# unattended-upgrades también desde Sury (parches de PHP sin esperar a una
+# pasada de Ansible). Reinicia php-fpm al actualizar.
+php_sury_desatendido: false
+
+# Copia de sources.list.d y preferences.d antes del cambio (una sola vez)
+php_sury_copia: /root/apt-antes-sury
+
+# Servicios que corren PHP fuera de php-fpm (colas de Laravel...). Un gancho de
+# apt los reinicia tras cada actualización (también las de unattended-upgrades)
+# si el binario de PHP es más nuevo que su arranque: si no, seguirían con el de antes.
+php_sury_reiniciar: []

@@ -1,0 +1,148 @@
+---
+- name: Copia de las fuentes de apt antes del cambio
+  ansible.builtin.shell: >-
+    mkdir -m 0700 {{ php_sury_copia }}
+    && cp -a /etc/apt/sources.list.d /etc/apt/preferences.d {{ php_sury_copia }}/
+  args:
+    creates: "{{ php_sury_copia }}"
+
+- name: Carpeta de claves de apt
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clave de Sury ya descargada
+  ansible.builtin.stat:
+    path: "{{ php_sury_clave }}"
+  register: php_sury_clave_previa
+
+- name: Clave de Sury
+  ansible.builtin.get_url:
+    url: "{{ php_sury_clave_url }}"
+    dest: "{{ php_sury_clave }}"
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+  when: not php_sury_clave_previa.stat.exists
+
+# En --check sobre limpio la clave aún no está: se comprueba en la pasada de verdad
+- name: Huella de la clave
+  when: php_sury_clave_previa.stat.exists or not ansible_check_mode
+  block:
+    - name: Leer la huella
+      ansible.builtin.command: gpg --show-keys --with-colons {{ php_sury_clave }}
+      register: php_sury_huellas
+      changed_when: false
+      check_mode: false
+
+    - name: Es la de Sury
+      ansible.builtin.assert:
+        that: ("fpr:::::::::" ~ php_sury_huella ~ ":") in php_sury_huellas.stdout
+        fail_msg: "{{ php_sury_clave }} no tiene la huella {{ php_sury_huella }}: no se usa"
+        quiet: true
+
+- name: Repositorio de Sury
+  ansible.builtin.copy:
+    content: |
+      # Gestionado por Ansible (rol php_sury)
+      Types: deb
+      URIs: https://packages.sury.org/php/
+      Suites: {{ ansible_facts['distribution_release'] }}
+      Components: main
+      Signed-By: {{ php_sury_clave }}
+    dest: /etc/apt/sources.list.d/php-sury.sources
+    owner: root
+    group: root
+    mode: "0644"
+
+# El fichero del PPA lleva su clave dentro (Signed-By): con él se va también
+- name: Sin el PPA congelado
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/ondrej-ubuntu-php-{{ ansible_facts['distribution_release'] }}.{{ item }}
+    state: absent
+  loop: [sources, list]
+
+- name: Actualizaciones automáticas desde Sury
+  ansible.builtin.copy:
+    content: |
+      // Gestionado por Ansible (rol php_sury)
+      Unattended-Upgrade::Origins-Pattern {
+        "origin=deb.sury.org,codename=${distro_codename}";
+      };
+    dest: /etc/apt/apt.conf.d/53php-sury
+    owner: root
+    group: root
+    mode: "0644"
+  when: php_sury_desatendido | bool
+
+- name: Sin actualizaciones automáticas desde Sury
+  ansible.builtin.file:
+    path: /etc/apt/apt.conf.d/53php-sury
+    state: absent
+  when: not php_sury_desatendido | bool
+
+# Antes de que apt actualice nada: el propio cambio a Sury ya pasa por el gancho
+- name: Gancho de apt que reinicia lo que corre PHP fuera de php-fpm
+  when: php_sury_reiniciar | length > 0
+  block:
+    - name: Script del gancho
+      ansible.builtin.template:
+        src: php-sury-reiniciar.j2
+        dest: /usr/local/sbin/php-sury-reiniciar
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Gancho en apt
+      ansible.builtin.copy:
+        content: |
+          // Gestionado por Ansible (rol php_sury)
+          DPkg::Post-Invoke { "[ -x /usr/local/sbin/php-sury-reiniciar ] && /usr/local/sbin/php-sury-reiniciar || true"; };
+        dest: /etc/apt/apt.conf.d/54php-sury-reiniciar
+        owner: root
+        group: root
+        mode: "0644"
+
+- name: Sin gancho si no hay nada que reiniciar
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: [/etc/apt/apt.conf.d/54php-sury-reiniciar, /usr/local/sbin/php-sury-reiniciar]
+  when: php_sury_reiniciar | length == 0
+
+- name: Paquetes de PHP instalados
+  ansible.builtin.shell: set -o pipefail && dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'php*' | awk '$1 == "ii" {print $2}'
+  args:
+    executable: /bin/bash
+  register: php_sury_paquetes
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Solo los php* que ya están: si Sury trae otra versión de una librería que
+# necesitan, apt la sube con ellos, pero no se toca nada más del sistema.
+# Los paquetes de Sury tienen número mayor que los del PPA (-3 frente a -2).
+- name: Pasar a Sury los paquetes de PHP
+  ansible.builtin.apt:
+    name: "{{ php_sury_paquetes.stdout_lines }}"
+    state: latest # noqa package-latest
+    only_upgrade: true
+    update_cache: true
+    dpkg_options: force-confdef,force-confold
+  when: php_sury_paquetes.stdout_lines | length > 0
+
+- name: Los php-fpm siguen en marcha
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    systemctl list-units --type=service --all --plain --no-legend 'php*-fpm.service'
+    | awk '{print $1, $3}'
+  args:
+    executable: /bin/bash
+  register: php_sury_fpm
+  changed_when: false
+  check_mode: false
+  failed_when: php_sury_fpm.stdout_lines | reject('search', ' active$') | list | length > 0
