@@ -1,0 +1,34 @@
+#!/bin/bash
+# Cuándo se construyó la imagen con la que corre cada contenedor del rol quadlet,
+# para el colector textfile de node-exporter:
+#   quadlet_imagen_creada_segundos{servicio="mi-bot"} <epoch>
+# Con la reconstrucción semanal no debería pasar de 7 días; la alerta
+# ImagenContenedorVieja salta a los 14.
+# Uso: quadlet-imagenes FICHERO.prom   (lista en /etc/quadlet/servicios)
+set -euo pipefail
+SALIDA=${1:?uso: quadlet-imagenes FICHERO.prom}
+LISTA=/etc/quadlet/servicios
+
+como() { # como USUARIO podman ...
+  local u=$1
+  shift
+  (cd / && runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$(id -u "$u")" "$@")
+}
+
+tmp=$(mktemp "$SALIDA.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+{
+  echo "# HELP quadlet_imagen_creada_segundos Cuándo se construyó la imagen con la que corre el contenedor (epoch)."
+  echo "# TYPE quadlet_imagen_creada_segundos gauge"
+  while read -r nombre usuario _ <&3; do
+    [[ -z $nombre || $nombre == \#* ]] && continue
+    id -u "$usuario" >/dev/null 2>&1 || continue
+    # Sin contenedor (parado o sin imagen) no hay serie: eso lo vigila su alerta de caída
+    imagen=$(como "$usuario" podman container inspect --format '{{.Image}}' "$nombre" 2>/dev/null) || continue
+    creada=$(como "$usuario" podman image inspect --format '{{.Created.Unix}}' "$imagen" 2>/dev/null) || continue
+    printf 'quadlet_imagen_creada_segundos{servicio="%s"} %s\n' "$nombre" "$creada"
+  done 3<"$LISTA"
+} >"$tmp"
+chmod 0644 "$tmp"
+mv "$tmp" "$SALIDA"
+trap - EXIT

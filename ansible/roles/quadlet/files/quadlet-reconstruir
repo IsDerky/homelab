@@ -1,0 +1,39 @@
+#!/bin/bash
+# Reconstrucción semanal de las imágenes del rol quadlet (timer del lunes).
+# Cada servicio con repo vuelve a desplegarse con deploy-repo en el MISMO commit
+# con el que corre, pero sin caché y bajando otra vez la imagen base
+# (DEPLOY_RECONSTRUIR=1, lo leen los pasos de la app): así entran los parches de
+# la base y de las dependencias del sistema sin esperar a un commit.
+# deploy-repo ya vuelve a la imagen anterior si no arranca y avisa por DM.
+# Uso: quadlet-reconstruir [SERVICIO]   (lista en /etc/quadlet/servicios)
+set -uo pipefail
+LISTA=/etc/quadlet/servicios
+solo=${1:-}
+fallos=0
+
+como() { # como USUARIO podman ...
+  local u=$1
+  shift
+  (cd / && runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$(id -u "$u")" "$@")
+}
+
+while read -r nombre usuario repo <&3; do
+  [[ -z $nombre || $nombre == \#* ]] && continue
+  [[ -n $solo && $nombre != "$solo" ]] && continue
+  [[ -z ${repo:-} || $repo == - ]] && continue
+  # El commit de la imagen en marcha: su etiqueta de 12 caracteres (la pone deploy-repo).
+  # No vale el HEAD de la copia de deploy-repo: tras un despliegue fallido apunta al commit roto.
+  imagen=$(como "$usuario" podman container inspect --format '{{.Image}}' "$nombre" 2>/dev/null) ||
+    { echo "$nombre: no hay contenedor, no se reconstruye" >&2; fallos=1; continue; }
+  corto=$(como "$usuario" podman image inspect --format '{{range .RepoTags}}{{println .}}{{end}}' "$imagen" |
+    sed -n 's/.*:\([0-9a-f]\{12\}\)$/\1/p' | head -n 1)
+  sha=$(git -C "/var/lib/deploy-repo/$repo" rev-parse --verify --quiet "$corto^{commit}" 2>/dev/null)
+  if [[ -z $corto || -z $sha ]]; then
+    echo "$nombre: la imagen en marcha no tiene etiqueta de commit conocida" >&2
+    fallos=1
+    continue
+  fi
+  echo "==> $nombre: reconstruyendo $repo ${sha:0:7}"
+  DEPLOY_RECONSTRUIR=1 /usr/local/sbin/deploy-repo "$repo" "$sha" || fallos=1
+done 3<"$LISTA"
+exit "$fallos"
