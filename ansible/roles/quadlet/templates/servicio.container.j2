@@ -12,8 +12,11 @@ ContainerName={{ quadlet_s.nombre }}
 {% if quadlet_s.orden is defined %}
 Exec={{ quadlet_s.orden }}
 {% endif %}
-# Dentro corre con el uid del usuario: los volúmenes conservan sus dueños
+# Dentro corre con el uid del usuario: los volúmenes conservan sus dueños.
+# User/Group explícitos porque un USER de la imagen manda sobre keep-id.
 UserNS=keep-id
+User={{ quadlet_usuario.uid }}
+Group={{ quadlet_usuario.group }}
 {% if quadlet_s.red is defined %}
 Network={{ quadlet_s.red }}
 {% endif %}
