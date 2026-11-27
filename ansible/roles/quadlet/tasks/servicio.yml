@@ -1,0 +1,179 @@
+---
+# Un servicio de quadlet_servicios (quadlet_s, índice quadlet_i).
+- name: "Datos derivados ({{ quadlet_s.nombre }})"
+  ansible.builtin.set_fact:
+    quadlet_home: "{{ quadlet_home_base }}/{{ quadlet_s.usuario }}"
+    quadlet_subid: "{{ quadlet_s.subid | default(quadlet_subid_base | int + quadlet_i * 65536) }}"
+
+# Cambiar el home de un usuario que tiene procesos vivos falla (usermod): si
+# venía de un servicio systemd normal, pararlo antes (el lanzador del cambio lo hace).
+- name: "Usuario sin shell ni contraseña ({{ quadlet_s.nombre }})"
+  ansible.builtin.user:
+    name: "{{ quadlet_s.usuario }}"
+    system: true
+    home: "{{ quadlet_home }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+    password_lock: true
+  register: quadlet_usuario
+
+- name: "¿existe ya el home? ({{ quadlet_s.nombre }})"
+  ansible.builtin.stat:
+    path: "{{ quadlet_home }}/.config/containers/systemd"
+  register: quadlet_home_previo
+
+# En --check sobre limpio no hay carpetas donde copiar: esas tareas se saltan
+- name: "Se puede escribir en el home ({{ quadlet_s.nombre }})"
+  ansible.builtin.set_fact:
+    quadlet_escribible: "{{ quadlet_home_previo.stat.exists or not ansible_check_mode }}"
+
+- name: "Home ({{ quadlet_s.nombre }})"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ quadlet_s.usuario }}"
+    group: "{{ quadlet_s.usuario }}"
+    mode: "0700"
+  loop:
+    - "{{ quadlet_home }}"
+    - "{{ quadlet_home }}/.config"
+    - "{{ quadlet_home }}/.config/containers"
+    - "{{ quadlet_home }}/.config/containers/systemd"
+
+# Solo se añade si el usuario no tiene ya un rango: cambiarlo dejaría sus
+# imágenes con dueños que ya no le corresponden
+- name: "¿tiene ya subuid/subgid? ({{ quadlet_s.nombre }})"
+  ansible.builtin.command: grep -c "^{{ quadlet_s.usuario }}:" /etc/{{ item }}
+  loop: [subuid, subgid]
+  register: quadlet_subids
+  changed_when: false
+  failed_when: quadlet_subids.rc > 1
+  check_mode: false
+
+- name: "Rango de subuid/subgid ({{ quadlet_s.nombre }})"
+  ansible.builtin.lineinfile:
+    path: /etc/{{ item.item }}
+    line: "{{ quadlet_s.usuario }}:{{ quadlet_subid }}:65536"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ quadlet_subids.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stdout | int == 0
+
+- name: "Su systemd de usuario arranca con la máquina ({{ quadlet_s.nombre }})"
+  ansible.builtin.command: loginctl enable-linger {{ quadlet_s.usuario }}
+  args:
+    creates: /var/lib/systemd/linger/{{ quadlet_s.usuario }}
+
+- name: "Carpetas de los volúmenes ({{ quadlet_s.nombre }})"
+  ansible.builtin.file:
+    path: "{{ item.split(':')[0] }}"
+    state: directory
+    owner: "{{ quadlet_s.usuario }}"
+    group: "{{ quadlet_s.usuario }}"
+    mode: "0750"
+  loop: "{{ quadlet_s.volumenes | default([]) }}"
+
+- name: "Entorno con secretos (copia del usuario) ({{ quadlet_s.nombre }})"
+  ansible.builtin.copy:
+    src: "{{ quadlet_s.fichero_entorno }}"
+    dest: "{{ quadlet_home }}/.config/{{ quadlet_s.nombre }}.env"
+    remote_src: true
+    owner: "{{ quadlet_s.usuario }}"
+    group: "{{ quadlet_s.usuario }}"
+    mode: "0600"
+  register: quadlet_entorno
+  when: quadlet_s.fichero_entorno is defined and quadlet_escribible
+
+- name: "Unidad quadlet ({{ quadlet_s.nombre }})"
+  ansible.builtin.template:
+    src: servicio.container.j2
+    dest: "{{ quadlet_home }}/.config/containers/systemd/{{ quadlet_s.nombre }}.container"
+    owner: "{{ quadlet_s.usuario }}"
+    group: "{{ quadlet_s.usuario }}"
+    mode: "0600"
+  register: quadlet_unidad
+  when: quadlet_escribible
+
+- name: "Systemd del usuario en marcha ({{ quadlet_s.nombre }})"
+  ansible.builtin.systemd_service:
+    name: user@{{ quadlet_usuario.uid }}.service
+    state: started
+  when: quadlet_usuario.uid is defined
+
+# systemctl a mano: el módulo systemd_service no llega al systemd de otro
+# usuario (--machine=usuario@) sin hacerse ese usuario, que no tiene sesión
+- name: "El usuario relee las unidades ({{ quadlet_s.nombre }})" # noqa: command-instead-of-module
+  ansible.builtin.command: systemctl --user --machine={{ quadlet_s.usuario }}@ daemon-reload
+  when: quadlet_unidad.changed or quadlet_entorno.changed | default(false)
+  changed_when: true
+
+# Lo demás solo tiene sentido con el usuario creado de verdad (no en --check sobre limpio)
+- name: "Estado ({{ quadlet_s.nombre }})"
+  when: quadlet_usuario.uid is defined
+  block:
+    - name: "¿está la imagen? ({{ quadlet_s.nombre }})"
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ quadlet_s.usuario }}", --, podman, image, exists, "{{ quadlet_s.imagen }}"]
+        chdir: "{{ quadlet_home }}"
+      environment:
+        XDG_RUNTIME_DIR: /run/user/{{ quadlet_usuario.uid }}
+      register: quadlet_imagen
+      changed_when: false
+      failed_when: quadlet_imagen.rc > 1
+      check_mode: false
+
+    - name: "¿está activo? ({{ quadlet_s.nombre }})" # noqa: command-instead-of-module
+      ansible.builtin.command: systemctl --user --machine={{ quadlet_s.usuario }}@ is-active {{ quadlet_s.nombre }}.service
+      register: quadlet_activo
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: "Sin imagen no se arranca ({{ quadlet_s.nombre }})"
+      ansible.builtin.debug:
+        msg: >-
+          No existe {{ quadlet_s.imagen }} para {{ quadlet_s.usuario }}: queda preparado y parado.
+          La construye el despliegue de la app.
+      when: quadlet_imagen.rc != 0 and quadlet_s.arrancar | default(true)
+
+    - name: "Arrancar o reiniciar con la configuración nueva ({{ quadlet_s.nombre }})" # noqa: command-instead-of-module
+      ansible.builtin.command: >-
+        systemctl --user --machine={{ quadlet_s.usuario }}@
+        {{ 'restart' if quadlet_activo.stdout == 'active' else 'start' }} {{ quadlet_s.nombre }}.service
+      when:
+        - quadlet_s.arrancar | default(true)
+        - quadlet_imagen.rc == 0
+        - quadlet_activo.stdout != 'active' or quadlet_unidad.changed or quadlet_entorno.changed | default(false)
+      register: quadlet_arranque
+      changed_when: true
+
+    - name: "Parar ({{ quadlet_s.nombre }})" # noqa: command-instead-of-module
+      ansible.builtin.command: systemctl --user --machine={{ quadlet_s.usuario }}@ stop {{ quadlet_s.nombre }}.service
+      when: not quadlet_s.arrancar | default(true) and quadlet_activo.stdout == 'active'
+      changed_when: true
+
+    # Un handler no vale aquí: se comprueba cada servicio del bucle tras su arranque
+    - name: "Comprobar que sigue en pie ({{ quadlet_s.nombre }})" # noqa: no-handler
+      when: quadlet_arranque is changed
+      block:
+        - name: "Esperar ({{ quadlet_s.nombre }})"
+          ansible.builtin.wait_for:
+            timeout: "{{ quadlet_espera_arranque }}"
+
+        - name: "Activo ({{ quadlet_s.nombre }})" # noqa: command-instead-of-module
+          ansible.builtin.command: systemctl --user --machine={{ quadlet_s.usuario }}@ is-active {{ quadlet_s.nombre }}.service
+          changed_when: false
+      rescue:
+        - name: "Últimas líneas del log ({{ quadlet_s.nombre }})"
+          ansible.builtin.command: journalctl _SYSTEMD_USER_UNIT={{ quadlet_s.nombre }}.service -n 30 --no-pager -o cat
+          register: quadlet_log
+          changed_when: false
+          failed_when: false
+
+        - name: "No arranca ({{ quadlet_s.nombre }})"
+          ansible.builtin.fail:
+            msg: "{{ quadlet_s.nombre }} no sigue activo tras arrancar.\n{{ quadlet_log.stdout }}"

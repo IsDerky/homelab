@@ -4,7 +4,7 @@ Description=Estado de unidades systemd para node-exporter (textfile)
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/systemd-textfile {{ monitoring_textfile_dir }}/systemd.prom{% for unit in monitoring_systemd_units %} {{ unit | replace('%', '%%') | quote }}{% endfor %}
+ExecStart=/usr/local/bin/systemd-textfile {{ monitoring_textfile_dir }}/systemd.prom{% for u in monitoring_systemd_usuarios %} --usuario={{ u | quote }}{% endfor %}{% for unit in monitoring_systemd_units %} {{ unit | replace('%', '%%') | quote }}{% endfor %}
 
 # Corre cada 30 s: sin esto llena el journal de "Starting/Finished"
 LogLevelMax=warning

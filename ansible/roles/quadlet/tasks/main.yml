@@ -1,0 +1,27 @@
+---
+- name: Podman y lo que necesita en modo rootless
+  ansible.builtin.apt:
+    name:
+      - podman
+      - uidmap
+      - dbus-user-session
+      - slirp4netns
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Carpeta de los homes de servicio
+  ansible.builtin.file:
+    path: "{{ quadlet_home_base }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Cada servicio
+  ansible.builtin.include_tasks: servicio.yml
+  loop: "{{ quadlet_servicios }}"
+  loop_control:
+    loop_var: quadlet_s
+    index_var: quadlet_i
+    label: "{{ quadlet_s.nombre }}"

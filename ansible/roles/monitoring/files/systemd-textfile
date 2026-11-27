@@ -8,8 +8,11 @@ node_systemd_unit_state (mismo nombre y etiquetas que el colector) en un .prom
 que node-exporter lee del disco. De los timers, además, la última vez que se
 dispararon (node_systemd_timer_last_trigger_seconds).
 
-Uso: systemd-textfile FICHERO REGEX...
+Uso: systemd-textfile FICHERO [--usuario=NOMBRE]... REGEX...
 Las regex se comparan con el nombre completo (nginx.service, certbot.timer).
+Con --usuario también se leen las unidades del systemd de ese usuario (servicios
+rootless del rol quadlet) y salen como NOMBRE@unidad (mibot@bot.service),
+para que no se confundan con una unidad de sistema que se llame igual.
 """
 
 import calendar
@@ -54,6 +57,27 @@ def parse_triggers(text):
     return triggers
 
 
+def prefixed(units, user):
+    """Unidades de un usuario con su nombre delante: {"usuario@unidad": estado}."""
+    return {f"{user}@{name}": state for name, state in units.items()}
+
+
+def user_units(user):
+    """Unidades del systemd de un usuario; vacío si no tiene uno en marcha."""
+    r = subprocess.run(
+        ["systemctl", "--user", f"--machine={user}@", "list-units", "--all", "--plain",
+         "--no-legend", "--no-pager", "--full"],
+        capture_output=True, text=True, check=False,
+    )
+    return prefixed(parse(r.stdout), user) if r.returncode == 0 else {}
+
+
+def split_args(args):
+    """[--usuario=a, regex, --usuario=b, regex2] → (["a", "b"], ["regex", "regex2"])."""
+    users = [a.split("=", 1)[1] for a in args if a.startswith("--usuario=")]
+    return users, [a for a in args if not a.startswith("--usuario=")]
+
+
 def selected(units, patterns):
     include = re.compile("^(?:" + "|".join(patterns) + ")$")
     return sorted(u for u in units if include.match(u))
@@ -92,15 +116,18 @@ def write(path, content):
 
 
 def main():
-    if len(sys.argv) < 3:
-        sys.exit("Uso: systemd-textfile FICHERO REGEX...")
+    users, patterns = split_args(sys.argv[2:])
+    if not patterns:
+        sys.exit("Uso: systemd-textfile FICHERO [--usuario=NOMBRE]... REGEX...")
     out = subprocess.run(
         ["systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--full"],
         capture_output=True, text=True, check=True,
     ).stdout
     units = parse(out)
-    patterns = sys.argv[2:]
+    # Los timers de usuario no tienen fecha de disparo aquí (show va al systemd de sistema)
     timers = [u for u in selected(units, patterns) if u.endswith(".timer")]
+    for user in users:
+        units.update(user_units(user))
     triggers = {}
     if timers:
         show = subprocess.run(

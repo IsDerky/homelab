@@ -88,6 +88,11 @@ monitoring_tls_probes: []
 # lo deja al contenedor.
 monitoring_systemd_units: []
 
+# Usuarios cuyo systemd también se mira (servicios rootless del rol quadlet).
+# Sus unidades salen como usuario@unidad: ponerlas así en monitoring_systemd_units
+# (p. ej. "mibot@mi-bot\\.service").
+monitoring_systemd_usuarios: []
+
 # Carpeta del colector textfile de node-exporter
 monitoring_textfile_dir: /var/lib/node-exporter/textfile
 
