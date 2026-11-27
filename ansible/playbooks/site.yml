@@ -36,6 +36,8 @@
   ansible.builtin.import_playbook: nas.yml
 - name: Servidor web
   ansible.builtin.import_playbook: nginx.yml
+- name: PHP de Sury
+  ansible.builtin.import_playbook: php-sury.yml
 - name: Túnel
   ansible.builtin.import_playbook: cloudflared.yml
 - name: Aplicaciones

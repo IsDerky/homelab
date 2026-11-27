@@ -1,0 +1,16 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Lo llama apt tras cada dpkg (DPkg::Post-Invoke). Reinicia los servicios que
+# corren PHP fuera de php-fpm si el binario de PHP es más nuevo que su arranque.
+php=$(readlink -f /usr/bin/php) || exit 0
+# ctime: dpkg deja en mtime la fecha del paquete, no la de instalación
+nuevo=$(stat -c %Z "$php") || exit 0
+for s in {{ php_sury_reiniciar | join(' ') }}; do
+  systemctl is-active --quiet "$s" || continue
+  desde=$(systemctl show -p ActiveEnterTimestamp --value "$s")
+  [ -n "$desde" ] || continue
+  if [ "$(date -d "$desde" +%s)" -lt "$nuevo" ]; then
+    systemctl restart "$s" && logger -t php-sury "Reiniciado $s: PHP actualizado"
+  fi
+done
+exit 0

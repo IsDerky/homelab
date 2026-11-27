@@ -1,0 +1,7 @@
+---
+# PHP de packages.sury.org en vez del PPA ondrej/php congelado
+- name: PHP de Sury
+  hosts: homelab
+  become: true
+  roles:
+    - php_sury
