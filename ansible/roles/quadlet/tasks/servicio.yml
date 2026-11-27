@@ -111,9 +111,10 @@
   when: quadlet_unidad.changed or quadlet_entorno.changed | default(false)
   changed_when: true
 
-# Lo demás solo tiene sentido con el usuario creado de verdad (no en --check sobre limpio)
+# Lo demás solo tiene sentido con el usuario y su home creados de verdad: en --check
+# sobre limpio, o con un usuario que ya existía con otro home, aún no hay dónde mirar
 - name: "Estado ({{ quadlet_s.nombre }})"
-  when: quadlet_usuario.uid is defined
+  when: quadlet_usuario.uid is defined and quadlet_escribible
   block:
     - name: "¿está la imagen? ({{ quadlet_s.nombre }})"
       ansible.builtin.command:
