@@ -26,6 +26,7 @@ Roles para montar piezas del homelab:
 - `bd_servidores`: MariaDB, PostgreSQL y MongoDB para las bases de datos de los servidores de Pterodactyl, en cada máquina con Wings y solo en su red de Wings o del túnel (`playbooks/bd-servidores.yml`).
 - `caddy_webs`: Caddy delante de los servidores de webs (HTTPS sin puerto y dominios propios); lo configura el panel por la API (`playbooks/caddy-webs.yml`).
 - `roninfc`: una web Next.js con puppeteer como servicio systemd encerrado, que se puede dejar instalada y apagada (`playbooks/webs.yml`).
+- `quadlet`: servicios en contenedores rootless de Podman, cada uno con su usuario y una unidad quadlet de usuario con límite de memoria y reinicio (`playbooks/quadlet.yml`).
 - `ci`: runners de GitHub Actions en el servidor que solo pueden desplegar con `deploy-repo`, más sus deploy keys y el registro en GitHub (`playbooks/ci.yml`).
 - `monitoring`: Prometheus, Alertmanager, Grafana, blackbox, node_exporter y cAdvisor, más un exportador propio en Python y los avisos por DM de Discord (`playbooks/monitoring.yml`).
 - `honeypot`: el mismo honeypot de [cowrie-honeypot](https://github.com/IsDerky/cowrie-honeypot), pero como rol en vez de `install.sh`.
@@ -618,6 +619,23 @@ Con `roninfc_enabled: false` deja la unidad instalada pero parada y deshabilitad
 | `roninfc_root` | `/srv/roninfc` | Fijada también en el script de despliegue |
 | `roninfc_memory_max` | `1536M` | Next y Chrome juntos |
 | `roninfc_check_path` / `roninfc_check_timeout` | `/api/partidos` / `90` | |
+
+## Rol `quadlet`
+
+Para pasar servicios sueltos de systemd (bots, webs pequeñas) a contenedores sin que ninguno corra como root en la máquina. Cada entrada de `quadlet_servicios` tiene su usuario de sistema sin shell, con home en `quadlet_home_base`, su propio rango de subuid/subgid (65536 ids, lejos de los de las cuentas normales; si ya tenía uno no se toca) y lingering, para que su systemd de usuario arranque con la máquina. El rol escribe `~/.config/containers/systemd/<nombre>.container` y Podman genera de ahí `<nombre>.service` en el systemd del usuario.
+
+Dentro del contenedor el proceso corre con el uid del usuario (`UserNS=keep-id`), sin capacidades, sin poder ganar privilegios y con la raíz de solo lectura; solo escribe en sus volúmenes. La salida va al journal tal cual (`LogDriver=passthrough`): `journalctl _SYSTEMD_USER_UNIT=<nombre>.service` como root. Límite con `MemoryMax` de la unidad y `Restart=on-failure`.
+
+La imagen no la trae el rol: la construye el despliegue de cada app (`podman build` como su usuario, etiqueta del commit) y la etiqueta como `imagen`. Sin ella el rol deja todo listo y parado; con ella arranca, y reinicia si cambian la unidad o el entorno. Los secretos van en `fichero_entorno`, que se copia al home del usuario con permisos 0600.
+
+Para que las alertas vean estas unidades: el usuario en `monitoring_systemd_usuarios` y la unidad como `usuario@nombre.service` en `monitoring_systemd_units`. Al pasar un servicio de systemd normal, hay que pararlo antes de aplicar (cambiar el home de un usuario con procesos vivos falla).
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `quadlet_servicios` | `[]` | `{nombre, usuario, imagen, memoria}` y opcionales `descripcion`, `orden`, `red`, `volumenes`, `entorno`, `fichero_entorno`, `solo_lectura`, `arrancar`, `subid` |
+| `quadlet_home_base` | `/var/lib/quadlet` | Homes de los usuarios (imágenes y unidades) |
+| `quadlet_subid_base` | `1000000000` | Primer subuid; cada servicio usa 65536 desde aquí según su posición |
+| `quadlet_espera_arranque` | `10` | Segundos que tiene que seguir activo tras arrancar |
 
 ## Rol `ci`
 

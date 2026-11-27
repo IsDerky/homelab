@@ -272,6 +272,20 @@ class SystemdTextfileTest(unittest.TestCase):
             self.assertEqual(os.listdir(d), ["systemd.prom"])
             self.assertEqual(os.stat(path).st_mode & 0o777, 0o644)
 
+    def test_argumentos_de_usuario(self):
+        users, patterns = textfile.split_args(["--usuario=mibot", "nginx.service", "--usuario=otro", "mibot@.*"])
+        self.assertEqual(users, ["mibot", "otro"])
+        self.assertEqual(patterns, ["nginx.service", "mibot@.*"])
+
+    def test_unidades_de_usuario_con_prefijo(self):
+        # La de usuario no pisa a la de sistema con el mismo nombre (antes del cambio conviven)
+        units = {**self.units, **textfile.prefixed(textfile.parse(
+            "nginx.service  loaded active running Bot en contenedor\n"), "mibot")}
+        s = samples(textfile.render(units, ["nginx.service", "mibot@nginx\\.service"]))
+        self.assertEqual(s['node_systemd_unit_state{name="mibot@nginx.service",state="active"}'], 1)
+        self.assertEqual(s['node_systemd_unit_state{name="nginx.service",state="active"}'], 1)
+        self.assertEqual(len(s), 2 * len(textfile.STATES))
+
 
 SEP_2027 = int(datetime(2027, 9, 21, 19, 58, 43, tzinfo=timezone.utc).timestamp())
 ABR_2028 = int(datetime(2028, 4, 20, 12, 0, tzinfo=timezone.utc).timestamp())

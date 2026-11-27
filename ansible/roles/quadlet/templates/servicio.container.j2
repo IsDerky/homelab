@@ -1,0 +1,44 @@
+# {{ ansible_managed }}
+# Contenedor rootless de {{ quadlet_s.usuario }}. Logs: journalctl --user-unit (o
+# _SYSTEMD_USER_UNIT={{ quadlet_s.nombre }}.service como root).
+[Unit]
+Description={{ quadlet_s.descripcion | default(quadlet_s.nombre) }}
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image={{ quadlet_s.imagen }}
+ContainerName={{ quadlet_s.nombre }}
+{% if quadlet_s.orden is defined %}
+Exec={{ quadlet_s.orden }}
+{% endif %}
+# Dentro corre con el uid del usuario: los volúmenes conservan sus dueños
+UserNS=keep-id
+{% if quadlet_s.red is defined %}
+Network={{ quadlet_s.red }}
+{% endif %}
+{% for v in quadlet_s.volumenes | default([]) %}
+Volume={{ v }}
+{% endfor %}
+{% if quadlet_s.fichero_entorno is defined %}
+EnvironmentFile=%h/.config/{{ quadlet_s.nombre }}.env
+{% endif %}
+{% for k, v in (quadlet_s.entorno | default({})).items() %}
+Environment={{ k }}={{ v }}
+{% endfor %}
+# La salida va directa al journal de la unidad (prioridades <N> incluidas)
+LogDriver=passthrough
+NoNewPrivileges=true
+DropCapability=ALL
+{% if quadlet_s.solo_lectura | default(true) %}
+ReadOnly=true
+{% endif %}
+
+[Service]
+Restart=on-failure
+RestartSec=10s
+MemoryMax={{ quadlet_s.memoria }}
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,7 @@
+---
+# Servicios en contenedores rootless de Podman (quadlets de usuario)
+- name: Quadlet
+  hosts: homelab
+  become: true
+  roles:
+    - quadlet
